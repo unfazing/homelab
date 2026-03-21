@@ -67,6 +67,7 @@ source "proxmox-iso" "vm" {
   onboot          = var.start_at_boot
   qemu_agent      = var.qemu_agent
   bios            = var.bios
+  machine         = var.machine
 
   boot_iso {
     # type             = var.iso_type

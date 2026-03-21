@@ -152,6 +152,12 @@ variable "bios" {
   default     = "ovmf"
 }
 
+variable "machine" {
+  description = "Set the machine type."
+  type        = string
+  default     = "q35"
+}
+
 variable "proxmox_api_url" {
   description = "API url containing IP and Port of the Proxmox host."
   type        = string
