@@ -70,9 +70,9 @@ How It Works
       autoinstall ds=nocloud-net;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ---
    
 2. HTTP server — Packer serves the ../http/ubuntu/ directory, which contains:
-   - user_data — Your cloud-config with all the installation answers (hostname, user, password, storage layout, packages, etc.)
-   - meta_data — Empty file (required by cloud-init but can be blank)
-3. Ubuntu autoinstall — The installer reads user_data and performs the entire installation unattended:
+   - user-data — Your cloud-config with all the installation answers (hostname, user, password, storage layout, packages, etc.)
+   - meta-data — Minimal NoCloud metadata for the installer
+3. Ubuntu autoinstall — The installer reads `user-data` and performs the entire installation unattended:
    - Sets hostname to ubuntu
    - Creates the packer user
    - Uses direct disk layout (no LVM prompts)
