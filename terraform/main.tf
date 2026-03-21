@@ -1,57 +1,63 @@
-resource "proxmox_vm_qemu" "test_vm" {
-  count       = 1
-  name        = var.vm_name
-  target_node = var.pm_target_host
-  agent       = 1
-  memory      = var.memory_mb
+resource "proxmox_vm_qemu" "vm" {
+  for_each           = local.vms
+  name               = each.key
+  target_node        = each.value.target_node
+  clone              = each.value.clone
+  full_clone         = true
+  os_type            = "cloud-init"
+  agent              = 1
+  start_at_node_boot = true
+
+  memory = each.value.memory_mb
   cpu {
-    cores = var.cpu_count
+    cores   = each.value.cpu_cores
     sockets = 1
-    numa = true
-    type = "x86-64-v2-AES"
+    numa    = true
+    type    = "host"
   }
+
   disk {
-    slot    = "virtio0"
-    size    = var.disk_gb
-    storage = "local-lvm"
+    slot    = "scsi0"
+    size    = each.value.disk_gb
+    storage = each.value.disk_storage
   }
+
+  disk {
+    type    = "cloudinit"
+    slot    = "ide0"
+    storage = each.value.disk_storage
+  }
+
   network {
-    id     = 0
-    model  = "virtio"
-    bridge = "vmbr0"
+    id      = 0
+    model   = "virtio"
+    bridge  = each.value.bridge
+    macaddr = each.value.mac_address
   }
-  scsihw      = "virtio-scsi-single" # Use VirtIO SCSI controller
-  boot        = "order=scsi0" # has to be the same as the OS disk of the template
-  clone       = var.clone # The template to clone from
+
+  scsihw   = "virtio-scsi-pci"
+  boot     = "order=scsi0"
+  bootdisk = "scsi0"
+  bios     = "ovmf"
+  machine  = "q35"
 
   # Cloud-Init configuration
-  cicustom   = var.cicustom
-  ciupgrade  = true # it will upgrade the OS to the latest version
-  nameserver = var.nameserver
-  ipconfig0  = var.ipconfig0
+  ciuser     = "user"
+  cipassword = var.debug_password
+  sshkeys    = local.ssh_public_key
+  ipconfig0  = each.value.ipconfig0
   skip_ipv6  = true
-  ciuser     = "root" # The user to use for the cloud-init script
-  cipassword = var.cipassword # Password for the cloud-init user
-  sshkeys    = var.ssh-public-key # The SSH public key to be added to the VM
 
-  # Most cloud-init images require a serial device for their display
-  serial {
-    id = 0
-  }
-
-  # EFI disk for UEFI boot
-  # This is required for cloud-init images that use UEFI
-  # If your template does not use UEFI, you can remove this block
   efidisk {
-    efitype = "4m" 
-    storage = "hdd-vm-data"
+    efitype = "4m"
+    storage = each.value.disk_storage
   }
 }
 
-output "vm_name" {
-  value = proxmox_vm_qemu.test_vm[0].name
+output "vm_names" {
+  value = { for name, vm in proxmox_vm_qemu.vm : name => vm.name }
 }
 
-output "vm_id" {
-  value = proxmox_vm_qemu.test_vm[0].id
+output "vm_ids" {
+  value = { for name, vm in proxmox_vm_qemu.vm : name => vm.id }
 }
