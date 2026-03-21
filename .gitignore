@@ -38,3 +38,7 @@ override.tf.json
 terraform.rc
 
 .envrc
+
+~
+
+.planning

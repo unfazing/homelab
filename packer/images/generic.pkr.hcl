@@ -18,7 +18,7 @@ locals {
 }
 
 source "proxmox-iso" "vm" {
-  proxmox_url              = "https://${var.proxmox_host}/api2/json"
+  proxmox_url              = var.proxmox_api_url
   username                 = var.proxmox_user
   password                 = var.proxmox_password
   token                    = var.proxmox_token

@@ -43,11 +43,9 @@ resource "proxmox_vm_qemu" "test_vm" {
   # This is required for cloud-init images that use UEFI
   # If your template does not use UEFI, you can remove this block
   efidisk {
-  efidisk {
     efitype = "4m" 
     storage = "hdd-vm-data"
   }
-
 }
 
 output "vm_name" {

@@ -41,13 +41,13 @@ variable "cpu_sockets" {
 variable "cpu_cores" {
   description = "The number of CPU cores per CPU socket to allocate to the VM."
   type        = number
-  default     = 2
+  default     = 8
 }
 
 variable "memory" {
   description = "The amount of memory to allocate to the VM in Megabytes."
   type        = number
-  default     = 2048
+  default     = 16384
 }
 
 variable "disk_storage_pool" {
@@ -65,7 +65,7 @@ variable "disk_size" {
 variable "disk_format" {
   description = "The drive's backing file's data format."
   type        = string
-  default     = "qcow2"
+  default     = "raw"
 }
 
 variable "disk_type" {
@@ -149,16 +149,11 @@ variable "qemu_agent" {
 variable "bios" {
   description = "Set the machine bios."
   type        = string
-  default     = "seabios"
+  default     = "ovmf"
 }
 
-
-
-
-
-
-variable "proxmox_host" {
-  description = "IP and Port of the Proxmox host."
+variable "proxmox_api_url" {
+  description = "API url containing IP and Port of the Proxmox host."
   type        = string
 }
 
@@ -182,11 +177,11 @@ variable "proxmox_token" {
 variable "proxmox_insecure_tls" {
   description = "Skip validating the certificate."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "iso_download" {
-  description = "Wether to download from iso_url or use the existing iso_file in the iso_storage_pool."
+  description = "Whether to download from iso_url or use the existing iso_file in the iso_storage_pool."
   type        = bool
   default     = true
 }
@@ -252,6 +247,7 @@ variable "additional_cd_files" {
     type   = string
     index  = number
     files  = list(string)
+    label  = string
   }))
   default = []
 }
