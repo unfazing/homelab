@@ -24,7 +24,7 @@ resource "proxmox_vm_qemu" "vm" {
 
   disk {
     type    = "cloudinit"
-    slot    = "ide0"
+    slot    = "ide2"
     storage = each.value.disk_storage
   }
 
