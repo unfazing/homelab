@@ -105,10 +105,11 @@
     <section id="repository-panel" role="tabpanel" aria-labelledby="repository-tab">
       <h2>Repository directory structure</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status planned">Planning</span></dd>
+        <dt>Status</dt><dd><span class="status complete">Initial interface implemented</span></dd>
         <dt>Operator interface</dt><dd>Task using the root <code>Taskfile.yml</code></dd>
         <dt>Execution host</dt><dd>Trusted administrator laptop or desktop</dd>
         <dt>Generated files</dt><dd>Written below ignored <code>.generated/</code></dd>
+        <dt>Credentials</dt><dd>Preloaded from ignored root <code>.envrc</code>; committed names and placeholders live in <code>.envrc.example</code></dd>
       </dl>
 
       <h3>Target tree</h3>
@@ -116,6 +117,7 @@
 ├── AGENTS.md                  # repository working agreements and sync rules
 ├── architecture.html          # design intent and accepted decisions
 ├── implementation.html        # plans, acceptance criteria, and progress
+├── .envrc.example             # non-secret credential variable contract
 ├── Taskfile.yml               # public operator interface
 ├── taskfiles/                 # included task groups as the interface grows
 │   ├── host.yml
@@ -160,11 +162,11 @@
             <tr><td>Root architecture document</td><td><span class="status complete">Complete</span></td><td>Maintain as design decisions change</td></tr>
             <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
-            <tr><td>Task interface</td><td><span class="status planned">Planned</span></td><td>Create validation and Packer tasks first</td></tr>
+            <tr><td>Task interface</td><td><span class="status complete">Initial slice complete</span></td><td>Add infrastructure and configuration tasks with their implementation phases</td></tr>
             <tr><td>Packer layout</td><td><span class="status complete">Complete</span></td><td>Replace the committed bootstrap credential and verify a cloned image</td></tr>
             <tr><td>Terraform layout</td><td><span class="status complete">Complete</span></td><td>Populate the approved five-VM topology and generate inventory</td></tr>
             <tr><td>Ansible layout</td><td><span class="status complete">Complete</span></td><td>Implement and verify the remaining application roles</td></tr>
-            <tr><td>Repository hygiene</td><td><span class="status existing">In progress</span></td><td>Provider lock committed; exclude downloads and OS metadata next</td></tr>
+            <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
       </div>
@@ -188,7 +190,7 @@
         <dt>Artifact</dt><dd><code>ubuntu-24.04-template</code> on Proxmox <code>local-lvm</code></dd>
         <dt>Scope</dt><dd>Generic Ubuntu Server 24.04 with cloud-init, SSH, and QEMU guest agent</dd>
         <dt>Consumers</dt><dd>All five Terraform-managed VMs</dd>
-        <dt>Architecture alignment</dt><dd>D-002, D-005, D-012, and D-029</dd>
+        <dt>Architecture alignment</dt><dd>D-002, D-005, D-012, D-029, and D-031</dd>
       </dl>
 
       <figure>
