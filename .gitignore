@@ -1,5 +1,8 @@
 # Local .terraform directories
 .terraform/
+.generated/
+.DS_Store
+packer/images/downloaded_iso_path/
 
 # .tfstate files
 *.tfstate
