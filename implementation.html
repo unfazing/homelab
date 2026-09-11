@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homelab Implementation</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#f7f7f5, #111312);
+      --surface: light-dark(#fff, #1a1d1b);
+      --surface-2: light-dark(#edf2ee, #242925);
+      --text: light-dark(#17201a, #eef5ef);
+      --muted: light-dark(#5e6a61, #aab7ad);
+      --line: light-dark(#c8d0ca, #465049);
+      --green: light-dark(#176b43, #68d19a);
+      --green-soft: light-dark(#e3f3e9, #18382a);
+      --blue: light-dark(#245f9e, #79b7f2);
+      --blue-soft: light-dark(#e7f0fa, #182f45);
+      --amber: light-dark(#855b00, #f0c568);
+      --amber-soft: light-dark(#fff3cf, #3b3017);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+    main { width: min(1100px, calc(100% - 28px)); margin: auto; padding: 36px 0 64px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.25rem); }
+    h2 { margin: 28px 0 14px; font-size: 1.45rem; }
+    h3 { margin: 24px 0 10px; font-size: 1.1rem; }
+    p { max-width: 80ch; }
+    a { color: var(--blue); }
+    code, pre { font: .92em ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .meta, .muted { color: var(--muted); }
+    .meta { margin: 7px 0 18px; }
+    .doc-links { display: flex; gap: 14px; margin-bottom: 18px; }
+    .doc-links a { color: var(--muted); text-decoration: none; }
+    .doc-links a:hover { color: var(--text); }
+    .doc-links a[aria-current="page"] { color: var(--text); font-weight: 700; }
+    .sync-note { margin: 0 0 24px; padding-left: 12px; border-left: 3px solid var(--blue); color: var(--muted); }
+
+    .tabs { display: flex; gap: 5px; overflow-x: auto; padding: 4px; background: var(--surface-2); border-radius: 10px; }
+    .tabs button { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 9px 15px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+    .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 15%, transparent); }
+    .tabs button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+    [role="tabpanel"] { padding-top: 5px; }
+    [hidden] { display: none !important; }
+
+    .status { display: inline-block; padding: 2px 8px; border-radius: 99px; white-space: nowrap; font-size: .78rem; font-weight: 700; }
+    .complete, .existing { color: var(--green); background: var(--green-soft); }
+    .planned { color: var(--blue); background: var(--blue-soft); }
+    .change, .open { color: var(--amber); background: var(--amber-soft); }
+
+    .context-list { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(0, 2fr); gap: 8px 18px; max-width: 850px; }
+    .context-list dt { color: var(--muted); font-weight: 700; }
+    .context-list dd { margin: 0; }
+    pre { overflow-x: auto; margin: 14px 0 0; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); line-height: 1.55; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); }
+    th, td { padding: 10px 11px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+    tr:last-child td { border-bottom: 0; }
+    .compact { margin: 8px 0; padding-left: 21px; }
+    .compact li + li { margin-top: 6px; }
+
+    figure { margin: 20px 0 0; }
+    figcaption { margin-top: 8px; color: var(--muted); }
+    .diagram-scroll { overflow-x: auto; }
+    svg { display: block; width: 100%; min-width: 900px; height: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    svg text { fill: var(--text); font-family: inherit; }
+    svg .title { font-size: 19px; font-weight: 700; }
+    svg .label { font-size: 16px; font-weight: 700; }
+    svg .small { fill: var(--muted); font-size: 13px; }
+    svg .eyebrow { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    svg .node { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.5; }
+    svg .control { fill: var(--blue-soft); stroke: var(--blue); }
+    svg .output { fill: var(--green-soft); stroke: var(--green); }
+
+    footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); }
+    @media (max-width: 620px) {
+      main { width: min(100% - 18px, 1100px); padding-top: 22px; }
+      th, td { padding: 8px; }
+      .context-list { grid-template-columns: 1fr; gap: 2px; }
+      .context-list dd + dt { margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav class="doc-links" aria-label="Project documents">
+        <a href="architecture.html">Architecture</a>
+        <a href="implementation.html" aria-current="page">Implementation</a>
+      </nav>
+      <h1>Homelab Implementation</h1>
+      <p class="meta">Executable specification · Planning · Updated 11 September 2026</p>
+      <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Implementation sections">
+      <button id="repository-tab" role="tab" aria-selected="true" aria-controls="repository-panel" type="button">Repository structure</button>
+      <button id="packer-tab" role="tab" aria-selected="false" aria-controls="packer-panel" type="button">Packer plan</button>
+    </nav>
+
+    <section id="repository-panel" role="tabpanel" aria-labelledby="repository-tab">
+      <h2>Repository directory structure</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status planned">Planning</span></dd>
+        <dt>Operator interface</dt><dd>Task using the root <code>Taskfile.yml</code></dd>
+        <dt>Execution host</dt><dd>Trusted administrator laptop or desktop</dd>
+        <dt>Generated files</dt><dd>Written below ignored <code>.generated/</code></dd>
+      </dl>
+
+      <h3>Target tree</h3>
+      <pre><code>homelab/
+├── architecture.html          # design intent and accepted decisions
+├── implementation.html        # plans, acceptance criteria, and progress
+├── Taskfile.yml               # public operator interface
+├── taskfiles/                 # included task groups as the interface grows
+│   ├── host.yml
+│   ├── image.yml
+│   ├── infrastructure.yml
+│   ├── applications.yml
+│   └── data.yml
+├── packer/
+│   ├── images/ubuntu-24.04/   # one generic Ubuntu image definition
+│   └── http/ubuntu/           # NoCloud autoinstall data
+├── terraform/
+│   ├── modules/proxmox-vm/    # reusable VM primitive
+│   └── *.tf                   # five-VM root composition
+├── ansible/
+│   ├── playbooks/             # host bootstrap, site convergence, verification
+│   └── roles/                 # reusable host and application roles
+├── scripts/
+│   ├── inventory/             # Terraform output → Ansible inventory
+│   ├── backup/
+│   └── validation/
+└── .generated/                # ignored transient hand-off files</code></pre>
+
+      <h3>Ownership rules</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Area</th><th>Owns</th><th>Must not own</th></tr></thead>
+          <tbody>
+            <tr><td>Taskfile</td><td>Ordering, consistent commands, preconditions</td><td>Infrastructure or application implementation</td></tr>
+            <tr><td>Packer</td><td>Generic Ubuntu template</td><td>VM identities, applications, durable data</td></tr>
+            <tr><td>Terraform</td><td>VMs, rebuildable disks, NICs, VLAN tags, outputs</td><td>Application secrets or in-guest configuration</td></tr>
+            <tr><td>Ansible</td><td>Host convergence and application configuration</td><td>VM lifecycle or Terraform state</td></tr>
+            <tr><td>Scripts</td><td>Small hand-offs, validation, backup operations</td><td>Logic already expressible in the three primary tools</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Migration progress</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Work item</th><th>Status</th><th>Next action</th></tr></thead>
+          <tbody>
+            <tr><td>Root architecture document</td><td><span class="status complete">Complete</span></td><td>Maintain as design decisions change</td></tr>
+            <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
+            <tr><td>Task interface</td><td><span class="status planned">Planned</span></td><td>Create validation and Packer tasks first</td></tr>
+            <tr><td>Packer layout</td><td><span class="status complete">Complete</span></td><td>Replace the committed bootstrap credential and verify a cloned image</td></tr>
+            <tr><td>Terraform layout</td><td><span class="status complete">Complete</span></td><td>Populate the approved five-VM topology and generate inventory</td></tr>
+            <tr><td>Ansible layout</td><td><span class="status complete">Complete</span></td><td>Implement and verify the remaining application roles</td></tr>
+            <tr><td>Repository hygiene</td><td><span class="status planned">Planned</span></td><td>Commit provider locks; exclude generated state, downloads, and OS metadata</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Command flow</h3>
+      <ol class="compact">
+        <li><code>task doctor</code> validates tools, credentials, connectivity, and source files without changing infrastructure.</li>
+        <li>Explicit network and Proxmox-host tasks establish prerequisites; they are never hidden inside normal deployment.</li>
+        <li>Packer creates the generic template.</li>
+        <li>Terraform creates the VM topology and emits machine-readable outputs.</li>
+        <li>An inventory script writes <code>.generated/ansible/hosts.yml</code> from those outputs.</li>
+        <li>Ansible converges applications, then verification tasks test health and network policy.</li>
+        <li>Backup and data-destruction tasks remain separate from compute deployment and destruction.</li>
+      </ol>
+    </section>
+
+    <section id="packer-panel" role="tabpanel" aria-labelledby="packer-tab" hidden>
+      <h2>Packer plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status planned">Structure normalized; hardening remains</span></dd>
+        <dt>Artifact</dt><dd><code>ubuntu-24.04-template</code> on Proxmox <code>local-lvm</code></dd>
+        <dt>Scope</dt><dd>Generic Ubuntu Server 24.04 with cloud-init, SSH, and QEMU guest agent</dd>
+        <dt>Consumers</dt><dd>All five Terraform-managed VMs</dd>
+        <dt>Architecture alignment</dt><dd>D-002, D-005, D-012, and D-029</dd>
+      </dl>
+
+      <figure>
+        <div class="diagram-scroll">
+          <svg viewBox="0 0 1100 360" role="img" aria-labelledby="packer-flow-title packer-flow-desc">
+            <title id="packer-flow-title">Packer build and verification flow</title>
+            <desc id="packer-flow-desc">Task validates the Packer files, then Packer creates a temporary Proxmox VM, serves Ubuntu autoinstall data, cleans instance identity, and converts the VM into a generic template. A disposable clone verifies the template before Terraform uses it.</desc>
+            <defs>
+              <marker id="packer-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+              </marker>
+            </defs>
+            <text class="title" x="35" y="42">Ubuntu template pipeline</text>
+
+            <rect class="node control" x="35" y="105" width="165" height="120" rx="10"></rect>
+            <text class="eyebrow" x="55" y="135">OPERATOR</text>
+            <text class="label" x="55" y="168">Task</text>
+            <text class="small" x="55" y="195">format · validate</text>
+
+            <rect class="node" x="245" y="105" width="165" height="120" rx="10"></rect>
+            <text class="eyebrow" x="265" y="135">PACKER</text>
+            <text class="label" x="265" y="168">Temporary VM</text>
+            <text class="small" x="265" y="195">ISO · HTTP seed</text>
+
+            <rect class="node" x="455" y="105" width="165" height="120" rx="10"></rect>
+            <text class="eyebrow" x="475" y="135">UBUNTU</text>
+            <text class="label" x="475" y="168">Autoinstall</text>
+            <text class="small" x="475" y="195">SSH · QEMU agent</text>
+
+            <rect class="node" x="665" y="105" width="165" height="120" rx="10"></rect>
+            <text class="eyebrow" x="685" y="135">GENERALIZE</text>
+            <text class="label" x="685" y="168">Clean identity</text>
+            <text class="small" x="685" y="195">cloud-init · machine-id</text>
+
+            <rect class="node output" x="875" y="105" width="190" height="120" rx="10"></rect>
+            <text class="eyebrow" x="895" y="135">PROXMOX TEMPLATE</text>
+            <text class="label" x="895" y="168">ubuntu-24.04</text>
+            <text class="small" x="895" y="195">Verified clone source</text>
+
+            <path d="M200 165 H245" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
+            <path d="M410 165 H455" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
+            <path d="M620 165 H665" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
+            <path d="M830 165 H875" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
+            <path d="M970 225 V285 H760" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
+            <text class="small" x="775" y="275">Disposable clone acceptance test</text>
+            <text class="small" x="35" y="320">Only a verified template name or ID crosses into Terraform; no application state crosses this boundary.</text>
+          </svg>
+        </div>
+        <figcaption>The template is an immutable build artifact. Terraform consumes it only after a clone passes acceptance checks.</figcaption>
+      </figure>
+
+      <h3>Current baseline assessment</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Concern</th><th>Current state</th><th>Plan</th></tr></thead>
+          <tbody>
+            <tr><td>Builder resources</td><td>Configured for 2 cores, 4 GB RAM, and a 16 GB base disk</td><td><span class="status complete">Complete</span> Retain as the generic image-build footprint</td></tr>
+            <tr><td>Guest identity</td><td>Cloud-init and machine ID cleanup already present</td><td><span class="status existing">Retain</span> Add an automated uniqueness check on clones</td></tr>
+            <tr><td>Bootstrap account</td><td>Committed fixed <code>packer</code> password; user deleted after build</td><td><span class="status change">Change</span> Inject an ephemeral credential and prove the account is absent</td></tr>
+            <tr><td>ISO</td><td>Local Ubuntu 24.04.3 ISO with upstream checksum reference</td><td><span class="status planned">Validate</span> Make version, filename, and checksum agree before building</td></tr>
+            <tr><td>Network</td><td>Packer HTTP server must be reachable from the temporary VM</td><td><span class="status planned">Validate</span> Bind explicitly to the trusted build interface</td></tr>
+            <tr><td>Output</td><td>Creates <code>ubuntu-24.04-template</code></td><td><span class="status planned">Extend</span> Record a manifest and run a disposable clone test</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Task interface</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Task</th><th>Responsibility</th><th>Changes Proxmox?</th></tr></thead>
+          <tbody>
+            <tr><td><code>task image:init</code></td><td>Install the pinned Packer plugin</td><td>No</td></tr>
+            <tr><td><code>task image:format</code></td><td>Check canonical HCL formatting</td><td>No</td></tr>
+            <tr><td><code>task image:validate</code></td><td>Validate templates and required variables</td><td>No</td></tr>
+            <tr><td><code>task image:build</code></td><td>Build and convert the temporary VM into a template</td><td>Yes</td></tr>
+            <tr><td><code>task image:verify</code></td><td>Clone, boot, inspect, and remove a disposable test VM</td><td>Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>Packer formatting and validation pass before the build begins.</li>
+        <li>The build uses a pinned Ubuntu release and verified checksum.</li>
+        <li>The template resides on NVMe/LVM-thin and its disk is no larger than the smallest planned VM root disk.</li>
+        <li>A clone obtains its intended cloud-init identity, address, and administrator SSH key.</li>
+        <li>Two clones have unique machine IDs and SSH host keys.</li>
+        <li>The temporary <code>packer</code> account, installer network configuration, logs, and credentials are absent.</li>
+        <li>QEMU guest agent reports successfully to Proxmox.</li>
+        <li>No application, durable data, or application secret is embedded in the template.</li>
+      </ul>
+
+      <h3>Open implementation choices</h3>
+      <ul class="compact">
+        <li><span class="status open">Open</span> Select a fixed template VM ID; proposed value: <code>9000</code>.</li>
+        <li><span class="status open">Open</span> Keep the ISO preloaded in Proxmox or let Packer download it to Proxmox.</li>
+        <li><span class="status open">Open</span> Choose the ephemeral autoinstall and SSH credential mechanism.</li>
+        <li><span class="status open">Open</span> Confirm which trusted workstation interface the temporary VM can reach for NoCloud HTTP.</li>
+      </ul>
+    </section>
+
+    <footer>
+      Keep this document aligned with <a href="architecture.html">architecture.html</a>. When an implementation detail changes the design, update the architecture decision before marking the implementation complete.
+    </footer>
+  </main>
+
+  <script>
+    function directTabs(tablist) {
+      return Array.from(tablist.children).filter((item) => item.getAttribute('role') === 'tab');
+    }
+
+    function activate(selected) {
+      directTabs(selected.parentElement).forEach((tab) => {
+        const active = tab === selected;
+        tab.setAttribute('aria-selected', String(active));
+        document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+      });
+    }
+
+    document.querySelectorAll('[role="tab"]').forEach((tab) => {
+      tab.addEventListener('click', () => activate(tab));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const tabs = directTabs(tab.parentElement);
+        const current = tabs.indexOf(tab);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 :
+          (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        event.preventDefault();
+        tabs[next].focus();
+        activate(tabs[next]);
+      });
+    });
+  </script>
+</body>
+</html>

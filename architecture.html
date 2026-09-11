@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homelab Architecture</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#f7f7f5, #111312);
+      --surface: light-dark(#fff, #1a1d1b);
+      --surface-2: light-dark(#edf2ee, #242925);
+      --text: light-dark(#17201a, #eef5ef);
+      --muted: light-dark(#5e6a61, #aab7ad);
+      --line: light-dark(#c8d0ca, #465049);
+      --green: light-dark(#176b43, #68d19a);
+      --green-soft: light-dark(#e3f3e9, #18382a);
+      --blue: light-dark(#245f9e, #79b7f2);
+      --blue-soft: light-dark(#e7f0fa, #182f45);
+      --amber: light-dark(#855b00, #f0c568);
+      --amber-soft: light-dark(#fff3cf, #3b3017);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+    main { width: min(1100px, calc(100% - 28px)); margin: auto; padding: 36px 0 64px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.25rem); }
+    h2 { margin: 28px 0 14px; font-size: 1.45rem; }
+    h3 { margin: 22px 0 10px; font-size: 1.1rem; }
+    p { max-width: 78ch; }
+    code { font: .92em ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .meta, .muted { color: var(--muted); }
+    .meta { margin: 7px 0 24px; }
+    .doc-links { display: flex; gap: 14px; margin-bottom: 18px; }
+    .doc-links a { color: var(--muted); text-decoration: none; }
+    .doc-links a:hover { color: var(--text); }
+    .doc-links a[aria-current="page"] { color: var(--text); font-weight: 700; }
+
+    .tabs { display: flex; gap: 5px; overflow-x: auto; padding: 4px; background: var(--surface-2); border-radius: 10px; }
+    .tabs button { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 9px 15px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+    .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 15%, transparent); }
+    .tabs button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+    .subtabs { width: max-content; max-width: 100%; margin: 14px 0 18px; }
+    [role="tabpanel"] { padding-top: 5px; }
+    [hidden] { display: none !important; }
+
+    figure { margin: 20px 0 0; }
+    figcaption { margin-top: 8px; color: var(--muted); }
+    .diagram-scroll { overflow-x: auto; }
+    svg { display: block; width: 100%; min-width: 760px; height: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    svg.wide-diagram { min-width: 1050px; }
+    svg text { fill: var(--text); font-family: inherit; }
+    svg .title { font-size: 19px; font-weight: 700; }
+    svg .label { font-size: 16px; font-weight: 650; }
+    svg .small { fill: var(--muted); font-size: 14px; }
+    svg .eyebrow { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    svg .boundary { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 7 6; }
+    svg .node { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.5; }
+    svg .control { fill: var(--blue-soft); stroke: var(--blue); }
+    svg .network { fill: var(--green-soft); stroke: var(--green); }
+    svg .storage { fill: var(--amber-soft); stroke: var(--amber); }
+    svg .os-storage { fill: var(--blue-soft); stroke: var(--blue); }
+    svg .line { fill: none; stroke: var(--muted); stroke-width: 2; marker-end: url(#vm-arrow); }
+    svg .data-line { fill: none; stroke: var(--amber); stroke-width: 2; marker-end: url(#vm-arrow); }
+    svg .rail { fill: none; stroke: var(--line); stroke-width: 2; }
+    svg .divider { stroke: var(--line); stroke-width: 1; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); }
+    th, td { padding: 10px 11px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+    tr:last-child td { border-bottom: 0; }
+
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; padding: 0; list-style: none; }
+    .facts li { padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+    .context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin: 18px 0 28px; }
+    .context-grid h3 { margin-top: 0; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+    .context-list { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.6fr); gap: 8px 18px; margin: 0; }
+    .context-list dt { color: var(--muted); font-weight: 650; }
+    .context-list dd { margin: 0; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 28px; }
+    .section-heading h2 { margin: 0; }
+    .flyout-toggle, .flyout-close {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .flyout-toggle:hover, .flyout-close:hover { background: var(--surface-2); }
+    .flyout-toggle:focus-visible, .flyout-close:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+    .flyout {
+      --flyout-width: 560px;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      visibility: hidden;
+      pointer-events: none;
+      transition: visibility 0s linear 180ms;
+    }
+    .flyout[data-open] { visibility: visible; pointer-events: auto; transition-delay: 0s; }
+    .flyout-scrim {
+      position: absolute;
+      inset: 0;
+      border: 0;
+      padding: 0;
+      background: color-mix(in srgb, var(--text) 28%, transparent);
+      opacity: 0;
+      cursor: default;
+      transition: opacity 180ms ease;
+    }
+    .flyout[data-open] .flyout-scrim { opacity: 1; }
+    .flyout-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: min(var(--flyout-width), 100%);
+      height: 100%;
+      overflow-y: auto;
+      padding: 24px;
+      border-left: 1px solid var(--line);
+      background: var(--bg);
+      box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 15%, transparent);
+      transform: translateX(100%);
+      transition: transform 180ms ease;
+    }
+    .flyout[data-open] .flyout-panel { transform: translateX(0); }
+    .flyout[data-resizing] .flyout-panel { transition: none; }
+    .flyout-resizer {
+      position: absolute;
+      z-index: 1;
+      top: 0;
+      left: 0;
+      width: 16px;
+      height: 100%;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: ew-resize;
+      touch-action: none;
+    }
+    .flyout-resizer::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 4px;
+      width: 3px;
+      height: 64px;
+      border-radius: 3px;
+      background: var(--line);
+      transform: translateY(-50%);
+    }
+    .flyout-resizer:hover::after, .flyout-resizer:focus-visible::after { background: var(--blue); }
+    .flyout-resizer:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+    .flyout-header { display: flex; align-items: start; justify-content: space-between; gap: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+    .flyout-header h2 { margin: 3px 0 0; }
+    .flyout-kicker { margin: 0; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .flyout-content > section { padding: 18px 0; }
+    .flyout-content > section + section { border-top: 1px solid var(--line); }
+    .flyout-content h3 { margin-top: 0; }
+    body.flyout-open { overflow: hidden; }
+    body.flyout-resizing { cursor: ew-resize; user-select: none; }
+    .status { display: inline-block; padding: 2px 8px; border-radius: 99px; white-space: nowrap; font-size: .78rem; font-weight: 700; }
+    .accepted { color: var(--green); background: var(--green-soft); }
+    .proposed { color: var(--blue); background: var(--blue-soft); }
+    .open { color: var(--amber); background: var(--amber-soft); }
+    .deferred { color: var(--muted); background: var(--surface-2); }
+    .placeholder { min-height: 180px; display: grid; place-items: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+    .compact { margin: 8px 0; padding-left: 21px; }
+    .compact li + li { margin-top: 5px; }
+    @media (max-width: 620px) {
+      main { width: min(100% - 18px, 1100px); padding-top: 22px; }
+      th, td { padding: 8px; }
+      .context-grid { grid-template-columns: 1fr; gap: 18px; }
+      .section-heading { align-items: start; }
+      .flyout-toggle { padding: 7px 10px; }
+      .flyout-panel { padding: 18px; }
+      .flyout-resizer { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .flyout, .flyout-scrim, .flyout-panel { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav class="doc-links" aria-label="Project documents">
+        <a href="architecture.html" aria-current="page">Architecture</a>
+        <a href="implementation.html">Implementation</a>
+      </nav>
+      <h1>Homelab Architecture</h1>
+      <p class="meta">Canonical design · Draft · Updated 11 September 2026</p>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Architecture sections">
+      <button id="hardware-tab" role="tab" aria-selected="true" aria-controls="hardware-panel" type="button">Hardware</button>
+      <button id="network-tab" role="tab" aria-selected="false" aria-controls="network-panel" type="button">Network</button>
+      <button id="os-tab" role="tab" aria-selected="false" aria-controls="os-panel" type="button">OS</button>
+      <button id="vms-tab" role="tab" aria-selected="false" aria-controls="vms-panel" type="button">VMs</button>
+      <button id="apps-tab" role="tab" aria-selected="false" aria-controls="apps-panel" type="button">Applications</button>
+    </nav>
+
+    <section id="hardware-panel" role="tabpanel" aria-labelledby="hardware-tab">
+      <h2>Hardware</h2>
+      <figure>
+        <div class="diagram-scroll">
+        <svg viewBox="0 0 1000 520" role="img" aria-labelledby="hardware-title hardware-desc">
+          <title id="hardware-title">Physical hardware and storage roles</title>
+          <desc id="hardware-desc">The blue Proxmox laptop provides one compute envelope connected to two storage tiers. Its existing 512 gigabyte NVMe LVM-thin tier holds Proxmox and rebuildable VM operating systems. Its one terabyte SATA SSD will be reformatted as single-disk ZFS for durable application datasets.</desc>
+          <defs>
+            <marker id="hardware-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <rect class="boundary" x="30" y="30" width="940" height="455" rx="16"></rect>
+          <text class="title" x="60" y="70">HP Pavilion · physical node blue</text>
+
+          <rect class="node" x="60" y="100" width="880" height="115" rx="10"></rect>
+          <text class="eyebrow" x="85" y="128">COMPUTE ENVELOPE</text>
+          <text class="label" x="85" y="160">Intel i7-8565U</text>
+          <text class="small" x="85" y="187">4 cores · 8 threads</text>
+          <line class="divider" x1="350" y1="120" x2="350" y2="195"></line>
+          <text class="label" x="385" y="160">16 GB RAM</text>
+          <text class="small" x="385" y="187">12 GB guest working budget</text>
+          <line class="divider" x1="640" y1="120" x2="640" y2="195"></line>
+          <text class="label" x="675" y="160">UHD 620 · MX250</text>
+          <text class="small" x="675" y="187">GPU passthrough deferred</text>
+
+          <path d="M500 215 V255 H265 V290" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#hardware-arrow)"></path>
+          <path d="M500 255 H735 V290" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#hardware-arrow)"></path>
+          <text class="eyebrow" x="430" y="246">PHYSICAL STORAGE</text>
+
+          <rect class="node os-storage" x="60" y="290" width="410" height="155" rx="10"></rect>
+          <text class="eyebrow" x="85" y="320">EXISTING · FAST / REBUILDABLE</text>
+          <text class="label" x="85" y="353">512 GB Intel NVMe</text>
+          <text class="small" x="85" y="380">/dev/nvme0n1 · LVM-thin</text>
+          <text class="small" x="85" y="407">Proxmox OS + five VM OS disks</text>
+
+          <rect class="node storage" x="530" y="290" width="410" height="155" rx="10"></rect>
+          <text class="eyebrow" x="555" y="320">PLANNED · DURABLE / BACKED UP</text>
+          <text class="label" x="555" y="353">1 TB Crucial MX500 SATA</text>
+          <text class="small" x="555" y="380">/dev/sda · single-disk ZFS</text>
+          <text class="small" x="555" y="407">Datasets + snapshots · no redundancy</text>
+        </svg>
+        </div>
+        <figcaption>Compute and durable data use separate physical storage tiers. Off-host backup remains required.</figcaption>
+      </figure>
+
+      <template data-flyout data-title="Hardware">
+        <section>
+          <h3>Decisions</h3>
+          <ul class="compact">
+            <li><span class="status accepted">D-004 Accepted</span> Keep Proxmox and VM OS disks on NVMe/LVM-thin.</li>
+            <li><span class="status accepted">D-005 Accepted</span> Reformat the 1 TB SATA SSD as a single-disk ZFS data pool.</li>
+            <li><span class="status proposed">D-008 Proposed</span> Reserve at least 4 GB for the host and keep the normal guest working set below 12 GB.</li>
+            <li><span class="status deferred">D-009 Deferred</span> GPU passthrough and local Ollama hosting.</li>
+          </ul>
+        </section>
+      </template>
+    </section>
+
+    <section id="network-panel" role="tabpanel" aria-labelledby="network-tab" hidden>
+      <h2>Network</h2>
+      <div class="context-grid">
+        <section>
+          <h3>Current environment</h3>
+          <dl class="context-list">
+            <dt>ISP handoff</dt><dd>Singtel ZTE ZXHN F620 ONR</dd>
+            <dt>LAN</dt><dd><code>192.168.1.0/24</code> · gateway <code>192.168.1.254</code></dd>
+            <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
+            <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Target constraints</h3>
+          <dl class="context-list">
+            <dt>WAN</dt><dd>F620 bridged to the new firewall router</dd>
+            <dt>Ingress</dt><dd>One forwarded UDP port to WireGuard</dd>
+            <dt>Public DNS</dt><dd>Namecheap Dynamic DNS</dd>
+            <dt>Private DNS</dt><dd>AdGuard for every home device and VPN peer</dd>
+            <dt>Applications</dt><dd>No direct public exposure</dd>
+          </dl>
+        </section>
+      </div>
+
+      <figure>
+        <div class="diagram-scroll">
+        <svg viewBox="0 0 1000 455" role="img" aria-labelledby="target-network-title target-network-desc">
+          <title id="target-network-title">Target physical network roles</title>
+          <desc id="target-network-desc">The Singtel F620 remains the bridged fibre handoff and gives the public connection to a new firewall router. The firewall router connects to a managed switch. The switch carries tagged VLANs to Proxmox and a VLAN-aware wireless access point.</desc>
+          <defs>
+            <marker id="target-network-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <text class="title" x="40" y="42">Target physical topology · equipment roles only</text>
+
+          <rect class="node" x="35" y="100" width="190" height="125" rx="10"></rect>
+          <text class="eyebrow" x="55" y="130">EXISTING · ISP-MANAGED</text>
+          <text class="label" x="55" y="163">Singtel F620</text>
+          <text class="small" x="55" y="190">Fibre ONR</text>
+          <text class="small" x="55" y="213">Bridge mode assumed</text>
+
+          <rect class="node control" x="285" y="100" width="190" height="125" rx="10"></rect>
+          <text class="eyebrow" x="305" y="130">TARGET · POLICY</text>
+          <text class="label" x="305" y="163">Firewall router</text>
+          <text class="small" x="305" y="190">Routing · ACLs · DHCP</text>
+          <text class="small" x="305" y="213">802.1Q gateway</text>
+
+          <rect class="node" x="535" y="100" width="190" height="125" rx="10"></rect>
+          <text class="eyebrow" x="555" y="130">TARGET · LAYER 2</text>
+          <text class="label" x="555" y="163">Managed switch</text>
+          <text class="small" x="555" y="190">Tagged trunks</text>
+          <text class="small" x="555" y="213">Access ports</text>
+
+          <rect class="node network" x="785" y="100" width="180" height="125" rx="10"></rect>
+          <text class="eyebrow" x="805" y="130">EXISTING · COMPUTE</text>
+          <text class="label" x="805" y="163">Proxmox blue</text>
+          <text class="small" x="805" y="190">VLAN-aware vmbr0</text>
+          <text class="small" x="805" y="213">One tagged NIC</text>
+
+          <path d="M225 162 H285" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
+          <path d="M475 162 H535" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
+          <path d="M725 162 H785" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
+
+          <rect class="node" x="285" y="305" width="190" height="100" rx="10"></rect>
+          <text class="eyebrow" x="305" y="335">TARGET · WIRELESS</text>
+          <text class="label" x="305" y="368">VLAN-aware AP</text>
+          <text class="small" x="305" y="391">Mapped SSIDs</text>
+
+          <rect class="boundary" x="535" y="305" width="430" height="100" rx="10"></rect>
+          <text class="eyebrow" x="555" y="335">LOGICAL ZONES ON THE TRUNK</text>
+          <text class="label" x="555" y="368">Management · edge · data · Git · secrets · agents</text>
+          <text class="small" x="555" y="391">Runner, trusted-client, and IoT zones remain isolated.</text>
+
+          <path d="M630 225 V270 H380 V305" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
+          <path d="M630 270 H750 V305" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
+        </svg>
+        </div>
+        <figcaption>The router enforces policy between zones. VLANs provide separation only when paired with default-deny firewall rules.</figcaption>
+      </figure>
+
+      <h3>Proposed segmentation</h3>
+      <figure>
+        <div class="diagram-scroll">
+        <svg class="wide-diagram" viewBox="0 0 1200 820" role="img" aria-labelledby="logical-network-title logical-network-desc">
+          <title id="logical-network-title">Logical VLAN and firewall architecture</title>
+          <desc id="logical-network-desc">A central firewall router connects ten isolated network zones. Management, edge, trusted clients, IoT, data, Git, agents, secrets, and future runners use separate VLANs. WireGuard clients use a routed subnet through the edge VM rather than a VLAN. Inter-zone traffic is denied unless explicitly allowed.</desc>
+          <defs>
+            <marker id="logical-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <text class="title" x="40" y="42">Logical network · routed security zones</text>
+
+          <rect class="node" x="475" y="65" width="250" height="85" rx="10"></rect>
+          <text class="eyebrow" x="500" y="93">PUBLIC EDGE</text>
+          <text class="label" x="500" y="122">Internet · public IPv4</text>
+          <path d="M600 150 V185" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#logical-arrow)"></path>
+
+          <rect class="node control" x="450" y="185" width="300" height="500" rx="12"></rect>
+          <text class="eyebrow" x="475" y="216">ROUTING AND POLICY AUTHORITY</text>
+          <text class="title" x="475" y="249">Firewall router</text>
+          <text class="small" x="475" y="278">VLAN gateways: 10.73.&lt;VLAN&gt;.1</text>
+          <text class="small" x="475" y="304">DHCP · WAN NAT · stateful firewall</text>
+          <line class="divider" x1="475" y1="330" x2="725" y2="330"></line>
+          <text class="eyebrow" x="475" y="360">DEFAULT</text>
+          <text class="label" x="475" y="389">Deny inter-zone traffic</text>
+          <line class="divider" x1="475" y1="416" x2="725" y2="416"></line>
+          <text class="eyebrow" x="475" y="446">EXPLICIT EXCEPTIONS</text>
+          <text class="small" x="475" y="475">Admin peers → management</text>
+          <text class="small" x="475" y="501">VPN / trusted → published apps</text>
+          <text class="small" x="475" y="527">Agents → Git · SSH / HTTPS</text>
+          <text class="small" x="475" y="553">All zones → AdGuard · TCP / UDP 53</text>
+          <text class="small" x="475" y="579">Approved zones → WAN egress</text>
+          <line class="divider" x1="475" y1="604" x2="725" y2="604"></line>
+          <text class="eyebrow" x="475" y="634">WIREGUARD RETURN ROUTE</text>
+          <text class="small" x="475" y="661">10.73.100.0/24 via 10.73.20.10</text>
+
+          <rect class="node control" x="40" y="185" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="214">VLAN 10 · 10.73.10.0/24</text>
+          <text class="label" x="60" y="244">Management</text>
+          <text class="small" x="185" y="244">Proxmox · router · switch · AP</text>
+          <path class="rail" d="M370 227 H450"></path>
+
+          <rect class="node" x="40" y="290" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="319">VLAN 30 · 10.73.30.0/24</text>
+          <text class="label" x="60" y="349">Data</text>
+          <text class="small" x="115" y="349">lab-data-01 · Nextcloud</text>
+          <path class="rail" d="M370 332 H450"></path>
+
+          <rect class="node storage" x="40" y="395" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="424">VLAN 50 · 10.73.50.0/24</text>
+          <text class="label" x="60" y="454">Secrets</text>
+          <text class="small" x="135" y="454">lab-secrets-01 · password vault</text>
+          <path class="rail" d="M370 437 H450"></path>
+
+          <rect class="boundary" x="40" y="500" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="529">VLAN 70 · 10.73.70.0/24 · FUTURE</text>
+          <text class="label" x="60" y="559">CI runner</text>
+          <text class="small" x="150" y="559">lab-runner-01 · ephemeral</text>
+          <path class="rail" d="M370 542 H450"></path>
+
+          <rect class="node storage" x="40" y="605" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="634">VLAN 90 · 10.73.90.0/24</text>
+          <text class="label" x="60" y="664">IoT</text>
+          <text class="small" x="108" y="664">Two Xiaomi cameras · no LAN access</text>
+          <path class="rail" d="M370 647 H450"></path>
+
+          <rect class="node network" x="830" y="185" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="850" y="214">VLAN 20 · 10.73.20.0/24</text>
+          <text class="label" x="850" y="244">Edge</text>
+          <text class="small" x="910" y="244">lab-access-01 · WG · DNS · DDNS</text>
+          <path class="rail" d="M750 227 H830"></path>
+
+          <rect class="node control" x="830" y="290" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="850" y="319">VLAN 40 · 10.73.40.0/24</text>
+          <text class="label" x="850" y="349">Git</text>
+          <text class="small" x="890" y="349">lab-git-01 · Gitea / artifacts</text>
+          <path class="rail" d="M750 332 H830"></path>
+
+          <rect class="node" x="830" y="395" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="850" y="424">VLAN 60 · 10.73.60.0/24</text>
+          <text class="label" x="850" y="454">Agents</text>
+          <text class="small" x="922" y="454">lab-agents-01 · Hermes</text>
+          <path class="rail" d="M750 437 H830"></path>
+
+          <rect class="node" x="830" y="500" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="850" y="529">VLAN 80 · 10.73.80.0/24</text>
+          <text class="label" x="850" y="559">Trusted clients</text>
+          <text class="small" x="995" y="559">Phone · laptop · desktop</text>
+          <path class="rail" d="M750 542 H830"></path>
+
+          <rect class="boundary" x="830" y="605" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="850" y="634">ROUTED · 10.73.100.0/24 · NOT A VLAN</text>
+          <text class="label" x="850" y="664">WireGuard peers</text>
+          <text class="small" x="997" y="664">Per-device /32 policy</text>
+          <path class="rail" d="M750 647 H830"></path>
+
+          <path d="M1160 437 H1178 V332 H1160" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#logical-arrow)"></path>
+          <text class="eyebrow" x="1080" y="390">GIT ONLY</text>
+          <text class="small" x="40" y="760">Every zone reaches another zone through the firewall; VLAN tags provide separation and explicit ACLs provide security.</text>
+        </svg>
+        </div>
+        <figcaption>Hub-and-spoke routing prevents direct Layer-2 paths between trust zones. The side arrow is the agent-to-Git exception.</figcaption>
+      </figure>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Zone</th><th>VLAN</th><th>Candidate subnet</th><th>Members</th><th>Default access</th></tr></thead>
+          <tbody>
+            <tr><td>Management</td><td>10</td><td><code>10.73.10.0/24</code></td><td>Proxmox and network equipment</td><td>Named admin devices and admin VPN peers only</td></tr>
+            <tr><td>Edge</td><td>20</td><td><code>10.73.20.0/24</code></td><td><code>lab-access-01</code></td><td>Forwarded WireGuard UDP; tightly scoped internal routing</td></tr>
+            <tr><td>Data</td><td>30</td><td><code>10.73.30.0/24</code></td><td><code>lab-data-01</code></td><td>VPN and trusted clients on published application ports</td></tr>
+            <tr><td>Git</td><td>40</td><td><code>10.73.40.0/24</code></td><td><code>lab-git-01</code></td><td>VPN and trusted clients; scoped SSH/HTTPS from agents</td></tr>
+            <tr><td>Secrets</td><td>50</td><td><code>10.73.50.0/24</code></td><td><code>lab-secrets-01</code></td><td>Explicit users and devices only</td></tr>
+            <tr><td>Agents</td><td>60</td><td><code>10.73.60.0/24</code></td><td><code>lab-agents-01</code></td><td>Outbound model APIs, DNS/NTP, and scoped access to Git</td></tr>
+            <tr><td>CI runners</td><td>70</td><td><code>10.73.70.0/24</code></td><td>Future <code>lab-runner-01</code></td><td>Isolated from agents, management, data, and secrets</td></tr>
+            <tr><td>Trusted clients</td><td>80</td><td><code>10.73.80.0/24</code></td><td>Home laptops and phones</td><td>DNS and selected private applications</td></tr>
+            <tr><td>IoT</td><td>90</td><td><code>10.73.90.0/24</code></td><td>Two Xiaomi cameras</td><td>DNS/NTP and explicitly approved internet destinations; no internal zones</td></tr>
+            <tr><td>VPN clients</td><td>Not a VLAN</td><td><code>10.73.100.0/24</code></td><td>WireGuard peers</td><td>Per-peer policy and selected tunnel profile</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">The <code>10.73.0.0/16</code> plan does not overlap the current <code>192.168.1.0/24</code> LAN. Application container networks must also remain outside it.</p>
+
+      <h3>How zones are implemented</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Layer</th><th>Responsibility</th></tr></thead>
+          <tbody>
+            <tr><td>Firewall router</td><td>Creates each VLAN gateway, routes between zones, supplies DHCP, applies default-deny ACLs, performs WAN NAT, and holds the WireGuard-subnet return route.</td></tr>
+            <tr><td>Managed switch</td><td>Carries tagged VLAN trunks to Proxmox and the access point; assigns untagged access VLANs to ordinary wired ports.</td></tr>
+            <tr><td>Proxmox</td><td>Makes <code>vmbr0</code> VLAN-aware, places host management on VLAN 10, and assigns one VLAN tag to each VM NIC.</td></tr>
+            <tr><td>Guest VM</td><td>Receives a normal untagged VirtIO NIC, IP address, and VLAN gateway; no VLAN configuration is required inside a single-zone guest.</td></tr>
+            <tr><td>Proxmox firewall</td><td>Adds per-VM defense in depth if router rules are absent or misconfigured.</td></tr>
+            <tr><td>Wireless AP</td><td>Maps trusted and IoT SSIDs to their VLANs. Wireless management remains on VLAN 10.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>WireGuard client profiles</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Profile</th><th>Routes through home</th><th>Primary use</th><th>Open control</th></tr></thead>
+          <tbody>
+            <tr><td>Travel</td><td>All IPv4 traffic + DNS</td><td>Trips, including China</td><td>Prevent IPv6 bypass; keep a tested fallback if UDP is disrupted.</td></tr>
+            <tr><td>DNS only</td><td>AdGuard address only</td><td>Outside home in Singapore</td><td>Disable client features that bypass AdGuard with independent encrypted DNS.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>WireGuard ingress</h3>
+      <figure>
+        <div class="diagram-scroll">
+        <svg viewBox="0 0 1000 465" role="img" aria-labelledby="network-title network-desc">
+          <title id="network-title">WireGuard ingress through dynamic DNS</title>
+          <desc id="network-desc">A remote client resolves a dedicated Namecheap Dynamic DNS hostname to the firewall router's changing public IPv4 address. The router forwards one UDP port to the WireGuard service on lab-access-01. That VM also runs AdGuard and the existing DDNS updater, and routes authenticated VPN clients to private application zones.</desc>
+          <defs>
+            <marker id="network-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <text class="title" x="40" y="42">WireGuard ingress · IPv4</text>
+
+          <rect class="node" x="35" y="120" width="175" height="115" rx="10"></rect>
+          <text class="eyebrow" x="55" y="150">INTERNET</text>
+          <text class="label" x="55" y="183">Remote client</text>
+          <text class="small" x="55" y="210">WireGuard peer</text>
+
+          <rect class="node control" x="275" y="120" width="190" height="115" rx="10"></rect>
+          <text class="eyebrow" x="295" y="150">PUBLIC DNS</text>
+          <text class="label" x="295" y="183">Namecheap</text>
+          <text class="small" x="295" y="210">vpn.&lt;domain&gt; · A+DDNS</text>
+
+          <rect class="node" x="530" y="120" width="190" height="115" rx="10"></rect>
+          <text class="eyebrow" x="550" y="150">HOME EDGE</text>
+          <text class="label" x="550" y="183">Firewall router</text>
+          <text class="small" x="550" y="210">Dynamic public IPv4</text>
+
+          <rect class="node network" x="785" y="120" width="180" height="115" rx="10"></rect>
+          <text class="eyebrow" x="805" y="150">EDGE · VLAN 20</text>
+          <text class="label" x="805" y="183">lab-access-01</text>
+          <text class="small" x="805" y="210">WireGuard · AdGuard</text>
+
+          <path d="M210 177 H275" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#network-arrow)"></path>
+          <text class="eyebrow" x="221" y="164">RESOLVE</text>
+          <path d="M465 177 H530" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#network-arrow)"></path>
+          <text class="eyebrow" x="473" y="164">PUBLIC IP</text>
+          <path d="M720 177 H785" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#network-arrow)"></path>
+          <text class="eyebrow" x="725" y="164">ONE UDP PORT</text>
+
+          <path d="M875 120 V78 H370 V120" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#network-arrow)"></path>
+          <text class="eyebrow" x="520" y="68">EXISTING SCRIPT · PERIODIC HTTPS DDNS UPDATE</text>
+
+          <rect class="boundary" x="250" y="330" width="715" height="95" rx="12"></rect>
+          <text class="eyebrow" x="275" y="360">PRIVATE ZONES · NO PUBLIC APPLICATION PORTS</text>
+          <text class="label" x="275" y="393">Data · Git · secrets · agents · management</text>
+          <path d="M875 235 V300 H610 V330" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#network-arrow)"></path>
+          <text class="eyebrow" x="653" y="291">AUTHENTICATED VPN ROUTES</text>
+        </svg>
+        </div>
+        <figcaption>The public DNS record reveals only the changing router address. Application services remain reachable only after WireGuard authentication.</figcaption>
+      </figure>
+
+      <template data-flyout data-title="Network">
+        <section>
+          <h3>Decisions</h3>
+          <ul class="compact">
+            <li><span class="status accepted">D-016 Accepted</span> Forward exactly one public UDP port from the router to WireGuard on <code>lab-access-01</code>.</li>
+            <li><span class="status accepted">Accepted</span> WAN IPv4 matches the externally observed address; the port-forward design has worked previously.</li>
+            <li><span class="status accepted">Accepted</span> Run the existing Namecheap DDNS script on <code>lab-access-01</code>; review and automate it with Ansible when workloads are deployed.</li>
+            <li><span class="status accepted">D-020 Accepted</span> Maintain separate full-tunnel travel and DNS-only WireGuard client profiles.</li>
+            <li><span class="status accepted">D-021 Accepted</span> Reserve <code>10.73.0.0/16</code> for the target network and <code>10.73.100.0/24</code> for WireGuard peers.</li>
+            <li><span class="status accepted">D-022 Accepted</span> Bridge the F620 and make a new VLAN-capable firewall router the public-IP endpoint and policy authority.</li>
+            <li><span class="status accepted">D-023 Accepted</span> Segment management, edge, data, Git, secrets, agents, runners, trusted clients, and IoT with default-deny inter-zone rules.</li>
+            <li><span class="status accepted">D-024 Accepted</span> Make AdGuard the DNS resolver advertised to every home VLAN and WireGuard peer.</li>
+            <li><span class="status proposed">D-025 Proposed</span> Route <code>10.73.100.0/24</code> through <code>lab-access-01</code> without internal NAT; NAT only full-tunnel internet egress at the firewall router.</li>
+            <li><span class="status accepted">D-026 Accepted</span> Limit management access to three named devices: the owner's phone, laptop, and desktop; give each its own WireGuard key and stable peer address.</li>
+            <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
+            <li><span class="status accepted">D-028 Accepted</span> Isolate <code>lab-git-01</code> on VLAN 40 so agent access to Git does not create a Layer-2 path to Nextcloud data.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Before implementation</h3>
+          <ul class="compact">
+            <li><span class="status open">Open</span> Decide whether the travel profile tunnels IPv6 or deliberately disables it.</li>
+            <li><span class="status open">Open</span> Confirm the public VPN hostname and UDP port.</li>
+            <li><span class="status open">Open</span> Inventory current DHCP assignments and plan the cutover from <code>192.168.1.0/24</code>.</li>
+            <li><span class="status open">Open</span> Decide whether the Xiaomi cameras require vendor-cloud internet access.</li>
+            <li><span class="status open">Open</span> Choose whether DNS fails closed with one AdGuard instance or gains a second resolver.</li>
+          </ul>
+        </section>
+      </template>
+    </section>
+
+    <section id="os-panel" role="tabpanel" aria-labelledby="os-tab" hidden>
+      <h2>Operating systems</h2>
+      <ul class="facts">
+        <li><strong>Hypervisor</strong><br>Proxmox VE 9.1.2 documented baseline</li>
+        <li><strong>Guest template</strong><br>Ubuntu Server 24.04 via Packer</li>
+        <li><strong>Provisioning</strong><br>Terraform + cloud-init</li>
+        <li><strong>Configuration</strong><br>Remote Ansible over key-only SSH</li>
+        <li><strong>Operator interface</strong><br>Task + root Taskfile</li>
+      </ul>
+      <template data-flyout data-title="Operating systems">
+        <section>
+          <h3>Decisions</h3>
+          <ul class="compact">
+            <li><span class="status accepted">D-002 Accepted</span> Packer owns the generic image, Terraform owns VM infrastructure, and Ansible owns applications.</li>
+            <li><span class="status accepted">D-012 Accepted</span> VM operating systems are disposable and recreated from the generic template.</li>
+            <li><span class="status accepted">D-029 Accepted</span> Use Task and a root <code>Taskfile.yml</code> as the operator interface; keep implementation logic in Packer, Terraform, Ansible, and focused scripts.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Before implementation</h3>
+          <ul class="compact">
+            <li><span class="status open">Open</span> Confirm the installed Proxmox patch version and update host firmware/Intel microcode.</li>
+          </ul>
+        </section>
+      </template>
+    </section>
+
+    <section id="vms-panel" role="tabpanel" aria-labelledby="vms-tab" hidden>
+      <h2>Virtual machines</h2>
+      <figure>
+        <div class="diagram-scroll">
+        <svg viewBox="0 0 1100 690" role="img" aria-labelledby="vm-title vm-desc">
+          <title id="vm-title">Five virtual machines organized by capability and trust boundary</title>
+          <desc id="vm-desc">Five role-named virtual machines separately provide access, personal data, secret storage, Git hosting, and agent execution. The agent VM has scoped access to the Git VM. Every VM uses a rebuildable operating system disk on NVMe LVM-thin and a durable dataset on SATA ZFS.</desc>
+          <defs>
+            <marker id="vm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <rect class="boundary" x="25" y="25" width="1050" height="625" rx="16"></rect>
+          <text class="title" x="55" y="65">Proxmox node blue · five capability domains</text>
+
+          <rect class="node network" x="45" y="105" width="190" height="155" rx="10"></rect>
+          <text class="eyebrow" x="65" y="133">ACCESS BOUNDARY</text>
+          <text class="label" x="65" y="166">lab-access-01</text>
+          <text class="small" x="65" y="197">WireGuard · AdGuard</text>
+          <text class="small" x="65" y="228">1 GB RAM</text>
+
+          <rect class="node" x="250" y="105" width="190" height="155" rx="10"></rect>
+          <text class="eyebrow" x="270" y="133">PERSONAL DATA</text>
+          <text class="label" x="270" y="166">lab-data-01</text>
+          <text class="small" x="270" y="197">Nextcloud · DB · Redis</text>
+          <text class="small" x="270" y="228">3 GB RAM</text>
+
+          <rect class="node storage" x="455" y="105" width="190" height="155" rx="10"></rect>
+          <text class="eyebrow" x="475" y="133">RESTRICTED SECRETS</text>
+          <text class="label" x="475" y="166">lab-secrets-01</text>
+          <text class="small" x="475" y="197">Password manager</text>
+          <text class="small" x="475" y="228">1 GB RAM</text>
+
+          <rect class="node control" x="660" y="105" width="190" height="155" rx="10"></rect>
+          <text class="eyebrow" x="680" y="133">SOURCE CONTROL</text>
+          <text class="label" x="680" y="166">lab-git-01</text>
+          <text class="small" x="680" y="197">Gitea · artifacts</text>
+          <text class="small" x="680" y="228">1 GB RAM</text>
+
+          <rect class="node" x="865" y="105" width="190" height="155" rx="10"></rect>
+          <text class="eyebrow" x="885" y="133">AGENT RUNTIME</text>
+          <text class="label" x="885" y="166">lab-agents-01</text>
+          <text class="small" x="885" y="197">Hermes · future agents</text>
+          <text class="small" x="885" y="228">2–4 GB RAM</text>
+
+          <path d="M865 185 H850" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
+          <text class="eyebrow" x="796" y="286">SCOPED GIT / API</text>
+
+          <path class="rail" d="M140 260 V335 M345 260 V335 M550 260 V335 M755 260 V335 M960 260 V335 M140 335 H960"></path>
+          <text class="eyebrow" x="420" y="365">TERRAFORM-MANAGED STORAGE ATTACHMENTS</text>
+          <path class="line" d="M550 335 V405 H290 V445"></path>
+          <path class="data-line" d="M550 405 H810 V445"></path>
+
+          <rect class="node os-storage" x="70" y="445" width="440" height="130" rx="10"></rect>
+          <text class="eyebrow" x="95" y="475">OS TIER · NVME / LVM-THIN</text>
+          <text class="label" x="95" y="510">Five independent root disks</text>
+          <text class="small" x="95" y="540">Rebuildable from Packer → Terraform → Ansible</text>
+
+          <rect class="node storage" x="590" y="445" width="440" height="130" rx="10"></rect>
+          <text class="eyebrow" x="615" y="475">DATA TIER · SATA / ZFS</text>
+          <text class="label" x="615" y="510">One dataset per capability domain</text>
+          <text class="small" x="615" y="540">Durable state · snapshots · off-host backup required</text>
+
+          <text class="small" x="70" y="615">Each VM is a separate failure and trust boundary; product replacements do not require hostname changes.</text>
+        </svg>
+        </div>
+        <figcaption>Names encode capability and trust role; application products remain replaceable.</figcaption>
+      </figure>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>VM</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
+          <tbody>
+            <tr><td><code>lab-access-01</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
+            <tr><td><code>lab-data-01</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Personal files and database</td></tr>
+            <tr><td><code>lab-secrets-01</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Highest-sensitivity application</td></tr>
+            <tr><td><code>lab-git-01</code></td><td>1</td><td>1 GB</td><td>24 GB</td><td>Source and artifact control plane</td></tr>
+            <tr><td><code>lab-agents-01</code></td><td>2</td><td>2–4 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">Initial sizing, not guaranteed reservations. Normal target: 9 GB guest RAM, leaving 4 GB for Proxmox and roughly 3 GB headroom.</p>
+
+      <h3>Naming</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Field</th><th>Meaning</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td><code>lab</code></td><td>Environment scope</td><td>Distinguishes homelab assets from clients and external systems.</td></tr>
+            <tr><td><code>&lt;role&gt;</code></td><td>Workload class, not a product</td><td><code>access</code>, <code>data</code>, <code>secrets</code>, <code>git</code>, <code>agents</code></td></tr>
+            <tr><td><code>01</code></td><td>Instance ordinal</td><td>Allows a later peer without renaming the first VM.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">Format: <code>&lt;scope&gt;-&lt;role&gt;-&lt;ordinal&gt;</code>. A product can be replaced within the same workload class without changing the hostname.</p>
+
+      <template data-flyout data-title="Virtual machines">
+        <section>
+          <h3>Decisions</h3>
+          <ul class="compact">
+            <li><span class="status accepted">D-003 Accepted</span> Keep WireGuard and AdGuard together on the network VM.</li>
+            <li><span class="status accepted">D-010 Accepted</span> Use five VMs separated by trust and failure domain.</li>
+            <li><span class="status accepted">D-011 Accepted</span> Keep Gitea separate from agent execution.</li>
+            <li><span class="status accepted">D-013 Accepted</span> Name VMs using <code>&lt;scope&gt;-&lt;role&gt;-&lt;ordinal&gt;</code>; keep product names in application configuration.</li>
+            <li><span class="status accepted">D-014 Accepted</span> Reserve <code>lab-agents-01</code> for agents; do not run Gitea Actions jobs there.</li>
+            <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
+          </ul>
+        </section>
+      </template>
+    </section>
+
+    <section id="apps-panel" role="tabpanel" aria-labelledby="apps-tab" hidden>
+      <h2>Applications</h2>
+      <nav class="tabs subtabs" role="tablist" aria-label="Application groups">
+        <button id="network-app-tab" role="tab" aria-selected="true" aria-controls="network-app-panel" type="button">lab-access-01</button>
+        <button id="cloud-app-tab" role="tab" aria-selected="false" aria-controls="cloud-app-panel" type="button">lab-data-01</button>
+        <button id="vault-app-tab" role="tab" aria-selected="false" aria-controls="vault-app-panel" type="button">lab-secrets-01</button>
+        <button id="git-app-tab" role="tab" aria-selected="false" aria-controls="git-app-panel" type="button">lab-git-01</button>
+        <button id="agents-app-tab" role="tab" aria-selected="false" aria-controls="agents-app-panel" type="button">lab-agents-01</button>
+      </nav>
+
+      <section id="network-app-panel" role="tabpanel" aria-labelledby="network-app-tab">
+        <h3>WireGuard + AdGuard</h3>
+        <p>WireGuard is the sole remote ingress. AdGuard provides DNS to VPN clients and selected local devices.</p>
+        <p>No application is exposed directly to the public internet.</p>
+        <p><strong>Durable:</strong> VPN identities, peer assignments, DNS rules, credentials. <strong>Deployment:</strong> Ansible; runtime packaging open.</p>
+      </section>
+
+      <section id="cloud-app-panel" role="tabpanel" aria-labelledby="cloud-app-tab" hidden>
+        <h3>Nextcloud</h3>
+        <p>Private file service with its database and Redis colocated inside the VM boundary.</p>
+        <p><strong>Durable:</strong> files, database, configuration, encryption material. <strong>Deployment:</strong> Ansible; runtime packaging open.</p>
+      </section>
+
+      <section id="vault-app-panel" role="tabpanel" aria-labelledby="vault-app-tab" hidden>
+        <h3>Password manager</h3>
+        <p>Dedicated VM because compromise has unusually high impact. Product selection remains open.</p>
+        <p><strong>Durable:</strong> vault database, keys, attachments, configuration. <strong>Access:</strong> private HTTPS over WireGuard.</p>
+      </section>
+
+      <section id="git-app-panel" role="tabpanel" aria-labelledby="git-app-tab" hidden>
+        <h3>Gitea</h3>
+        <p>Private source-of-truth for agent code and artifacts. Start with SQLite. No Actions runner is registered in the initial deployment.</p>
+        <p><strong>Durable:</strong> repositories, LFS, packages, artifacts, configuration, database. <strong>Clients:</strong> users and scoped agent identities.</p>
+        <p><strong>Runner boundary:</strong> CI jobs never execute on this VM or on <code>lab-agents-01</code>. A future <code>lab-runner-01</code> is disposable and receives no application datasets. Gitea documents that host mode has no job isolation and Docker mode shares its daemon; <a href="https://docs.gitea.com/runner/">runner isolation is an explicit security boundary</a>.</p>
+      </section>
+
+      <section id="agents-app-panel" role="tabpanel" aria-labelledby="agents-app-tab" hidden>
+        <h3>Hermes Agent</h3>
+        <p>Initial agent runtime. This VM may host future agents, but it never accepts CI runner jobs.</p>
+        <p><strong>Durable:</strong> agent configuration, credentials, sessions, skills. <strong>Boundary:</strong> no direct access to the vault, Nextcloud data, or Proxmox management. Outbound HTTPS is required for model and tool providers.</p>
+      </section>
+
+      <h3>Shared deployment contract</h3>
+      <ol class="compact">
+        <li>Packer builds the generic Ubuntu image.</li>
+        <li>Terraform creates each VM, OS disk, network attachment, and data attachment.</li>
+        <li>Ansible installs and configures applications.</li>
+        <li>Application data is restored or mounted from ZFS-backed storage.</li>
+      </ol>
+      <template data-flyout data-title="Applications">
+        <section>
+          <h3>Decisions</h3>
+          <ul class="compact">
+            <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Before implementation</h3>
+          <ul class="compact">
+            <li><span class="status open">D-006 Open</span> Decide whether ordinary <code>terraform destroy</code> must preserve ZFS application datasets. Recommendation: preserve by default and require a separate explicit data-destruction action.</li>
+            <li><span class="status open">D-007 Open</span> Select an encrypted off-host backup target, retention, and restore objective.</li>
+            <li><span class="status open">D-017 Open</span> Choose application packaging. Recommendation: Ansible-managed Docker Compose, with exceptions only where host networking makes native services simpler.</li>
+            <li><span class="status open">D-018 Open</span> Choose encrypted secret storage. Terraform must not receive application secret plaintext; recommendation: SOPS with age keys, decrypted by Ansible at deployment time.</li>
+            <li><span class="status open">D-019 Open</span> Select the password manager product and define emergency recovery of its database and encryption material.</li>
+          </ul>
+        </section>
+      </template>
+    </section>
+  </main>
+
+  <div class="flyout" id="architecture-flyout" aria-hidden="true" inert>
+    <div class="flyout-scrim" data-flyout-close aria-hidden="true"></div>
+    <aside class="flyout-panel" role="dialog" aria-modal="true" aria-labelledby="flyout-title">
+      <button class="flyout-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize panel with the Left and Right arrow keys" aria-valuemin="360" aria-valuemax="760" aria-valuenow="560"></button>
+      <header class="flyout-header">
+        <div>
+          <p class="flyout-kicker">Architecture context</p>
+          <h2 id="flyout-title"></h2>
+        </div>
+        <button class="flyout-close" type="button" data-flyout-close>Close</button>
+      </header>
+      <div class="flyout-content" data-flyout-content></div>
+    </aside>
+  </div>
+
+  <script>
+    function directTabs(tablist) {
+      return Array.from(tablist.children).filter((item) => item.getAttribute('role') === 'tab');
+    }
+
+    class ArchitectureFlyout {
+      constructor(root) {
+        this.root = root;
+        this.panel = root.querySelector('.flyout-panel');
+        this.title = root.querySelector('#flyout-title');
+        this.content = root.querySelector('[data-flyout-content]');
+        this.resizer = root.querySelector('.flyout-resizer');
+        this.defaultWidth = 560;
+        this.currentWidth = this.defaultWidth;
+        this.trigger = null;
+        this.resizePointer = null;
+
+        root.querySelectorAll('[data-flyout-close]').forEach((button) => {
+          button.addEventListener('click', () => this.close());
+        });
+        this.panel.addEventListener('keydown', (event) => this.keepFocusInside(event));
+        this.resizer.addEventListener('pointerdown', (event) => this.startResize(event));
+        this.resizer.addEventListener('pointermove', (event) => this.resizeFromPointer(event));
+        this.resizer.addEventListener('pointerup', (event) => this.stopResize(event));
+        this.resizer.addEventListener('pointercancel', (event) => this.stopResize(event));
+        this.resizer.addEventListener('keydown', (event) => this.resizeFromKeyboard(event));
+        this.resizer.addEventListener('dblclick', () => this.setWidth(this.defaultWidth));
+        window.addEventListener('resize', () => this.updateResizeMetadata());
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && this.isOpen()) this.close();
+        });
+        this.updateResizeMetadata();
+        this.mountTriggers();
+      }
+
+      resizeBounds() {
+        const min = Math.min(360, window.innerWidth);
+        const max = Math.max(min, Math.min(760, window.innerWidth - 24));
+        return { min, max };
+      }
+
+      setWidth(width) {
+        const { min, max } = this.resizeBounds();
+        this.currentWidth = Math.round(Math.max(min, Math.min(max, width)));
+        this.root.style.setProperty('--flyout-width', `${this.currentWidth}px`);
+        this.updateResizeMetadata();
+      }
+
+      updateResizeMetadata() {
+        const { min, max } = this.resizeBounds();
+        const displayedWidth = Math.max(min, Math.min(max, this.currentWidth));
+        this.resizer.setAttribute('aria-valuemin', String(min));
+        this.resizer.setAttribute('aria-valuemax', String(max));
+        this.resizer.setAttribute('aria-valuenow', String(displayedWidth));
+      }
+
+      startResize(event) {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        this.resizePointer = event.pointerId;
+        this.resizeStartX = event.clientX;
+        this.resizeStartWidth = this.panel.getBoundingClientRect().width;
+        this.resizer.setPointerCapture(event.pointerId);
+        this.root.setAttribute('data-resizing', '');
+        document.body.classList.add('flyout-resizing');
+      }
+
+      resizeFromPointer(event) {
+        if (event.pointerId !== this.resizePointer) return;
+        this.setWidth(this.resizeStartWidth + this.resizeStartX - event.clientX);
+      }
+
+      stopResize(event) {
+        if (event.pointerId !== this.resizePointer) return;
+        this.resizePointer = null;
+        this.root.removeAttribute('data-resizing');
+        document.body.classList.remove('flyout-resizing');
+      }
+
+      resizeFromKeyboard(event) {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 64 : 24;
+        this.setWidth(this.currentWidth + (event.key === 'ArrowLeft' ? step : -step));
+      }
+
+      mountTriggers() {
+        document.querySelectorAll('main > section[role="tabpanel"]').forEach((section) => {
+          const template = Array.from(section.children).find((child) => child.matches('template[data-flyout]'));
+          const heading = Array.from(section.children).find((child) => child.tagName === 'H2');
+          if (!template || !heading) return;
+
+          const row = document.createElement('div');
+          row.className = 'section-heading';
+          heading.before(row);
+          row.append(heading, this.createTrigger(template));
+        });
+      }
+
+      createTrigger(template) {
+        const button = document.createElement('button');
+        button.className = 'flyout-toggle';
+        button.type = 'button';
+        button.textContent = 'Decisions & inputs';
+        button.setAttribute('aria-controls', this.root.id);
+        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-label', `Open ${template.dataset.title} decisions and implementation inputs`);
+        button.addEventListener('click', () => this.open(template, button));
+        return button;
+      }
+
+      open(template, trigger) {
+        this.trigger = trigger;
+        this.title.textContent = `${template.dataset.title} decisions & inputs`;
+        this.content.replaceChildren(template.content.cloneNode(true));
+        document.querySelectorAll('.flyout-toggle').forEach((button) => {
+          button.setAttribute('aria-expanded', String(button === trigger));
+        });
+        this.root.inert = false;
+        this.root.setAttribute('aria-hidden', 'false');
+        this.root.setAttribute('data-open', '');
+        document.body.classList.add('flyout-open');
+        this.updateResizeMetadata();
+        this.panel.scrollTop = 0;
+        this.root.querySelector('.flyout-close').focus();
+      }
+
+      close(restoreFocus = true) {
+        if (!this.isOpen()) return;
+        const trigger = this.trigger;
+        this.root.removeAttribute('data-open');
+        this.root.setAttribute('aria-hidden', 'true');
+        this.root.inert = true;
+        this.root.removeAttribute('data-resizing');
+        document.body.classList.remove('flyout-open');
+        document.body.classList.remove('flyout-resizing');
+        this.resizePointer = null;
+        document.querySelectorAll('.flyout-toggle').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+        this.trigger = null;
+        if (restoreFocus && trigger) trigger.focus();
+      }
+
+      isOpen() {
+        return this.root.hasAttribute('data-open');
+      }
+
+      keepFocusInside(event) {
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(this.panel.querySelectorAll('button, a[href]'))
+          .filter((element) => element.getClientRects().length > 0);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    const architectureFlyout = new ArchitectureFlyout(document.getElementById('architecture-flyout'));
+
+    function activate(selected) {
+      if (selected.parentElement.getAttribute('aria-label') === 'Architecture sections') {
+        architectureFlyout.close(false);
+      }
+      directTabs(selected.parentElement).forEach((tab) => {
+        const active = tab === selected;
+        tab.setAttribute('aria-selected', String(active));
+        document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+      });
+    }
+
+    document.querySelectorAll('[role="tab"]').forEach((tab) => {
+      tab.addEventListener('click', () => activate(tab));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const tabs = directTabs(tab.parentElement);
+        const current = tabs.indexOf(tab);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 :
+          (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        event.preventDefault();
+        tabs[next].focus();
+        activate(tabs[next]);
+      });
+    });
+  </script>
+</body>
+</html>

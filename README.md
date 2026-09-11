@@ -2,6 +2,10 @@
 
 This homelab uses Packer to build Proxmox VM templates and Terraform to deploy VM instances on a 5 year old HP Pavilion running Proxmox VE 9.
 
+Architecture and design decisions: [architecture.html](architecture.html)
+
+Implementation plan and progress: [implementation.html](implementation.html)
+
 ## Terraform Providers
 ### BGP (Selected)
 
