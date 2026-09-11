@@ -1,0 +1,15 @@
+---
+- name: Apply common guest configuration
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - common
+
+- name: Configure the access boundary
+  hosts: access
+  become: true
+  gather_facts: true
+  roles:
+    - wireguard
+    - adguard

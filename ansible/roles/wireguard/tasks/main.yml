@@ -1,0 +1,104 @@
+---
+- name: Install WireGuard packages
+  ansible.builtin.apt:
+    name:
+      - iptables
+      - qrencode
+      - wireguard
+      - wireguard-tools
+    update_cache: true
+    state: present
+
+- name: Create WireGuard state directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - /etc/wireguard/clients
+    - /var/lib/lab-access/wireguard/clients
+
+- name: Enable IPv4 forwarding
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-wireguard-forwarding.conf
+    mode: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+  register: wireguard_sysctl
+
+- name: Apply forwarding configuration
+  ansible.builtin.command: sysctl --system
+  when: wireguard_sysctl.changed
+  changed_when: true
+
+- name: Generate the WireGuard server keypair when absent
+  ansible.builtin.shell: |
+    set -euo pipefail
+    umask 077
+    wg genkey | tee /etc/wireguard/server_private.key | wg pubkey >/etc/wireguard/server_public.key
+  args:
+    executable: /bin/bash
+    creates: /etc/wireguard/server_private.key
+
+- name: Generate WireGuard client keypairs when absent
+  ansible.builtin.shell: |
+    set -euo pipefail
+    umask 077
+    wg genkey | tee /etc/wireguard/clients/{{ item.name }}.key | wg pubkey >/etc/wireguard/clients/{{ item.name }}.pub
+  args:
+    executable: /bin/bash
+    creates: "/etc/wireguard/clients/{{ item.name }}.key"
+  loop: "{{ wireguard_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Render the WireGuard server and client configurations
+  ansible.builtin.shell: |
+    set -euo pipefail
+    dns_address="{{ wireguard_server_address.split('/')[0] }}"
+
+    cat >/etc/wireguard/wg0.conf <<EOF_WG
+    [Interface]
+    Address = {{ wireguard_server_address }}
+    ListenPort = {{ wireguard_listen_port }}
+    PrivateKey = $(cat /etc/wireguard/server_private.key)
+    PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT
+    PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT
+    SaveConfig = false
+    EOF_WG
+
+    {% for client in wireguard_clients %}
+    cat >>/etc/wireguard/wg0.conf <<EOF_PEER_{{ loop.index }}
+
+    [Peer]
+    PublicKey = $(cat /etc/wireguard/clients/{{ client.name }}.pub)
+    AllowedIPs = {{ client.address }}
+    EOF_PEER_{{ loop.index }}
+
+    cat >/var/lib/lab-access/wireguard/clients/{{ client.name }}.conf <<EOF_CLIENT_{{ loop.index }}
+    [Interface]
+    PrivateKey = $(cat /etc/wireguard/clients/{{ client.name }}.key)
+    Address = {{ client.address }}
+    DNS = $dns_address
+
+    [Peer]
+    PublicKey = $(cat /etc/wireguard/server_public.key)
+    AllowedIPs = {{ client.allowed_ips | join(', ') }}
+    Endpoint = {{ wireguard_endpoint }}:{{ wireguard_listen_port }}
+    PersistentKeepalive = 25
+    EOF_CLIENT_{{ loop.index }}
+    chmod 0600 /var/lib/lab-access/wireguard/clients/{{ client.name }}.conf
+    {% endfor %}
+
+    chmod 0600 /etc/wireguard/wg0.conf
+  args:
+    executable: /bin/bash
+  changed_when: true
+  no_log: true
+  notify: Restart WireGuard
+
+- name: Enable WireGuard
+  ansible.builtin.systemd:
+    name: wg-quick@wg0
+    enabled: true
+    state: started

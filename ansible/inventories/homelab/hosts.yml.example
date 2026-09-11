@@ -1,0 +1,26 @@
+---
+all:
+  vars:
+    ansible_user: user
+    ansible_port: 22
+  children:
+    access:
+      hosts:
+        lab-access-01:
+          ansible_host: 10.73.20.10
+    data:
+      hosts:
+        lab-data-01:
+          ansible_host: 10.73.30.10
+    git:
+      hosts:
+        lab-git-01:
+          ansible_host: 10.73.40.10
+    secrets:
+      hosts:
+        lab-secrets-01:
+          ansible_host: 10.73.50.10
+    agents:
+      hosts:
+        lab-agents-01:
+          ansible_host: 10.73.60.10

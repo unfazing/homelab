@@ -1,0 +1,14 @@
+---
+- name: Install common guest packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - qemu-guest-agent
+    update_cache: true
+    state: present
+
+- name: Enable the QEMU guest agent
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
