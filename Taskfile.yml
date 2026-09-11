@@ -1,0 +1,95 @@
+version: "3"
+
+silent: true
+
+includes:
+  image:
+    taskfile: ./taskfiles/image.yml
+
+tasks:
+  default:
+    desc: List available homelab tasks
+    cmds:
+      - task --list
+
+  doctor:
+    desc: Check tools, source files, credentials, and Proxmox API access
+    cmds:
+      - |
+        set -eu
+        for command in packer terraform ansible-playbook curl; do
+          command -v "$command" >/dev/null 2>&1 || {
+            echo "Missing required command: $command" >&2
+            exit 1
+          }
+        done
+        echo "Required tools are available."
+      - |
+        set -eu
+        for path in \
+          architecture.html \
+          implementation.html \
+          packer/images/ubuntu-24.04/config.pkr.hcl \
+          packer/images/ubuntu-24.04/ubuntu-24.04.pkrvars.hcl \
+          terraform/providers.tf \
+          terraform/keys/keys.pub \
+          ansible/playbooks/site.yml \
+          ansible/inventories/homelab/hosts.example.yml; do
+          test -f "$path" || {
+            echo "Missing required file: $path" >&2
+            exit 1
+          }
+        done
+        echo "Required source files are present."
+      - |
+        set -eu
+        require_value() {
+          if [ -z "$2" ]; then
+            echo "Missing required environment variable: $1" >&2
+            exit 1
+          fi
+        }
+        require_value PKR_VAR_proxmox_api_url "${PKR_VAR_proxmox_api_url:-}"
+        require_value PKR_VAR_proxmox_user "${PKR_VAR_proxmox_user:-}"
+        require_value PKR_VAR_node "${PKR_VAR_node:-}"
+        if [ -z "${PKR_VAR_proxmox_token:-}" ] && [ -z "${PKR_VAR_proxmox_password:-}" ]; then
+          echo "Set PKR_VAR_proxmox_token or PKR_VAR_proxmox_password." >&2
+          exit 1
+        fi
+        require_value TF_VAR_pm_api_url "${TF_VAR_pm_api_url:-}"
+        require_value TF_VAR_pm_api_token_id "${TF_VAR_pm_api_token_id:-}"
+        require_value TF_VAR_pm_api_token_secret "${TF_VAR_pm_api_token_secret:-}"
+        echo "Required credential variables are loaded."
+      - |
+        set -eu
+        printf 'header = "Authorization: PVEAPIToken=%s=%s"\n' \
+          "$TF_VAR_pm_api_token_id" \
+          "$TF_VAR_pm_api_token_secret" |
+          curl \
+            --config - \
+            --silent \
+            --show-error \
+            --fail \
+            --insecure \
+            --output /dev/null \
+            "${TF_VAR_pm_api_url%/}/nodes"
+        echo "Proxmox API authentication succeeded."
+
+  format:
+    desc: Check Packer and Terraform formatting
+    cmds:
+      - task: image:format
+      - terraform -chdir=terraform fmt -check -recursive
+
+  validate:
+    desc: Run every non-mutating repository validation
+    cmds:
+      - task: doctor
+      - task: format
+      - task: image:init
+      - task: image:validate
+      - terraform -chdir=terraform init -backend=false -input=false
+      - terraform -chdir=terraform validate
+      - mkdir -p .generated/ansible/tmp
+      - ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_LOCAL_TEMP=.generated/ansible/tmp ansible-inventory -i ansible/inventories/homelab/hosts.example.yml --list >/dev/null
+      - ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_LOCAL_TEMP=.generated/ansible/tmp ansible-playbook --syntax-check -i ansible/inventories/homelab/hosts.example.yml ansible/playbooks/site.yml

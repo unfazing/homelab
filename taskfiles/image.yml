@@ -1,0 +1,32 @@
+version: "3"
+
+silent: true
+
+vars:
+  IMAGE_DIR: packer/images/ubuntu-24.04
+  IMAGE_VARS: packer/images/ubuntu-24.04/ubuntu-24.04.pkrvars.hcl
+
+tasks:
+  init:
+    desc: Install the pinned Packer Proxmox plugin
+    cmds:
+      - packer init "{{.IMAGE_DIR}}"
+
+  format:
+    desc: Check the Ubuntu image definition formatting
+    cmds:
+      - packer fmt -check -recursive "{{.IMAGE_DIR}}"
+
+  validate:
+    desc: Validate the Ubuntu image definition with loaded credentials
+    preconditions:
+      - sh: test -n "${PKR_VAR_proxmox_api_url:-}"
+        msg: Load PKR_VAR_proxmox_api_url before validating the image.
+      - sh: test -n "${PKR_VAR_proxmox_user:-}"
+        msg: Load PKR_VAR_proxmox_user before validating the image.
+      - sh: test -n "${PKR_VAR_node:-}"
+        msg: Load PKR_VAR_node before validating the image.
+      - sh: test -n "${PKR_VAR_proxmox_token:-}" || test -n "${PKR_VAR_proxmox_password:-}"
+        msg: Load a Packer Proxmox token or password before validating the image.
+    cmds:
+      - packer validate -var-file="{{.IMAGE_VARS}}" "{{.IMAGE_DIR}}"

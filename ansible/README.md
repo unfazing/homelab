@@ -8,7 +8,7 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 - `roles/common` applies shared guest configuration.
 - `roles/wireguard` and `roles/adguard` configure `lab-access-01`.
 - The remaining application roles are explicit placeholders until their implementation plans are approved.
-- `inventories/homelab/hosts.yml.example` documents the expected generated inventory shape.
+- `inventories/homelab/hosts.example.yml` documents the expected generated inventory shape and is used for syntax validation.
 - `inventories/homelab/group_vars/access.yml.example` documents non-secret access-service variables beside the inventory that consumes them.
 
 ## Inventory contract

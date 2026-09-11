@@ -1,0 +1,11 @@
+# Copy to .envrc, replace every placeholder, and run `direnv allow`.
+# Task checks these variables but never sources or prints the secret file.
+
+export PKR_VAR_proxmox_api_url="https://proxmox.example:8006/api2/json"
+export PKR_VAR_proxmox_user="terraform@pve!homelab"
+export PKR_VAR_proxmox_token="replace-me"
+export PKR_VAR_node="blue"
+
+export TF_VAR_pm_api_url="https://proxmox.example:8006/api2/json"
+export TF_VAR_pm_api_token_id="terraform@pve!homelab"
+export TF_VAR_pm_api_token_secret="replace-me"
