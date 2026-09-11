@@ -1,16 +1,16 @@
 locals {
   unattended_content = {
     for key, value in var.unattended_content : key => templatefile(value.template, merge(value.vars, {
-      winrm_username = var.winrm_username
-      winrm_password = var.winrm_password
-      windows_edition = var.windows_edition == "" ? value.vars.image_name : var.windows_edition
-      windows_language = var.windows_language
+      winrm_username         = var.winrm_username
+      winrm_password         = var.winrm_password
+      windows_edition        = var.windows_edition == "" ? value.vars.image_name : var.windows_edition
+      windows_language       = var.windows_language
       windows_input_language = var.windows_input_language
     }))
   }
   unattended_as_cd = length(var.unattended_content) > 0 ? [{
-    type = "sata"
-    index = 3 + length(var.unattended_content)
+    type    = "sata"
+    index   = 3 + length(var.unattended_content)
     content = local.unattended_content
     label   = "Windows Unattended CD"
   }] : []
@@ -42,11 +42,11 @@ source "proxmox-iso" "vm" {
   http_port_max     = var.packer_http_port == -1 ? 9000 : "${var.packer_http_port}"
 
   disks {
-    storage_pool      = var.disk_storage_pool
-    disk_size         = var.disk_size
-    format            = var.disk_format
-    type              = var.disk_type
-    cache_mode        = var.disk_cache
+    storage_pool = var.disk_storage_pool
+    disk_size    = var.disk_size
+    format       = var.disk_format
+    type         = var.disk_type
+    cache_mode   = var.disk_cache
   }
 
   network_adapters {
@@ -132,7 +132,7 @@ build {
 
   dynamic "provisioner" {
     for_each = length(var.provisioner) > 0 ? [1] : []
-    labels = ["shell"]
+    labels   = ["shell"]
     content {
       execute_command = "echo 'packer' | {{ .Vars }} sudo -S -E sh -eux '{{ .Path }}'"
       inline          = var.provisioner

@@ -6,12 +6,14 @@ iso_download_pve = false
 iso_download     = false
 iso_checksum     = "file:https://releases.ubuntu.com/noble/SHA256SUMS"
 
-disk_storage_pool = "local-lvm"
+disk_storage_pool       = "local-lvm"
+cloud_init_storage_pool = "local-lvm"
+cpu_cores               = 2
+memory                  = 4096
 
-
-http_directory = "../http/ubuntu"
+http_directory = "../../http/ubuntu"
 boot_wait      = "5s"
-disk_size      = "100G"
+disk_size      = "16G"
 
 boot_command = [
   "<wait5>",
@@ -25,7 +27,11 @@ boot_command = [
 ]
 
 provisioner = [
-  "cloud-init clean",
-  "rm /etc/cloud/cloud.cfg.d/*",
+  "cloud-init clean --logs --seed",
+  "rm -f /etc/cloud/cloud.cfg.d/99-installer.cfg",
+  "rm -f /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
+  "rm -f /etc/netplan/00-installer-config*.yaml",
+  "truncate -s 0 /etc/machine-id",
+  "rm -f /var/lib/dbus/machine-id",
   "userdel --remove --force packer"
 ]
