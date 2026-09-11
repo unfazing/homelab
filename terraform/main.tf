@@ -1,63 +1,19 @@
-resource "proxmox_vm_qemu" "vm" {
-  for_each           = local.vms
-  name               = each.key
-  target_node        = each.value.target_node
-  clone              = each.value.clone
-  full_clone         = true
-  os_type            = "cloud-init"
-  agent              = 1
-  start_at_node_boot = true
+module "vm" {
+  source   = "./modules/proxmox-vm"
+  for_each = local.vms
 
-  memory = each.value.memory_mb
-  cpu {
-    cores   = each.value.cpu_cores
-    sockets = 1
-    numa    = true
-    type    = "host"
-  }
-
-  disk {
-    slot    = "scsi0"
-    size    = each.value.disk_gb
-    storage = each.value.disk_storage
-  }
-
-  disk {
-    type    = "cloudinit"
-    slot    = "ide2"
-    storage = each.value.disk_storage
-  }
-
-  network {
-    id      = 0
-    model   = "virtio"
-    bridge  = each.value.bridge
-    macaddr = each.value.mac_address
-  }
-
-  scsihw   = "virtio-scsi-pci"
-  boot     = "order=scsi0"
-  bootdisk = "scsi0"
-  bios     = "ovmf"
-  machine  = "q35"
-
-  # Cloud-Init configuration
-  ciuser     = "user"
-  cipassword = var.debug_password
-  sshkeys    = local.ssh_public_key
-  ipconfig0  = each.value.ipconfig0
-  skip_ipv6  = true
-
-  efidisk {
-    efitype = "4m"
-    storage = each.value.disk_storage
-  }
-}
-
-output "vm_names" {
-  value = { for name, vm in proxmox_vm_qemu.vm : name => vm.name }
-}
-
-output "vm_ids" {
-  value = { for name, vm in proxmox_vm_qemu.vm : name => vm.id }
+  name            = each.key
+  target_node     = each.value.target_node
+  clone           = each.value.clone
+  cpu_cores       = each.value.cpu_cores
+  memory_mb       = each.value.memory_mb
+  disk_gb         = each.value.disk_gb
+  disk_storage    = each.value.disk_storage
+  bridge          = each.value.bridge
+  vlan_tag        = each.value.vlan_tag
+  mac_address     = each.value.mac_address
+  ipconfig0       = each.value.ipconfig0
+  cloud_init_user = var.cloud_init_user
+  debug_password  = var.debug_password
+  ssh_public_key  = local.ssh_public_key
 }

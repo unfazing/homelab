@@ -27,17 +27,26 @@ variable "debug_password" {
   sensitive   = true
 }
 
+variable "cloud_init_user" {
+  type        = string
+  description = "Administrative user created by cloud-init in deployed VMs."
+  default     = "user"
+}
+
 variable "vms" {
   description = "VM definitions keyed by deployed VM name."
   type = map(object({
-    target_node  = string
-    clone        = string
-    cpu_cores    = optional(number, 2)
-    memory_mb    = optional(number, 4096)
-    disk_gb      = optional(number, 100)
-    disk_storage = optional(string, "local-lvm")
-    bridge       = optional(string, "vmbr0")
-    ipconfig0    = optional(string, "ip=dhcp")
-    mac_address  = optional(string)
+    target_node    = string
+    clone          = string
+    cpu_cores      = optional(number, 2)
+    memory_mb      = optional(number, 4096)
+    disk_gb        = optional(number, 100)
+    disk_storage   = optional(string, "local-lvm")
+    bridge         = optional(string, "vmbr0")
+    vlan_tag       = optional(number)
+    ipconfig0      = optional(string, "ip=dhcp")
+    mac_address    = optional(string)
+    ansible_host   = optional(string)
+    ansible_groups = optional(set(string), [])
   }))
 }
