@@ -37,7 +37,7 @@ source "proxmox-iso" "vm" {
   memory   = var.memory
 
   http_interface    = var.packer_http_interface
-  http_bind_address = var.packer_http_bind_address
+  http_bind_address = var.packer_http_interface == "" ? var.packer_http_bind_address : ""
   http_port_min     = var.packer_http_port == -1 ? 8000 : "${var.packer_http_port}"
   http_port_max     = var.packer_http_port == -1 ? 9000 : "${var.packer_http_port}"
 
@@ -111,19 +111,19 @@ source "proxmox-iso" "vm" {
   cloud_init              = var.cloud_init
   cloud_init_storage_pool = var.cloud_init_storage_pool
 
-  boot           = "order=${var.disk_type}0;ide2;net0"
-  boot_command   = var.boot_command
-  boot_wait      = var.boot_wait
-  task_timeout   = var.task_timeout
-  http_directory = var.http_directory
-  communicator   = var.communicator
-  ssh_username   = var.ssh_username
-  ssh_password   = var.ssh_password
-  ssh_timeout    = var.ssh_timeout
-  winrm_username = var.winrm_username
-  winrm_password = var.winrm_password
-  winrm_insecure = var.winrm_insecure
-  winrm_use_ssl  = var.winrm_use_ssl
+  boot                 = "order=${var.disk_type}0;ide2;net0"
+  boot_command         = var.boot_command
+  boot_wait            = var.boot_wait
+  task_timeout         = var.task_timeout
+  http_directory       = var.http_directory
+  communicator         = var.communicator
+  ssh_username         = var.ssh_username
+  ssh_private_key_file = var.ssh_private_key_file
+  ssh_timeout          = var.ssh_timeout
+  winrm_username       = var.winrm_username
+  winrm_password       = var.winrm_password
+  winrm_insecure       = var.winrm_insecure
+  winrm_use_ssl        = var.winrm_use_ssl
 }
 
 build {
@@ -134,9 +134,19 @@ build {
     for_each = length(var.provisioner) > 0 ? [1] : []
     labels   = ["shell"]
     content {
-      execute_command = "echo 'packer' | {{ .Vars }} sudo -S -E sh -eux '{{ .Path }}'"
+      execute_command = "{{ .Vars }} sudo -E sh -eux '{{ .Path }}'"
       inline          = var.provisioner
       skip_clean      = true
+    }
+  }
+
+  post-processor "manifest" {
+    output     = var.manifest_path
+    strip_path = true
+    custom_data = {
+      operating_system = "Ubuntu Server 26.04.1 LTS"
+      template_id      = var.vmid
+      template_name    = var.name
     }
   }
 }

@@ -276,9 +276,8 @@ variable "task_timeout" {
 }
 
 variable "http_directory" {
-  description = "Path to a directory to serve using an HTTP server."
+  description = "Path to the generated NoCloud directory served during the build."
   type        = string
-  default     = "./http"
 }
 
 variable "unattended_content" {
@@ -302,10 +301,9 @@ variable "ssh_username" {
   default     = "packer"
 }
 
-variable "ssh_password" {
-  description = "The ssh password to connect to the guest"
+variable "ssh_private_key_file" {
+  description = "Path to the ephemeral SSH private key generated for this build."
   type        = string
-  default     = "packer"
 }
 
 variable "ssh_timeout" {
@@ -323,7 +321,7 @@ variable "winrm_username" {
 variable "winrm_password" {
   description = "The winrm password to connect to the guest."
   type        = string
-  default     = "packer"
+  default     = ""
 }
 
 variable "winrm_insecure" {
@@ -362,19 +360,23 @@ variable "provisioner" {
 }
 
 variable "packer_http_interface" {
-  description = "Name of the network interface that Packer gets HTTPIP from. Defaults to the first non loopback interface."
+  description = "Trusted operator interface from which Packer advertises the NoCloud URL."
   type        = string
-  default     = ""
 }
 
 variable "packer_http_bind_address" {
-  description = "This is the bind address for the HTTP server. Defaults to 0.0.0.0 so that it will work with any network interface."
+  description = "IPv4 address of the trusted operator interface to which the NoCloud HTTP server binds."
   type        = string
-  default     = ""
 }
 
 variable "packer_http_port" {
-  description = "Port the HTTP server started to serve the http_directory (required only for ssh portworarding)."
+  description = "Fixed port used by the temporary NoCloud HTTP server."
   type        = number
-  default     = -1
+  default     = 8800
+}
+
+variable "manifest_path" {
+  description = "Path to the non-secret Packer build manifest."
+  type        = string
+  default     = ".generated/packer/manifest.json"
 }

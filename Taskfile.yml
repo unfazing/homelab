@@ -17,7 +17,7 @@ tasks:
     cmds:
       - |
         set -eu
-        for command in packer terraform ansible-playbook curl; do
+        for command in packer terraform ansible-playbook curl ssh-keygen; do
           command -v "$command" >/dev/null 2>&1 || {
             echo "Missing required command: $command" >&2
             exit 1
@@ -29,8 +29,10 @@ tasks:
         for path in \
           architecture.html \
           implementation.html \
-          packer/images/ubuntu-24.04/config.pkr.hcl \
-          packer/images/ubuntu-24.04/ubuntu-24.04.pkrvars.hcl \
+          packer/images/ubuntu-26.04/config.pkr.hcl \
+          packer/images/ubuntu-26.04/ubuntu-26.04.pkrvars.hcl \
+          packer/http/ubuntu/user-data.pkrtpl \
+          scripts/packer-image.sh \
           terraform/providers.tf \
           terraform/keys/keys.pub \
           ansible/playbooks/site.yml \

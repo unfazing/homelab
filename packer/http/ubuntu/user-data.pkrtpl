@@ -7,7 +7,7 @@ autoinstall:
   identity:
     hostname: ubuntu
     username: packer
-    password: '$6$FhcddHFVZ7ABA4Gi$QybBjJXeTESb.NIDf7umP5rubBXM0N.SseGarXYz1kZpit8UgV6CVWo7ubIoacgdBEPUXTWXe92GyAVJ.jOJZ.'
+    password: '*'
   network:
     version: 2
     ethernets:
@@ -22,6 +22,11 @@ autoinstall:
     - qemu-guest-agent
   ssh:
     install-server: true
+    allow-pw: false
+    authorized-keys:
+      - __PACKER_SSH_PUBLIC_KEY__
   late-commands:
     - curtin in-target --target=/target -- apt update
     - curtin in-target --target=/target -- apt upgrade -y
+    - curtin in-target --target=/target -- sh -c "echo 'packer ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/packer"
+    - curtin in-target --target=/target -- chmod 0440 /etc/sudoers.d/packer
