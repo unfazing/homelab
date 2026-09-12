@@ -17,7 +17,7 @@ Each `vms` entry is keyed by its workload-independent hostname. It selects the t
 vms = {
   lab-access-01 = {
     target_node    = "blue"
-    clone          = "ubuntu-24.04-template"
+    clone          = "ubuntu-26.04-template"
     cpu_cores      = 1
     memory_mb      = 1024
     disk_gb        = 16
