@@ -5,6 +5,8 @@ silent: true
 includes:
   image:
     taskfile: ./taskfiles/image.yml
+  infra:
+    taskfile: ./taskfiles/infrastructure.yml
 
 tasks:
   default:

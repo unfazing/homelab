@@ -274,6 +274,7 @@
             <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
             <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
             <dt>DHCP limitation</dt><dd>The F620 misaddresses concurrent VM offers at Layer 2; do not use it for multi-clone acceptance</dd>
+            <dt>Temporary VMs</dt><dd>Static <code>192.168.1.100–104</code>; DHCP must end at or below <code>192.168.1.99</code></dd>
           </dl>
         </section>
         <section>
@@ -565,6 +566,7 @@
             <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
             <li><span class="status accepted">D-028 Accepted</span> Isolate <code>lab-git-01</code> on VLAN 40 so agent access to Git does not create a Layer-2 path to Nextcloud data.</li>
             <li><span class="status accepted">D-036 Accepted</span> Do not depend on the F620 DHCP server for concurrent Proxmox guests. Packet capture showed an Offer for clone B carrying B's client MAC inside DHCP but addressed to clone A's MAC in the Ethernet frame, even when B requested a broadcast reply. Use excluded static addresses until DHCP moves to the target firewall router.</li>
+            <li><span class="status accepted">D-037 Accepted</span> During the flat-LAN transition, Terraform assigns VM IDs <code>1000</code>–<code>1004</code> and static addresses <code>192.168.1.100</code>–<code>192.168.1.104</code> in capability order. The F620 DHCP pool must end at or below <code>192.168.1.99</code> before apply; the target VLAN migration replaces these temporary addresses.</li>
           </ul>
         </section>
         <section>
@@ -572,7 +574,7 @@
           <ul class="compact">
             <li><span class="status open">Open</span> Decide whether the travel profile tunnels IPv6 or deliberately disables it.</li>
             <li><span class="status open">Open</span> Confirm the public VPN hostname and UDP port.</li>
-            <li><span class="status open">Open</span> Inventory current DHCP assignments and plan the cutover from <code>192.168.1.0/24</code>.</li>
+            <li><span class="status open">Required</span> Reduce the F620 DHCP end address from <code>192.168.1.253</code> to <code>192.168.1.99</code> before applying the five-VM topology.</li>
             <li><span class="status open">Open</span> Decide whether the Xiaomi cameras require vendor-cloud internet access.</li>
             <li><span class="status open">Open</span> Choose whether DNS fails closed with one AdGuard instance or gains a second resolver.</li>
           </ul>
@@ -684,13 +686,13 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>VM</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
+          <thead><tr><th>VM</th><th>VM ID</th><th>Temporary IP</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
           <tbody>
-            <tr><td><code>lab-access-01</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
-            <tr><td><code>lab-data-01</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Personal files and database</td></tr>
-            <tr><td><code>lab-secrets-01</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Highest-sensitivity application</td></tr>
-            <tr><td><code>lab-git-01</code></td><td>1</td><td>1 GB</td><td>24 GB</td><td>Source and artifact control plane</td></tr>
-            <tr><td><code>lab-agents-01</code></td><td>2</td><td>2–4 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
+            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
+            <tr><td><code>lab-data-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Personal files and database</td></tr>
+            <tr><td><code>lab-secrets-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Highest-sensitivity application</td></tr>
+            <tr><td><code>lab-git-01</code></td><td>1003</td><td><code>192.168.1.103</code></td><td>1</td><td>1 GB</td><td>24 GB</td><td>Source and artifact control plane</td></tr>
+            <tr><td><code>lab-agents-01</code></td><td>1004</td><td><code>192.168.1.104</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
           </tbody>
         </table>
       </div>
@@ -719,6 +721,12 @@
             <li><span class="status accepted">D-013 Accepted</span> Name VMs using <code>&lt;scope&gt;-&lt;role&gt;-&lt;ordinal&gt;</code>; keep product names in application configuration.</li>
             <li><span class="status accepted">D-014 Accepted</span> Reserve <code>lab-agents-01</code> for agents; do not run Gitea Actions jobs there.</li>
             <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Before implementation</h3>
+          <ul class="compact">
+            <li><span class="status open">Required</span> Choose the long-lived Cloud-Init administrator username and review the exact SSH keys authorized on every VM. The current key bundle contains four public keys, so infrastructure apply remains pending.</li>
           </ul>
         </section>
       </template>

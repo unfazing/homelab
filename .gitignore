@@ -19,6 +19,9 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# The non-secret homelab topology is infrastructure source and is versioned.
+!terraform/deployment.tfvars.json
+
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
 override.tf

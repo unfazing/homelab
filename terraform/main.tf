@@ -3,6 +3,7 @@ module "vm" {
   for_each = local.vms
 
   name            = each.key
+  vmid            = each.value.vmid
   target_node     = each.value.target_node
   clone           = each.value.clone
   cpu_cores       = each.value.cpu_cores

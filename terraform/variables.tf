@@ -36,6 +36,7 @@ variable "cloud_init_user" {
 variable "vms" {
   description = "VM definitions keyed by deployed VM name."
   type = map(object({
+    vmid           = number
     target_node    = string
     clone          = string
     cpu_cores      = optional(number, 2)

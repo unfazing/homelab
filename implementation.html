@@ -100,6 +100,7 @@
     <nav class="tabs" role="tablist" aria-label="Implementation sections">
       <button id="repository-tab" role="tab" aria-selected="true" aria-controls="repository-panel" type="button">Repository structure</button>
       <button id="packer-tab" role="tab" aria-selected="false" aria-controls="packer-panel" type="button">Packer plan</button>
+      <button id="terraform-tab" role="tab" aria-selected="false" aria-controls="terraform-panel" type="button">Terraform plan</button>
     </nav>
 
     <section id="repository-panel" role="tabpanel" aria-labelledby="repository-tab">
@@ -168,7 +169,7 @@
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
             <tr><td>Task interface</td><td><span class="status complete">Initial slice complete</span></td><td>Add infrastructure and configuration tasks with their implementation phases</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform layout</td><td><span class="status complete">Complete</span></td><td>Populate the approved five-VM topology and generate inventory</td></tr>
+            <tr><td>Terraform layout</td><td><span class="status planned">Five-VM topology ready</span></td><td>Reduce the F620 DHCP pool, review <code>task infra:plan</code>, then apply</td></tr>
             <tr><td>Ansible layout</td><td><span class="status complete">Complete</span></td><td>Implement and verify the remaining application roles</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
@@ -311,6 +312,49 @@
         <li><span class="status complete">Single clone</span> On 2026-09-14, <code>task image:verify</code> created VM <code>9900</code>, obtained <code>192.168.1.15</code>, passed all functional assertions with two recoverable cloud-init warnings, wrote the non-secret report, and destroyed the VM.</li>
         <li><span class="status complete">Fail closed</span> Treat either a non-zero Dracut exit, a logged Dracut error, or a generated initramfs that still contains <code>dracut-default.network</code> as a build failure.</li>
         <li><span class="status open">Deferred</span> Restore the two-clone identity and independent-address assertions after the current F620 DHCP dependency is removed.</li>
+      </ul>
+    </section>
+
+    <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
+      <h2>Terraform plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status planned">Configuration and plan ready; network and administrator prerequisites open</span></dd>
+        <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
+        <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
+        <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–104</code></dd>
+        <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
+        <dt>Admin identity</dt><dd><span class="status open">Open</span> Replace the generic <code>user</code> account and review the four public keys currently bundled for authorization.</dd>
+      </dl>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>VM</th><th>ID</th><th>Address</th><th>Resources</th><th>Ansible group</th></tr></thead>
+          <tbody>
+            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1 vCPU · 1 GiB · 16 GiB</td><td><code>access</code></td></tr>
+            <tr><td><code>lab-data-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2 vCPU · 3 GiB · 32 GiB</td><td><code>data</code></td></tr>
+            <tr><td><code>lab-secrets-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>1 vCPU · 1 GiB · 16 GiB</td><td><code>secrets</code></td></tr>
+            <tr><td><code>lab-git-01</code></td><td>1003</td><td><code>192.168.1.103</code></td><td>1 vCPU · 1 GiB · 24 GiB</td><td><code>git</code></td></tr>
+            <tr><td><code>lab-agents-01</code></td><td>1004</td><td><code>192.168.1.104</code></td><td>2 vCPU · 3 GiB · 32 GiB</td><td><code>agents</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Operator sequence</h3>
+      <ol class="compact">
+        <li>Choose the Cloud-Init administrator username and retain only the intended SSH public keys.</li>
+        <li>Reduce the F620 DHCP end address to <code>192.168.1.99</code>.</li>
+        <li>Run <code>task infra:validate</code> and <code>task infra:plan</code>.</li>
+        <li>Review all five VM IDs, addresses, root disks, and the absence of VLAN tags.</li>
+        <li>Export <code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> and run <code>task infra:apply</code>.</li>
+        <li>Use <code>task infra:output</code> as the inventory-generation input.</li>
+      </ol>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>All five guests boot from template <code>9000</code> with their intended hostname and static IPv4 address.</li>
+        <li>Each VM reports through QEMU guest agent and accepts key-only SSH.</li>
+        <li>Only rebuildable root disks exist; persistent ZFS-backed data disks remain a separate implementation step.</li>
+        <li>No VLAN tag is applied until the VLAN-capable router and switch exist.</li>
       </ul>
     </section>
 

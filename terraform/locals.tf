@@ -4,6 +4,7 @@ locals {
   vms = {
     for name, cfg in var.vms : name => {
       name           = name
+      vmid           = cfg.vmid
       target_node    = cfg.target_node
       clone          = cfg.clone
       cpu_cores      = cfg.cpu_cores
