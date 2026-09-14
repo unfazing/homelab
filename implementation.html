@@ -323,7 +323,7 @@
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
         <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–104</code></dd>
         <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
-        <dt>Admin identity</dt><dd><span class="status open">Open</span> Replace the generic <code>user</code> account and review the four public keys currently bundled for authorization.</dd>
+        <dt>Admin identity</dt><dd><span class="status planned">Username open</span> The key bundle now contains only this Mac's confirmed ED25519 administrator key; replace the generic <code>user</code> account before apply.</dd>
       </dl>
 
       <div class="table-wrap">
@@ -341,7 +341,7 @@
 
       <h3>Operator sequence</h3>
       <ol class="compact">
-        <li>Choose the Cloud-Init administrator username and retain only the intended SSH public keys.</li>
+        <li>Choose the Cloud-Init administrator username; the intended single SSH public key is already pinned.</li>
         <li>Reduce the F620 DHCP end address to <code>192.168.1.99</code>.</li>
         <li>Run <code>task infra:validate</code> and <code>task infra:plan</code>.</li>
         <li>Review all five VM IDs, addresses, root disks, and the absence of VLAN tags.</li>

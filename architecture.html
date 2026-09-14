@@ -721,12 +721,13 @@
             <li><span class="status accepted">D-013 Accepted</span> Name VMs using <code>&lt;scope&gt;-&lt;role&gt;-&lt;ordinal&gt;</code>; keep product names in application configuration.</li>
             <li><span class="status accepted">D-014 Accepted</span> Reserve <code>lab-agents-01</code> for agents; do not run Gitea Actions jobs there.</li>
             <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
+            <li><span class="status accepted">D-038 Accepted</span> Initially authorize only the administrator key from this Mac, fingerprint <code>SHA256:gAlPyAsihuQua3grrkeUr7Gp1mmc1hlD49WyHV3gdyU</code>, on all five VMs. Exclude the retired GitHub-imported key, the unidentified key, and <code>root@blue</code>; adding access requires an explicit source-controlled key change.</li>
           </ul>
         </section>
         <section>
           <h3>Before implementation</h3>
           <ul class="compact">
-            <li><span class="status open">Required</span> Choose the long-lived Cloud-Init administrator username and review the exact SSH keys authorized on every VM. The current key bundle contains four public keys, so infrastructure apply remains pending.</li>
+            <li><span class="status open">Required</span> Choose the long-lived Cloud-Init administrator username. The initial SSH key set is approved by D-038.</li>
           </ul>
         </section>
       </template>
