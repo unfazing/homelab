@@ -93,7 +93,7 @@
         <a href="implementation.html" aria-current="page">Implementation</a>
       </nav>
       <h1>Homelab Implementation</h1>
-      <p class="meta">Executable specification · Planning · Updated 14 September 2026</p>
+      <p class="meta">Executable specification · Planning · Updated 15 September 2026</p>
       <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
     </header>
 
@@ -133,7 +133,7 @@
 ├── terraform/
 │   ├── modules/proxmox-vm/    # reusable VM primitive
 │   ├── image-verification/    # disposable single-clone acceptance stack
-│   └── *.tf                   # five-VM root composition
+│   └── *.tf                   # three-VM root composition
 ├── ansible/
 │   ├── playbooks/             # host bootstrap, site convergence, verification
 │   └── roles/                 # reusable host and application roles
@@ -169,8 +169,8 @@
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
             <tr><td>Task interface</td><td><span class="status complete">Initial slice complete</span></td><td>Add infrastructure and configuration tasks with their implementation phases</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform deployment</td><td><span class="status complete">Applied and verified</span></td><td>Generate Ansible inventory and begin guest convergence</td></tr>
-            <tr><td>Ansible layout</td><td><span class="status complete">Complete</span></td><td>Implement and verify the remaining application roles</td></tr>
+            <tr><td>Terraform deployment</td><td><span class="status complete">Three-VM topology applied</span></td><td>Generate Ansible inventory and begin guest convergence</td></tr>
+            <tr><td>Ansible layout</td><td><span class="status complete">Three groups aligned</span></td><td>Implement pinned Compose roles; keep WireGuard native</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -194,7 +194,7 @@
         <dt>Status</dt><dd><span class="status complete">Template built and single-clone functional verification passed</span></dd>
         <dt>Artifact</dt><dd>Template VM <code>9000</code>, <code>ubuntu-26.04-template</code>, on Proxmox <code>local-lvm</code></dd>
         <dt>Scope</dt><dd>Generic Ubuntu Server 26.04.1 LTS with cloud-init, SSH, and QEMU guest agent</dd>
-        <dt>Consumers</dt><dd>All five Terraform-managed VMs</dd>
+        <dt>Consumers</dt><dd>All three Terraform-managed VMs</dd>
         <dt>Architecture alignment</dt><dd>D-002, D-005, D-012, D-029, and D-031–D-036</dd>
       </dl>
 
@@ -318,10 +318,10 @@
     <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
       <h2>Terraform plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Five VMs created on 14 September 2026; the post-apply plan is empty.</dd>
+        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three-VM topology reconciled on 15 September 2026; the post-apply plan is empty.</dd>
         <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
-        <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–104</code></dd>
+        <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–102</code></dd>
         <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
         <dt>Admin identity</dt><dd><span class="status complete">Resolved</span> Cloud-Init creates <code>user</code> with only this Mac's confirmed ED25519 administrator key.</dd>
         <dt>Provider normalization</dt><dd>Cloud-Init disk first, raw LVM-thin root disk second; ignore provider-only boot and startup/shutdown-default noise. Create VMs with <code>power_state=running</code>, then lifecycle-ignore power state so manual starts and stops remain operator-controlled without using deprecated <code>vm_state</code>.</dd>
@@ -331,11 +331,9 @@
         <table>
           <thead><tr><th>VM</th><th>ID</th><th>Address</th><th>Resources</th><th>Ansible group</th></tr></thead>
           <tbody>
-            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1 vCPU · 1 GiB · 16 GiB</td><td><code>access</code></td></tr>
-            <tr><td><code>lab-data-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2 vCPU · 3 GiB · 32 GiB</td><td><code>data</code></td></tr>
-            <tr><td><code>lab-secrets-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>1 vCPU · 1 GiB · 16 GiB</td><td><code>secrets</code></td></tr>
-            <tr><td><code>lab-git-01</code></td><td>1003</td><td><code>192.168.1.103</code></td><td>1 vCPU · 1 GiB · 24 GiB</td><td><code>git</code></td></tr>
-            <tr><td><code>lab-agents-01</code></td><td>1004</td><td><code>192.168.1.104</code></td><td>2 vCPU · 3 GiB · 32 GiB</td><td><code>agents</code></td></tr>
+            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1 vCPU · 1.5 GiB · 16 GiB</td><td><code>access</code></td></tr>
+            <tr><td><code>lab-services-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2 vCPU · 4 GiB · 32 GiB</td><td><code>services</code></td></tr>
+            <tr><td><code>lab-agents-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>2 vCPU · 3 GiB · 32 GiB</td><td><code>agents</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -345,18 +343,20 @@
         <li><span class="status complete">Complete</span> Use Cloud-Init administrator <code>user</code> with the pinned single SSH public key.</li>
         <li><span class="status complete">Complete</span> Reduce the F620 DHCP end address to <code>192.168.1.99</code>.</li>
         <li><span class="status complete">Complete</span> Run <code>task infra:validate</code> and <code>task infra:plan</code>.</li>
-        <li><span class="status complete">Complete</span> Review all five VM IDs, addresses, root disks, and the absence of VLAN tags.</li>
-        <li><span class="status complete">Complete</span> Export <code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> and run <code>task infra:apply</code>; five full clones completed in 11 minutes 7 seconds.</li>
+        <li><span class="status complete">Complete</span> Review all three VM IDs, addresses, root disks, and the absence of VLAN tags.</li>
+        <li><span class="status complete">Complete</span> Reconcile the live five-VM baseline: preserve VM 1001 through a Terraform state move, remove empty superseded guests, and recreate the agent VM as 1002.</li>
+        <li><span class="status complete">Complete</span> Export <code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> and run <code>task infra:apply</code>; the final apply completed in 2 minutes 15 seconds.</li>
         <li><span class="status complete">Available</span> Use <code>task infra:output</code> as the inventory-generation input.</li>
       </ol>
 
       <h3>Acceptance criteria</h3>
       <ul class="compact">
-        <li><span class="status complete">Passed</span> All five guests booted from template <code>9000</code> with their intended hostname and static IPv4 address.</li>
+        <li><span class="status complete">Passed</span> All three guests booted from template <code>9000</code> with their intended hostname and static IPv4 address; cloud-init reports <code>done</code>.</li>
         <li><span class="status complete">Passed</span> Cloud-init reports <code>done</code> and key-only SSH succeeds as <code>user</code> on every VM.</li>
         <li><span class="status complete">Passed</span> Only rebuildable root disks exist; persistent ZFS-backed data disks remain a separate implementation step.</li>
         <li><span class="status complete">Passed</span> No VLAN tag is applied until the VLAN-capable router and switch exist.</li>
-        <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes.</li>
+        <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes after consolidation.</li>
+        <li><span class="status active">Operator action</span> Remove the obsolete SSH known-host entries for <code>192.168.1.101</code> and <code>192.168.1.102</code>, verify the displayed fingerprints, and trust the replacement guest keys before Ansible convergence.</li>
       </ul>
     </section>
 

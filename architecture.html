@@ -193,7 +193,7 @@
         <a href="implementation.html">Implementation</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Draft · Updated 14 September 2026</p>
+      <p class="meta">Canonical design · Draft · Updated 15 September 2026</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
@@ -238,7 +238,7 @@
           <text class="eyebrow" x="85" y="320">EXISTING · FAST / REBUILDABLE</text>
           <text class="label" x="85" y="353">512 GB Intel NVMe</text>
           <text class="small" x="85" y="380">/dev/nvme0n1 · LVM-thin</text>
-          <text class="small" x="85" y="407">Proxmox OS + five VM OS disks</text>
+          <text class="small" x="85" y="407">Proxmox OS + three VM OS disks</text>
 
           <rect class="node storage" x="530" y="290" width="410" height="155" rx="10"></rect>
           <text class="eyebrow" x="555" y="320">PLANNED · DURABLE / BACKED UP</text>
@@ -274,7 +274,7 @@
             <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
             <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
             <dt>DHCP limitation</dt><dd>The F620 misaddresses concurrent VM offers at Layer 2; do not use it for multi-clone acceptance</dd>
-            <dt>Temporary VMs</dt><dd>Five Terraform-managed guests running at static <code>192.168.1.100–104</code>; F620 DHCP ends at <code>192.168.1.99</code></dd>
+            <dt>Temporary VMs</dt><dd>Three Terraform-managed guests running at static <code>192.168.1.100–102</code>; F620 DHCP ends at <code>192.168.1.99</code></dd>
           </dl>
         </section>
         <section>
@@ -336,7 +336,7 @@
 
           <rect class="boundary" x="535" y="305" width="430" height="100" rx="10"></rect>
           <text class="eyebrow" x="555" y="335">LOGICAL ZONES ON THE TRUNK</text>
-          <text class="label" x="555" y="368">Management · edge · data · Git · secrets · agents</text>
+          <text class="label" x="555" y="368">Management · edge · services · agents</text>
           <text class="small" x="555" y="391">Runner, trusted-client, and IoT zones remain isolated.</text>
 
           <path d="M630 225 V270 H380 V305" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
@@ -351,7 +351,7 @@
         <div class="diagram-scroll">
         <svg class="wide-diagram" viewBox="0 0 1200 820" role="img" aria-labelledby="logical-network-title logical-network-desc">
           <title id="logical-network-title">Logical VLAN and firewall architecture</title>
-          <desc id="logical-network-desc">A central firewall router connects ten isolated network zones. Management, edge, trusted clients, IoT, data, Git, agents, secrets, and future runners use separate VLANs. WireGuard clients use a routed subnet through the edge VM rather than a VLAN. Inter-zone traffic is denied unless explicitly allowed.</desc>
+          <desc id="logical-network-desc">A central firewall router connects seven isolated network zones. Management, edge, services, agents, future runners, trusted clients, and IoT use separate VLANs. WireGuard clients use a routed subnet through the edge VM rather than a VLAN. Inter-zone traffic is denied unless explicitly allowed.</desc>
           <defs>
             <marker id="logical-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
@@ -376,7 +376,7 @@
           <text class="eyebrow" x="475" y="446">EXPLICIT EXCEPTIONS</text>
           <text class="small" x="475" y="475">Admin peers → management</text>
           <text class="small" x="475" y="501">VPN / trusted → published apps</text>
-          <text class="small" x="475" y="527">Agents → Git · SSH / HTTPS</text>
+          <text class="small" x="475" y="527">Agents → Gitea ports on services</text>
           <text class="small" x="475" y="553">All zones → AdGuard · TCP / UDP 53</text>
           <text class="small" x="475" y="579">Approved zones → WAN egress</text>
           <line class="divider" x1="475" y1="604" x2="725" y2="604"></line>
@@ -391,27 +391,21 @@
 
           <rect class="node" x="40" y="290" width="330" height="85" rx="10"></rect>
           <text class="eyebrow" x="60" y="319">VLAN 30 · 10.73.30.0/24</text>
-          <text class="label" x="60" y="349">Data</text>
-          <text class="small" x="115" y="349">lab-data-01 · Nextcloud</text>
+          <text class="label" x="60" y="349">Services</text>
+          <text class="small" x="140" y="349">lab-services-01 · apps</text>
           <path class="rail" d="M370 332 H450"></path>
 
-          <rect class="node storage" x="40" y="395" width="330" height="85" rx="10"></rect>
-          <text class="eyebrow" x="60" y="424">VLAN 50 · 10.73.50.0/24</text>
-          <text class="label" x="60" y="454">Secrets</text>
-          <text class="small" x="135" y="454">lab-secrets-01 · password vault</text>
+          <rect class="boundary" x="40" y="395" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="424">VLAN 50 · 10.73.50.0/24 · FUTURE</text>
+          <text class="label" x="60" y="454">CI runner</text>
+          <text class="small" x="150" y="454">lab-runner-01 · ephemeral</text>
           <path class="rail" d="M370 437 H450"></path>
 
-          <rect class="boundary" x="40" y="500" width="330" height="85" rx="10"></rect>
-          <text class="eyebrow" x="60" y="529">VLAN 70 · 10.73.70.0/24 · FUTURE</text>
-          <text class="label" x="60" y="559">CI runner</text>
-          <text class="small" x="150" y="559">lab-runner-01 · ephemeral</text>
+          <rect class="node storage" x="40" y="500" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="60" y="529">VLAN 70 · 10.73.70.0/24</text>
+          <text class="label" x="60" y="559">IoT</text>
+          <text class="small" x="108" y="559">Two Xiaomi cameras · no LAN access</text>
           <path class="rail" d="M370 542 H450"></path>
-
-          <rect class="node storage" x="40" y="605" width="330" height="85" rx="10"></rect>
-          <text class="eyebrow" x="60" y="634">VLAN 90 · 10.73.90.0/24</text>
-          <text class="label" x="60" y="664">IoT</text>
-          <text class="small" x="108" y="664">Two Xiaomi cameras · no LAN access</text>
-          <path class="rail" d="M370 647 H450"></path>
 
           <rect class="node network" x="830" y="185" width="330" height="85" rx="10"></rect>
           <text class="eyebrow" x="850" y="214">VLAN 20 · 10.73.20.0/24</text>
@@ -419,36 +413,28 @@
           <text class="small" x="910" y="244">lab-access-01 · WG · DNS · DDNS</text>
           <path class="rail" d="M750 227 H830"></path>
 
-          <rect class="node control" x="830" y="290" width="330" height="85" rx="10"></rect>
+          <rect class="node" x="830" y="290" width="330" height="85" rx="10"></rect>
           <text class="eyebrow" x="850" y="319">VLAN 40 · 10.73.40.0/24</text>
-          <text class="label" x="850" y="349">Git</text>
-          <text class="small" x="890" y="349">lab-git-01 · Gitea / artifacts</text>
+          <text class="label" x="850" y="349">Agents</text>
+          <text class="small" x="922" y="349">lab-agents-01 · Hermes</text>
           <path class="rail" d="M750 332 H830"></path>
 
           <rect class="node" x="830" y="395" width="330" height="85" rx="10"></rect>
           <text class="eyebrow" x="850" y="424">VLAN 60 · 10.73.60.0/24</text>
-          <text class="label" x="850" y="454">Agents</text>
-          <text class="small" x="922" y="454">lab-agents-01 · Hermes</text>
+          <text class="label" x="850" y="454">Trusted clients</text>
+          <text class="small" x="995" y="454">Phone · laptop · desktop</text>
           <path class="rail" d="M750 437 H830"></path>
 
-          <rect class="node" x="830" y="500" width="330" height="85" rx="10"></rect>
-          <text class="eyebrow" x="850" y="529">VLAN 80 · 10.73.80.0/24</text>
-          <text class="label" x="850" y="559">Trusted clients</text>
-          <text class="small" x="995" y="559">Phone · laptop · desktop</text>
+          <rect class="boundary" x="830" y="500" width="330" height="85" rx="10"></rect>
+          <text class="eyebrow" x="850" y="529">ROUTED · 10.73.100.0/24 · NOT A VLAN</text>
+          <text class="label" x="850" y="559">WireGuard peers</text>
+          <text class="small" x="997" y="559">Per-device /32 policy</text>
           <path class="rail" d="M750 542 H830"></path>
 
-          <rect class="boundary" x="830" y="605" width="330" height="85" rx="10"></rect>
-          <text class="eyebrow" x="850" y="634">ROUTED · 10.73.100.0/24 · NOT A VLAN</text>
-          <text class="label" x="850" y="664">WireGuard peers</text>
-          <text class="small" x="997" y="664">Per-device /32 policy</text>
-          <path class="rail" d="M750 647 H830"></path>
-
-          <path d="M1160 437 H1178 V332 H1160" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#logical-arrow)"></path>
-          <text class="eyebrow" x="1080" y="390">GIT ONLY</text>
-          <text class="small" x="40" y="760">Every zone reaches another zone through the firewall; VLAN tags provide separation and explicit ACLs provide security.</text>
+          <text class="small" x="40" y="735">Every zone reaches another zone through the firewall; VLAN tags provide separation and explicit ACLs provide security.</text>
         </svg>
         </div>
-        <figcaption>Hub-and-spoke routing prevents direct Layer-2 paths between trust zones. The side arrow is the agent-to-Git exception.</figcaption>
+        <figcaption>Hub-and-spoke routing prevents direct Layer-2 paths between trust zones. Agents reach only Gitea's published ports on the services VM.</figcaption>
       </figure>
 
       <div class="table-wrap">
@@ -457,13 +443,11 @@
           <tbody>
             <tr><td>Management</td><td>10</td><td><code>10.73.10.0/24</code></td><td>Proxmox and network equipment</td><td>Named admin devices and admin VPN peers only</td></tr>
             <tr><td>Edge</td><td>20</td><td><code>10.73.20.0/24</code></td><td><code>lab-access-01</code></td><td>Forwarded WireGuard UDP; tightly scoped internal routing</td></tr>
-            <tr><td>Data</td><td>30</td><td><code>10.73.30.0/24</code></td><td><code>lab-data-01</code></td><td>VPN and trusted clients on published application ports</td></tr>
-            <tr><td>Git</td><td>40</td><td><code>10.73.40.0/24</code></td><td><code>lab-git-01</code></td><td>VPN and trusted clients; scoped SSH/HTTPS from agents</td></tr>
-            <tr><td>Secrets</td><td>50</td><td><code>10.73.50.0/24</code></td><td><code>lab-secrets-01</code></td><td>Explicit users and devices only</td></tr>
-            <tr><td>Agents</td><td>60</td><td><code>10.73.60.0/24</code></td><td><code>lab-agents-01</code></td><td>Outbound model APIs, DNS/NTP, and scoped access to Git</td></tr>
-            <tr><td>CI runners</td><td>70</td><td><code>10.73.70.0/24</code></td><td>Future <code>lab-runner-01</code></td><td>Isolated from agents, management, data, and secrets</td></tr>
-            <tr><td>Trusted clients</td><td>80</td><td><code>10.73.80.0/24</code></td><td>Home laptops and phones</td><td>DNS and selected private applications</td></tr>
-            <tr><td>IoT</td><td>90</td><td><code>10.73.90.0/24</code></td><td>Two Xiaomi cameras</td><td>DNS/NTP and explicitly approved internet destinations; no internal zones</td></tr>
+            <tr><td>Services</td><td>30</td><td><code>10.73.30.0/24</code></td><td><code>lab-services-01</code></td><td>VPN and trusted clients on published application ports; agents on Gitea ports only</td></tr>
+            <tr><td>Agents</td><td>40</td><td><code>10.73.40.0/24</code></td><td><code>lab-agents-01</code></td><td>Outbound model APIs, DNS/NTP, and scoped access to Gitea</td></tr>
+            <tr><td>CI runners</td><td>50</td><td><code>10.73.50.0/24</code></td><td>Future <code>lab-runner-01</code></td><td>Isolated from agents, management, and application data</td></tr>
+            <tr><td>Trusted clients</td><td>60</td><td><code>10.73.60.0/24</code></td><td>Home laptops and phones</td><td>DNS and selected private applications</td></tr>
+            <tr><td>IoT</td><td>70</td><td><code>10.73.70.0/24</code></td><td>Two Xiaomi cameras</td><td>DNS/NTP and explicitly approved internet destinations; no internal zones</td></tr>
             <tr><td>VPN clients</td><td>Not a VLAN</td><td><code>10.73.100.0/24</code></td><td>WireGuard peers</td><td>Per-peer policy and selected tunnel profile</td></tr>
           </tbody>
         </table>
@@ -541,7 +525,7 @@
 
           <rect class="boundary" x="250" y="330" width="715" height="95" rx="12"></rect>
           <text class="eyebrow" x="275" y="360">PRIVATE ZONES · NO PUBLIC APPLICATION PORTS</text>
-          <text class="label" x="275" y="393">Data · Git · secrets · agents · management</text>
+          <text class="label" x="275" y="393">Services · agents · management</text>
           <path d="M875 235 V300 H610 V330" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#network-arrow)"></path>
           <text class="eyebrow" x="653" y="291">AUTHENTICATED VPN ROUTES</text>
         </svg>
@@ -559,14 +543,14 @@
             <li><span class="status accepted">D-020 Accepted</span> Maintain separate full-tunnel travel and DNS-only WireGuard client profiles.</li>
             <li><span class="status accepted">D-021 Accepted</span> Reserve <code>10.73.0.0/16</code> for the target network and <code>10.73.100.0/24</code> for WireGuard peers.</li>
             <li><span class="status accepted">D-022 Accepted</span> Bridge the F620 and make a new VLAN-capable firewall router the public-IP endpoint and policy authority.</li>
-            <li><span class="status accepted">D-023 Accepted</span> Segment management, edge, data, Git, secrets, agents, runners, trusted clients, and IoT with default-deny inter-zone rules.</li>
+            <li><span class="status accepted">D-023 Accepted</span> Segment management, edge, services, agents, runners, trusted clients, and IoT with default-deny inter-zone rules.</li>
             <li><span class="status accepted">D-024 Accepted</span> Make AdGuard the DNS resolver advertised to every home VLAN and WireGuard peer.</li>
             <li><span class="status proposed">D-025 Proposed</span> Route <code>10.73.100.0/24</code> through <code>lab-access-01</code> without internal NAT; NAT only full-tunnel internet egress at the firewall router.</li>
             <li><span class="status accepted">D-026 Accepted</span> Limit management access to three named devices: the owner's phone, laptop, and desktop; give each its own WireGuard key and stable peer address.</li>
             <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
-            <li><span class="status accepted">D-028 Accepted</span> Isolate <code>lab-git-01</code> on VLAN 40 so agent access to Git does not create a Layer-2 path to Nextcloud data.</li>
+            <li><span class="status deferred">D-028 Superseded</span> Gitea now shares the services VLAN with Nextcloud and Vaultwarden. Agents remain on VLAN 40 and may reach only Gitea's published ports; this is port-level isolation, not a separate Gitea VM boundary.</li>
             <li><span class="status accepted">D-036 Accepted</span> Do not depend on the F620 DHCP server for concurrent Proxmox guests. Packet capture showed an Offer for clone B carrying B's client MAC inside DHCP but addressed to clone A's MAC in the Ethernet frame, even when B requested a broadcast reply. Use excluded static addresses until DHCP moves to the target firewall router.</li>
-            <li><span class="status accepted">D-037 Accepted</span> During the flat-LAN transition, Terraform assigns VM IDs <code>1000</code>–<code>1004</code> and static addresses <code>192.168.1.100</code>–<code>192.168.1.104</code> in capability order. The F620 DHCP pool must end at or below <code>192.168.1.99</code> before apply; the target VLAN migration replaces these temporary addresses.</li>
+            <li><span class="status accepted">D-037 Accepted</span> During the flat-LAN transition, Terraform assigns VM IDs <code>1000</code>–<code>1002</code> and static addresses <code>192.168.1.100</code>–<code>192.168.1.102</code> in capability order. The F620 DHCP pool must end at or below <code>192.168.1.99</code> before apply; the target VLAN migration replaces these temporary addresses.</li>
           </ul>
         </section>
         <section>
@@ -574,7 +558,7 @@
           <ul class="compact">
             <li><span class="status open">Open</span> Decide whether the travel profile tunnels IPv6 or deliberately disables it.</li>
             <li><span class="status open">Open</span> Confirm the public VPN hostname and UDP port.</li>
-            <li><span class="status accepted">Complete</span> The F620 DHCP end address is <code>192.168.1.99</code>, reserving <code>192.168.1.100–104</code> for the five-VM topology.</li>
+            <li><span class="status accepted">Complete</span> The F620 DHCP end address is <code>192.168.1.99</code>, reserving <code>192.168.1.100–102</code> for the three-VM topology.</li>
             <li><span class="status open">Open</span> Decide whether the Xiaomi cameras require vendor-cloud internet access.</li>
             <li><span class="status open">Open</span> Choose whether DNS fails closed with one AdGuard instance or gains a second resolver.</li>
           </ul>
@@ -619,84 +603,70 @@
       <h2>Virtual machines</h2>
       <figure>
         <div class="diagram-scroll">
-        <svg viewBox="0 0 1100 690" role="img" aria-labelledby="vm-title vm-desc">
-          <title id="vm-title">Five virtual machines organized by capability and trust boundary</title>
-          <desc id="vm-desc">Five role-named virtual machines separately provide access, personal data, secret storage, Git hosting, and agent execution. The agent VM has scoped access to the Git VM. Every VM uses a rebuildable operating system disk on NVMe LVM-thin and a durable dataset on SATA ZFS.</desc>
+        <svg viewBox="0 0 1100 650" role="img" aria-labelledby="vm-title vm-desc">
+          <title id="vm-title">Three virtual machines organized by capability</title>
+          <desc id="vm-desc">Three role-named virtual machines provide access, shared applications, and isolated agent execution. Agents have scoped access only to Gitea ports on the services VM. Every VM uses a rebuildable operating system disk on NVMe LVM-thin while each stateful application has an independent SATA ZFS dataset.</desc>
           <defs>
             <marker id="vm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
             </marker>
           </defs>
-          <rect class="boundary" x="25" y="25" width="1050" height="625" rx="16"></rect>
-          <text class="title" x="55" y="65">Proxmox node blue · five capability domains</text>
+          <rect class="boundary" x="25" y="25" width="1050" height="585" rx="16"></rect>
+          <text class="title" x="55" y="65">Proxmox node blue · three capability domains</text>
 
-          <rect class="node network" x="45" y="105" width="190" height="155" rx="10"></rect>
-          <text class="eyebrow" x="65" y="133">ACCESS BOUNDARY</text>
-          <text class="label" x="65" y="166">lab-access-01</text>
-          <text class="small" x="65" y="197">WireGuard · AdGuard</text>
-          <text class="small" x="65" y="228">1 GB RAM</text>
+          <rect class="node network" x="70" y="105" width="270" height="155" rx="10"></rect>
+          <text class="eyebrow" x="95" y="133">ACCESS BOUNDARY</text>
+          <text class="label" x="95" y="166">lab-access-01</text>
+          <text class="small" x="95" y="197">Native WireGuard · Compose AdGuard</text>
+          <text class="small" x="95" y="228">1 vCPU · 1.5 GB RAM</text>
 
-          <rect class="node" x="250" y="105" width="190" height="155" rx="10"></rect>
-          <text class="eyebrow" x="270" y="133">PERSONAL DATA</text>
-          <text class="label" x="270" y="166">lab-data-01</text>
-          <text class="small" x="270" y="197">Nextcloud · DB · Redis</text>
-          <text class="small" x="270" y="228">3 GB RAM</text>
+          <rect class="node storage" x="415" y="105" width="270" height="155" rx="10"></rect>
+          <text class="eyebrow" x="440" y="133">SHARED APPLICATIONS</text>
+          <text class="label" x="440" y="166">lab-services-01</text>
+          <text class="small" x="440" y="197">Nextcloud · Gitea · Vaultwarden</text>
+          <text class="small" x="440" y="228">2 vCPU · 4 GB RAM</text>
 
-          <rect class="node storage" x="455" y="105" width="190" height="155" rx="10"></rect>
-          <text class="eyebrow" x="475" y="133">RESTRICTED SECRETS</text>
-          <text class="label" x="475" y="166">lab-secrets-01</text>
-          <text class="small" x="475" y="197">Password manager</text>
-          <text class="small" x="475" y="228">1 GB RAM</text>
+          <rect class="node" x="760" y="105" width="270" height="155" rx="10"></rect>
+          <text class="eyebrow" x="785" y="133">AGENT RUNTIME</text>
+          <text class="label" x="785" y="166">lab-agents-01</text>
+          <text class="small" x="785" y="197">Hermes · future agents</text>
+          <text class="small" x="785" y="228">2 vCPU · 3 GB RAM</text>
 
-          <rect class="node control" x="660" y="105" width="190" height="155" rx="10"></rect>
-          <text class="eyebrow" x="680" y="133">SOURCE CONTROL</text>
-          <text class="label" x="680" y="166">lab-git-01</text>
-          <text class="small" x="680" y="197">Gitea · artifacts</text>
-          <text class="small" x="680" y="228">1 GB RAM</text>
+          <path d="M760 185 H685" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
+          <text class="eyebrow" x="688" y="168">GITEA PORTS</text>
 
-          <rect class="node" x="865" y="105" width="190" height="155" rx="10"></rect>
-          <text class="eyebrow" x="885" y="133">AGENT RUNTIME</text>
-          <text class="label" x="885" y="166">lab-agents-01</text>
-          <text class="small" x="885" y="197">Hermes · future agents</text>
-          <text class="small" x="885" y="228">2–4 GB RAM</text>
-
-          <path d="M865 185 H850" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
-          <text class="eyebrow" x="796" y="286">SCOPED GIT / API</text>
-
-          <path class="rail" d="M140 260 V335 M345 260 V335 M550 260 V335 M755 260 V335 M960 260 V335 M140 335 H960"></path>
+          <path class="rail" d="M205 260 V335 M550 260 V335 M895 260 V335 M205 335 H895"></path>
           <text class="eyebrow" x="420" y="365">TERRAFORM-MANAGED STORAGE ATTACHMENTS</text>
           <path class="line" d="M550 335 V405 H290 V445"></path>
           <path class="data-line" d="M550 405 H810 V445"></path>
 
           <rect class="node os-storage" x="70" y="445" width="440" height="130" rx="10"></rect>
           <text class="eyebrow" x="95" y="475">OS TIER · NVME / LVM-THIN</text>
-          <text class="label" x="95" y="510">Five independent root disks</text>
+          <text class="label" x="95" y="510">Three independent root disks</text>
           <text class="small" x="95" y="540">Rebuildable from Packer → Terraform → Ansible</text>
 
           <rect class="node storage" x="590" y="445" width="440" height="130" rx="10"></rect>
           <text class="eyebrow" x="615" y="475">DATA TIER · SATA / ZFS</text>
-          <text class="label" x="615" y="510">One dataset per capability domain</text>
+          <text class="label" x="615" y="510">One dataset per stateful application</text>
           <text class="small" x="615" y="540">Durable state · snapshots · off-host backup required</text>
 
-          <text class="small" x="70" y="615">Each VM is a separate failure and trust boundary; product replacements do not require hostname changes.</text>
+          <text class="small" x="70" y="600">The services share a VM boundary but retain separate Compose projects, secrets, networks, and durable datasets.</text>
         </svg>
         </div>
-        <figcaption>Names encode capability and trust role; application products remain replaceable.</figcaption>
+        <figcaption>Names encode capability rather than products. The smaller VM count intentionally trades isolation for lower memory and maintenance cost.</figcaption>
       </figure>
 
       <div class="table-wrap">
         <table>
           <thead><tr><th>VM</th><th>VM ID</th><th>Temporary IP</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
           <tbody>
-            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
-            <tr><td><code>lab-data-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Personal files and database</td></tr>
-            <tr><td><code>lab-secrets-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>1</td><td>1 GB</td><td>16 GB</td><td>Highest-sensitivity application</td></tr>
-            <tr><td><code>lab-git-01</code></td><td>1003</td><td><code>192.168.1.103</code></td><td>1</td><td>1 GB</td><td>24 GB</td><td>Source and artifact control plane</td></tr>
-            <tr><td><code>lab-agents-01</code></td><td>1004</td><td><code>192.168.1.104</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
+            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1</td><td>1.5 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
+            <tr><td><code>lab-services-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>4 GB</td><td>32 GB</td><td>Nextcloud, Gitea, and Vaultwarden share one boundary</td></tr>
+            <tr><td><code>lab-agents-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="muted">Initial sizing, not guaranteed reservations. Normal target: 9 GB guest RAM, leaving 4 GB for Proxmox and roughly 3 GB headroom.</p>
+      <p class="muted">Initial sizing, not guaranteed reservations. Normal target: 8.5 GB guest RAM, leaving roughly 7.5 GB for Proxmox, filesystem cache, and transient load.</p>
 
       <h3>Naming</h3>
       <div class="table-wrap">
@@ -704,7 +674,7 @@
           <thead><tr><th>Field</th><th>Meaning</th><th>Examples</th></tr></thead>
           <tbody>
             <tr><td><code>lab</code></td><td>Environment scope</td><td>Distinguishes homelab assets from clients and external systems.</td></tr>
-            <tr><td><code>&lt;role&gt;</code></td><td>Workload class, not a product</td><td><code>access</code>, <code>data</code>, <code>secrets</code>, <code>git</code>, <code>agents</code></td></tr>
+            <tr><td><code>&lt;role&gt;</code></td><td>Workload class, not a product</td><td><code>access</code>, <code>services</code>, <code>agents</code></td></tr>
             <tr><td><code>01</code></td><td>Instance ordinal</td><td>Allows a later peer without renaming the first VM.</td></tr>
           </tbody>
         </table>
@@ -716,14 +686,17 @@
           <h3>Decisions</h3>
           <ul class="compact">
             <li><span class="status accepted">D-003 Accepted</span> Keep WireGuard and AdGuard together on the network VM.</li>
-            <li><span class="status accepted">D-010 Accepted</span> Use five VMs separated by trust and failure domain.</li>
+            <li><span class="status deferred">D-010 Superseded</span> The original five-VM layout provided stronger isolation but consumed too much of the 16 GB host.</li>
             <li><span class="status accepted">D-011 Accepted</span> Keep Gitea separate from agent execution.</li>
             <li><span class="status accepted">D-013 Accepted</span> Name VMs using <code>&lt;scope&gt;-&lt;role&gt;-&lt;ordinal&gt;</code>; keep product names in application configuration.</li>
             <li><span class="status accepted">D-014 Accepted</span> Reserve <code>lab-agents-01</code> for agents; do not run Gitea Actions jobs there.</li>
             <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
-            <li><span class="status accepted">D-038 Accepted</span> Initially authorize only the administrator key from this Mac, fingerprint <code>SHA256:gAlPyAsihuQua3grrkeUr7Gp1mmc1hlD49WyHV3gdyU</code>, on all five VMs. Exclude the retired GitHub-imported key, the unidentified key, and <code>root@blue</code>; adding access requires an explicit source-controlled key change.</li>
-            <li><span class="status accepted">D-039 Accepted</span> Use <code>user</code> as the Cloud-Init administrator account on the initial five VMs.</li>
+            <li><span class="status accepted">D-038 Accepted</span> Initially authorize only the administrator key from this Mac, fingerprint <code>SHA256:gAlPyAsihuQua3grrkeUr7Gp1mmc1hlD49WyHV3gdyU</code>, on all three VMs. Exclude the retired GitHub-imported key, the unidentified key, and <code>root@blue</code>; adding access requires an explicit source-controlled key change.</li>
+            <li><span class="status accepted">D-039 Accepted</span> Use <code>user</code> as the Cloud-Init administrator account on the initial three VMs.</li>
             <li><span class="status accepted">D-040 Accepted</span> Keep Terraform plans idempotent against Telmate provider normalization: declare the Cloud-Init disk before the raw LVM-thin root disk and ignore provider-only boot-disk and startup/shutdown-default noise. Set the supported <code>power_state</code> to <code>running</code> for creation but lifecycle-ignore later power changes, allowing manual VM starts and stops. Terraform continues to own disk slots, storage, sizes, and boot order.</li>
+            <li><span class="status accepted">D-041 Accepted</span> Consolidate to three VMs: access, shared services, and agents. Assign IDs <code>1000</code>–<code>1002</code>, addresses <code>192.168.1.100</code>–<code>192.168.1.102</code>, and 1.5 GB, 4 GB, and 3 GB RAM respectively.</li>
+            <li><span class="status accepted">D-042 Accepted</span> Nextcloud, Gitea, and Vaultwarden share <code>lab-services-01</code>. Accept the shared VM failure and compromise boundary; isolate operations with separate Compose projects, container networks, secrets, and ZFS datasets.</li>
+            <li><span class="status accepted">D-043 Accepted</span> Keep WireGuard native for simple host networking. Deploy AdGuard, Nextcloud, Gitea, Vaultwarden, and Hermes with Ansible-managed Docker Compose and pinned images.</li>
           </ul>
         </section>
         <section>
@@ -739,9 +712,7 @@
       <h2>Applications</h2>
       <nav class="tabs subtabs" role="tablist" aria-label="Application groups">
         <button id="network-app-tab" role="tab" aria-selected="true" aria-controls="network-app-panel" type="button">lab-access-01</button>
-        <button id="cloud-app-tab" role="tab" aria-selected="false" aria-controls="cloud-app-panel" type="button">lab-data-01</button>
-        <button id="vault-app-tab" role="tab" aria-selected="false" aria-controls="vault-app-panel" type="button">lab-secrets-01</button>
-        <button id="git-app-tab" role="tab" aria-selected="false" aria-controls="git-app-panel" type="button">lab-git-01</button>
+        <button id="services-app-tab" role="tab" aria-selected="false" aria-controls="services-app-panel" type="button">lab-services-01</button>
         <button id="agents-app-tab" role="tab" aria-selected="false" aria-controls="agents-app-panel" type="button">lab-agents-01</button>
       </nav>
 
@@ -749,32 +720,21 @@
         <h3>WireGuard + AdGuard</h3>
         <p>WireGuard is the sole remote ingress. AdGuard provides DNS to VPN clients and selected local devices.</p>
         <p>No application is exposed directly to the public internet.</p>
-        <p><strong>Durable:</strong> VPN identities, peer assignments, DNS rules, credentials. <strong>Deployment:</strong> Ansible; runtime packaging open.</p>
+        <p><strong>Durable:</strong> VPN identities, peer assignments, DNS rules, credentials. <strong>Deployment:</strong> native WireGuard plus an Ansible-managed AdGuard Compose project.</p>
       </section>
 
-      <section id="cloud-app-panel" role="tabpanel" aria-labelledby="cloud-app-tab" hidden>
-        <h3>Nextcloud</h3>
-        <p>Private file service with its database and Redis colocated inside the VM boundary.</p>
-        <p><strong>Durable:</strong> files, database, configuration, encryption material. <strong>Deployment:</strong> Ansible; runtime packaging open.</p>
-      </section>
-
-      <section id="vault-app-panel" role="tabpanel" aria-labelledby="vault-app-tab" hidden>
-        <h3>Password manager</h3>
-        <p>Dedicated VM because compromise has unusually high impact. Product selection remains open.</p>
-        <p><strong>Durable:</strong> vault database, keys, attachments, configuration. <strong>Access:</strong> private HTTPS over WireGuard.</p>
-      </section>
-
-      <section id="git-app-panel" role="tabpanel" aria-labelledby="git-app-tab" hidden>
-        <h3>Gitea</h3>
-        <p>Private source-of-truth for agent code and artifacts. Start with SQLite. No Actions runner is registered in the initial deployment.</p>
-        <p><strong>Durable:</strong> repositories, LFS, packages, artifacts, configuration, database. <strong>Clients:</strong> users and scoped agent identities.</p>
+      <section id="services-app-panel" role="tabpanel" aria-labelledby="services-app-tab" hidden>
+        <h3>Nextcloud + Gitea + Vaultwarden</h3>
+        <p>These applications share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Each runs as a separate Compose project with its own container network, secrets, and ZFS-backed dataset.</p>
+        <p><strong>Nextcloud durable state:</strong> files, database, configuration, and encryption material. <strong>Gitea durable state:</strong> repositories, LFS, packages, artifacts, configuration, and database. <strong>Vaultwarden durable state:</strong> database, keys, attachments, and configuration.</p>
+        <p>Private clients reach only published application ports. Agents receive network access only to Gitea's HTTPS and SSH endpoints, not Nextcloud, Vaultwarden, or the container networks.</p>
         <p><strong>Runner boundary:</strong> CI jobs never execute on this VM or on <code>lab-agents-01</code>. A future <code>lab-runner-01</code> is disposable and receives no application datasets. Gitea documents that host mode has no job isolation and Docker mode shares its daemon; <a href="https://docs.gitea.com/runner/">runner isolation is an explicit security boundary</a>.</p>
       </section>
 
       <section id="agents-app-panel" role="tabpanel" aria-labelledby="agents-app-tab" hidden>
         <h3>Hermes Agent</h3>
         <p>Initial agent runtime. This VM may host future agents, but it never accepts CI runner jobs.</p>
-        <p><strong>Durable:</strong> agent configuration, credentials, sessions, skills. <strong>Boundary:</strong> no direct access to the vault, Nextcloud data, or Proxmox management. Outbound HTTPS is required for model and tool providers.</p>
+        <p><strong>Durable:</strong> agent configuration, credentials, sessions, skills. <strong>Deployment:</strong> Ansible-managed Docker Compose. <strong>Boundary:</strong> no direct access to Vaultwarden, Nextcloud, or Proxmox management. Outbound HTTPS is required for model and tool providers.</p>
       </section>
 
       <h3>Shared deployment contract</h3>
@@ -796,9 +756,10 @@
           <ul class="compact">
             <li><span class="status open">D-006 Open</span> Decide whether ordinary <code>terraform destroy</code> must preserve ZFS application datasets. Recommendation: preserve by default and require a separate explicit data-destruction action.</li>
             <li><span class="status open">D-007 Open</span> Select an encrypted off-host backup target, retention, and restore objective.</li>
-            <li><span class="status open">D-017 Open</span> Choose application packaging. Recommendation: Ansible-managed Docker Compose, with exceptions only where host networking makes native services simpler.</li>
+            <li><span class="status accepted">D-017 Accepted</span> Use Ansible-managed Docker Compose for applications, with native WireGuard as the host-networking exception.</li>
             <li><span class="status open">D-018 Open</span> Choose encrypted secret storage. Terraform must not receive application secret plaintext; recommendation: SOPS with age keys, decrypted by Ansible at deployment time.</li>
-            <li><span class="status open">D-019 Open</span> Select the password manager product and define emergency recovery of its database and encryption material.</li>
+            <li><span class="status accepted">D-019 Accepted</span> Use Vaultwarden as the password manager.</li>
+            <li><span class="status open">Open</span> Define Vaultwarden emergency recovery for its database and encryption material.</li>
           </ul>
         </section>
       </template>

@@ -8,7 +8,8 @@ Terraform clones the generic Packer image and owns rebuildable VM infrastructure
 - `modules/proxmox-vm` owns the Proxmox VM resource.
 - `image-verification` uses that module for one linked template-test clone in an isolated local state, then automatically destroys it.
 - `outputs.tf` exposes VM identity and the non-secret Ansible inventory contract.
-- `deployment.tfvars.json` is the versioned, non-secret five-VM topology. Never add credentials or private keys to it.
+- `deployment.tfvars.json` is the versioned, non-secret three-VM topology. Never add credentials or private keys to it.
+- `migrations.tf` records the state-preserving rename from `lab-data-01` to `lab-services-01`.
 
 The image-verification clone receives an explicit DHCP `ipconfig0`. The current F620 DHCP server misaddresses a second clone's Offer at Ethernet layer, so multi-clone verification is deferred until it can use excluded static test addresses or DHCP moves to the target firewall router.
 
@@ -22,7 +23,7 @@ vms = {
     target_node    = "blue"
     clone          = "ubuntu-26.04-template"
     cpu_cores      = 1
-    memory_mb      = 1024
+    memory_mb      = 1536
     disk_gb        = 16
     disk_storage   = "local-lvm"
     bridge         = "vmbr0"
@@ -34,7 +35,7 @@ vms = {
 }
 ```
 
-The temporary flat-LAN topology uses fixed VM IDs `1000`–`1004` and addresses `192.168.1.100`–`192.168.1.104`. Before applying it, reduce the F620 DHCP end address to `192.168.1.99`, then export `HOMELAB_STATIC_RANGE_RESERVED=yes`. The final VLAN deployment will replace these temporary addresses with the approved `10.73.0.0/16` plan.
+The temporary flat-LAN topology uses fixed VM IDs `1000`–`1002` and addresses `192.168.1.100`–`192.168.1.102`. Before applying it, reduce the F620 DHCP end address to `192.168.1.99`, then export `HOMELAB_STATIC_RANGE_RESERVED=yes`. The final VLAN deployment will replace these temporary addresses with the approved `10.73.0.0/16` plan.
 
 ## Flow
 

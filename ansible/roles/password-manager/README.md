@@ -1,3 +1,3 @@
 # Password manager role
 
-Planned configuration for `lab-secrets-01`. Product selection and emergency recovery remain open.
+Planned Vaultwarden Docker Compose configuration for `lab-services-01`. It will use a dedicated Compose project, container network, secrets, and ZFS-backed data mount. Emergency recovery remains open.

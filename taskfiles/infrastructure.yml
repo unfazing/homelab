@@ -8,7 +8,7 @@ vars:
 
 tasks:
   init:
-    desc: Initialize the five-VM Terraform deployment
+    desc: Initialize the three-VM Terraform deployment
     cmds:
       - terraform -chdir="{{.TERRAFORM_DIR}}" init -input=false
 
@@ -18,13 +18,13 @@ tasks:
       - terraform -chdir="{{.TERRAFORM_DIR}}" fmt -check -recursive
 
   validate:
-    desc: Validate the five-VM Terraform deployment
+    desc: Validate the three-VM Terraform deployment
     deps: [init]
     cmds:
       - terraform -chdir="{{.TERRAFORM_DIR}}" validate
 
   plan:
-    desc: Plan the five-VM Terraform deployment
+    desc: Plan the three-VM Terraform deployment
     deps: [init]
     preconditions:
       - sh: test -f "{{.TERRAFORM_DIR}}/{{.VAR_FILE}}"
@@ -33,7 +33,7 @@ tasks:
       - terraform -chdir="{{.TERRAFORM_DIR}}" plan -input=false -var-file="{{.VAR_FILE}}"
 
   apply:
-    desc: Apply the five-VM Terraform deployment
+    desc: Apply the three-VM Terraform deployment
     preconditions:
       - sh: test "${HOMELAB_STATIC_RANGE_RESERVED:-}" = "yes"
         msg: Set HOMELAB_STATIC_RANGE_RESERVED=yes only after the F620 DHCP pool ends at or below 192.168.1.99

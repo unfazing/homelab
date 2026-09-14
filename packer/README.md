@@ -1,6 +1,6 @@
 # Packer image pipeline
 
-Packer builds one reusable operating-system template. It does **not** create the five long-lived homelab VMs or install their applications:
+Packer builds one reusable operating-system template. It does **not** create the three long-lived homelab VMs or install their applications:
 
 - Packer creates `ubuntu-26.04-template` as Proxmox template VM `9000`.
 - Terraform clones that template and gives each VM its CPU, memory, disks, VLAN, address, and identity.
