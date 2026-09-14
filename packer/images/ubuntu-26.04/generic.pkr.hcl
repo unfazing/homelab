@@ -36,11 +36,6 @@ source "proxmox-iso" "vm" {
   cores    = var.cpu_cores
   memory   = var.memory
 
-  http_interface    = var.packer_http_interface
-  http_bind_address = var.packer_http_interface == "" ? var.packer_http_bind_address : ""
-  http_port_min     = var.packer_http_port == -1 ? 8000 : "${var.packer_http_port}"
-  http_port_max     = var.packer_http_port == -1 ? 9000 : "${var.packer_http_port}"
-
   disks {
     storage_pool = var.disk_storage_pool
     disk_size    = var.disk_size
@@ -94,6 +89,15 @@ source "proxmox-iso" "vm" {
     }
   }
 
+  additional_iso_files {
+    type             = "sata"
+    index            = 3
+    iso_storage_pool = var.iso_storage_pool
+    cd_files         = [var.nocloud_meta_data_file, var.nocloud_user_data_file]
+    cd_label         = "cidata"
+    unmount          = true
+  }
+
   dynamic "additional_iso_files" {
     for_each = local.additional_cd_files
     iterator = iso
@@ -115,7 +119,6 @@ source "proxmox-iso" "vm" {
   boot_command         = var.boot_command
   boot_wait            = var.boot_wait
   task_timeout         = var.task_timeout
-  http_directory       = var.http_directory
   communicator         = var.communicator
   ssh_username         = var.ssh_username
   ssh_private_key_file = var.ssh_private_key_file
@@ -134,7 +137,7 @@ build {
     for_each = length(var.provisioner) > 0 ? [1] : []
     labels   = ["shell"]
     content {
-      execute_command = "{{ .Vars }} sudo -E sh -eux '{{ .Path }}'"
+      execute_command = "{{ .Vars }} sudo sh -eux '{{ .Path }}'"
       inline          = var.provisioner
       skip_clean      = true
     }

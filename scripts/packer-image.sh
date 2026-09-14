@@ -16,7 +16,7 @@ image_dir="$repo_root/packer/images/ubuntu-26.04"
 image_vars="$image_dir/ubuntu-26.04.pkrvars.hcl"
 generated_root="$repo_root/.generated/packer"
 build_dir="$generated_root/ubuntu-26.04"
-http_dir="$build_dir/http"
+seed_dir="$build_dir/seed"
 key_file="$build_dir/id_ed25519"
 template_vmid=9000
 
@@ -39,41 +39,22 @@ require_value() {
 require_value PKR_VAR_proxmox_api_url
 require_value PKR_VAR_proxmox_user
 require_value PKR_VAR_node
-require_value PKR_VAR_packer_http_interface
-
 if [ -z "${PKR_VAR_proxmox_token:-}" ] && [ -z "${PKR_VAR_proxmox_password:-}" ]; then
   echo "Set PKR_VAR_proxmox_token or PKR_VAR_proxmox_password." >&2
   exit 1
 fi
 
-interface="$PKR_VAR_packer_http_interface"
-bind_address="${PKR_VAR_packer_http_bind_address:-}"
-if [ -z "$bind_address" ] && command -v ipconfig >/dev/null 2>&1; then
-  bind_address=$(ipconfig getifaddr "$interface" 2>/dev/null || true)
-fi
-if [ -z "$bind_address" ] && command -v ip >/dev/null 2>&1; then
-  bind_address=$(ip -o -4 addr show dev "$interface" 2>/dev/null | awk '$3 == "inet" { split($4, address, "/"); print address[1]; exit }')
-fi
-if [ -z "$bind_address" ] && command -v ifconfig >/dev/null 2>&1; then
-  bind_address=$(ifconfig "$interface" 2>/dev/null | awk '$1 == "inet" { print $2; exit }')
-fi
-if [ -z "$bind_address" ]; then
-  echo "Could not determine an IPv4 address for trusted interface: $interface" >&2
-  echo "Set PKR_VAR_packer_http_bind_address explicitly." >&2
-  exit 1
-fi
-
 umask 077
-mkdir -p "$http_dir"
+mkdir -p "$seed_dir"
 ssh-keygen -q -t ed25519 -N "" -C "homelab-packer-ephemeral" -f "$key_file"
 public_key=$(awk '{ print $1 " " $2 " " $3 }' "$key_file.pub")
 awk -v key="$public_key" '{ gsub(/__PACKER_SSH_PUBLIC_KEY__/, key); print }' \
-  "$repo_root/packer/http/ubuntu/user-data.pkrtpl" > "$http_dir/user-data"
-cp "$repo_root/packer/http/ubuntu/meta-data" "$http_dir/meta-data"
+  "$repo_root/packer/seed/ubuntu/user-data.pkrtpl" > "$seed_dir/user-data"
+cp "$repo_root/packer/seed/ubuntu/meta-data" "$seed_dir/meta-data"
 
-export PKR_VAR_http_directory="$http_dir"
+export PKR_VAR_nocloud_meta_data_file="$seed_dir/meta-data"
+export PKR_VAR_nocloud_user_data_file="$seed_dir/user-data"
 export PKR_VAR_ssh_private_key_file="$key_file"
-export PKR_VAR_packer_http_bind_address="$bind_address"
 
 packer validate -var-file="$image_vars" "$image_dir"
 

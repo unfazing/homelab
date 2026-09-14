@@ -8,18 +8,18 @@ This directory defines the generic `ubuntu-26.04-template` at fixed Proxmox VM I
 - `generic.pkr.hcl` defines the reusable Proxmox ISO builder.
 - `variables.pkr.hcl` declares the builder contract.
 - `ubuntu-26.04.pkrvars.hcl` pins the Ubuntu release, checksum, template ID, and build sizing.
-- `../../http/ubuntu` contains the NoCloud autoinstall template.
+- `../../seed/ubuntu` contains the NoCloud autoinstall template.
 - `../../../scripts/packer-image.sh` renders a temporary seed and runs validation or the build.
 
 ## Validate and build
 
-Run from the repository root. Supply Proxmox connection values and `PKR_VAR_packer_http_interface` through an ignored `.envrc`; see `.envrc.example`. The selected interface must have an IPv4 address reachable by the temporary VM.
+Run from the repository root. Supply Proxmox connection values through an ignored `.envrc`; see `.envrc.example`.
 
 ```sh
 task image:validate
 task image:build
 ```
 
-`image:build` changes Proxmox. It first refuses to continue when VM ID `9000` is occupied, then asks Proxmox to download the pinned ISO directly. The operator machine serves the NoCloud seed only on its selected trusted interface and port `8800`.
+`image:build` changes Proxmox. It first refuses to continue when VM ID `9000` is occupied, then asks Proxmox to download the pinned Ubuntu ISO directly. Packer packages the generated seed as a temporary `cidata` ISO and attaches it to the build VM; no seed HTTP server is opened on the operator machine.
 
-Every validation and build generates a new ED25519 key in `.generated/packer`, renders the public key into the seed, and removes the seed and key on exit. Password SSH is disabled, and the temporary `packer` account and its passwordless-sudo rule are removed before the VM becomes a template. A successful build leaves only the non-secret `.generated/packer/manifest.json` record.
+Every validation and build generates a new ED25519 key in `.generated/packer`, renders the public key into the seed, and removes the seed and key on exit. Password SSH is disabled. After first-boot cloud-init finishes, Packer removes installer networking, regenerates the local-disk initramfs without the unnecessary `dyn-netconf` and `systemd-networkd` modules, and removes the temporary `packer` account and sudo rule. This prevents clones from requesting DHCP with the shared installer hostname before cloud-init applies their individual identities. Dracut errors or a remaining default network profile fail the build. A successful build leaves only the non-secret `.generated/packer/manifest.json` record.

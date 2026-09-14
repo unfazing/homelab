@@ -275,8 +275,13 @@ variable "task_timeout" {
   default     = "5m"
 }
 
-variable "http_directory" {
-  description = "Path to the generated NoCloud directory served during the build."
+variable "nocloud_meta_data_file" {
+  description = "Path to the generated NoCloud meta-data file attached on the temporary cidata CD."
+  type        = string
+}
+
+variable "nocloud_user_data_file" {
+  description = "Path to the generated NoCloud user-data file attached on the temporary cidata CD."
   type        = string
 }
 
@@ -357,22 +362,6 @@ variable "windows_input_language" {
 variable "provisioner" {
   description = "The packer provisioner commands."
   type        = list(string)
-}
-
-variable "packer_http_interface" {
-  description = "Trusted operator interface from which Packer advertises the NoCloud URL."
-  type        = string
-}
-
-variable "packer_http_bind_address" {
-  description = "IPv4 address of the trusted operator interface to which the NoCloud HTTP server binds."
-  type        = string
-}
-
-variable "packer_http_port" {
-  description = "Fixed port used by the temporary NoCloud HTTP server."
-  type        = number
-  default     = 8800
 }
 
 variable "manifest_path" {

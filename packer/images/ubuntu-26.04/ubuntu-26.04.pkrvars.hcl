@@ -13,14 +13,13 @@ cloud_init_storage_pool = "local-lvm"
 cpu_cores               = 2
 memory                  = 4096
 
-packer_http_port = 8800
-boot_wait        = "5s"
-disk_size        = "16G"
+boot_wait = "5s"
+disk_size = "16G"
 
 boot_command = [
   "<wait5>",
   "c<wait5>",
-  "linux /casper/vmlinuz autoinstall ds='nocloud-net;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/' ---",
+  "linux /casper/vmlinuz autoinstall ds=nocloud ---",
   "<enter><wait5>",
   "initrd /casper/initrd",
   "<enter><wait5>",
@@ -29,10 +28,18 @@ boot_command = [
 ]
 
 provisioner = [
+  "cloud-init status --wait",
   "cloud-init clean --logs --seed",
   "rm -f /etc/cloud/cloud.cfg.d/99-installer.cfg",
   "rm -f /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
   "rm -f /etc/netplan/00-installer-config*.yaml",
+  "mkdir -p /etc/dracut.conf.d",
+  "printf '%s\\n' 'omit_dracutmodules+=\" dyn-netconf systemd-networkd \"' > /etc/dracut.conf.d/90-homelab-no-initramfs-network.conf",
+  "dracut_log=$(mktemp)",
+  "if ! dracut --regenerate-all --force >\"$dracut_log\" 2>&1; then cat \"$dracut_log\"; exit 1; fi",
+  "if grep -q 'dracut\\[E\\]:' \"$dracut_log\"; then cat \"$dracut_log\"; exit 1; fi",
+  "rm -f \"$dracut_log\"",
+  "for initrd in /boot/initrd.img-*; do if lsinitrd \"$initrd\" | grep -q 'dracut-default.network'; then echo \"Unexpected early-network profile in $initrd\"; exit 1; fi; done",
   "truncate -s 0 /etc/machine-id",
   "rm -f /var/lib/dbus/machine-id",
   "rm -f /etc/sudoers.d/packer",

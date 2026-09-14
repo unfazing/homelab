@@ -3,6 +3,12 @@ variable "name" {
   description = "Proxmox VM name."
 }
 
+variable "vmid" {
+  type        = number
+  description = "Optional fixed Proxmox VM ID."
+  default     = null
+}
+
 variable "target_node" {
   type        = string
   description = "Proxmox node that hosts the VM."
@@ -11,6 +17,37 @@ variable "target_node" {
 variable "clone" {
   type        = string
   description = "Packer-built template name to clone."
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = (var.clone != null) != (var.clone_id != null)
+    error_message = "Set exactly one of clone or clone_id."
+  }
+}
+
+variable "clone_id" {
+  type        = number
+  description = "Optional exact Proxmox template VM ID to clone."
+  default     = null
+}
+
+variable "full_clone" {
+  type        = bool
+  description = "Create a full clone rather than a linked clone."
+  default     = true
+}
+
+variable "agent_timeout" {
+  type        = number
+  description = "Seconds Terraform waits for an IPv4 address from QEMU guest agent."
+  default     = 300
+}
+
+variable "start_at_node_boot" {
+  type        = bool
+  description = "Start the VM automatically with its Proxmox node."
+  default     = true
 }
 
 variable "cpu_cores" {

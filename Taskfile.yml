@@ -17,7 +17,7 @@ tasks:
     cmds:
       - |
         set -eu
-        for command in packer terraform ansible-playbook curl ssh-keygen; do
+        for command in packer terraform ansible-playbook curl jq ssh ssh-keygen; do
           command -v "$command" >/dev/null 2>&1 || {
             echo "Missing required command: $command" >&2
             exit 1
@@ -31,8 +31,11 @@ tasks:
           implementation.html \
           packer/images/ubuntu-26.04/config.pkr.hcl \
           packer/images/ubuntu-26.04/ubuntu-26.04.pkrvars.hcl \
-          packer/http/ubuntu/user-data.pkrtpl \
+          packer/seed/ubuntu/user-data.pkrtpl \
           scripts/packer-image.sh \
+          scripts/verify-image.sh \
+          terraform/image-verification/main.tf \
+          terraform/image-verification/.terraform.lock.hcl \
           terraform/providers.tf \
           terraform/keys/keys.pub \
           ansible/playbooks/site.yml \
@@ -61,6 +64,7 @@ tasks:
         require_value TF_VAR_pm_api_url "${TF_VAR_pm_api_url:-}"
         require_value TF_VAR_pm_api_token_id "${TF_VAR_pm_api_token_id:-}"
         require_value TF_VAR_pm_api_token_secret "${TF_VAR_pm_api_token_secret:-}"
+        require_value TF_VAR_verification_node "${TF_VAR_verification_node:-}"
         echo "Required credential variables are loaded."
       - |
         set -eu
@@ -92,6 +96,8 @@ tasks:
       - task: image:validate
       - terraform -chdir=terraform init -backend=false -input=false
       - terraform -chdir=terraform validate
+      - terraform -chdir=terraform/image-verification init -backend=false -input=false
+      - terraform -chdir=terraform/image-verification validate
       - mkdir -p .generated/ansible/tmp
       - ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_LOCAL_TEMP=.generated/ansible/tmp ansible-inventory -i ansible/inventories/homelab/hosts.example.yml --list >/dev/null
       - ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_LOCAL_TEMP=.generated/ansible/tmp ansible-playbook --syntax-check -i ansible/inventories/homelab/hosts.example.yml ansible/playbooks/site.yml

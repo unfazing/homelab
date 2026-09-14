@@ -193,7 +193,7 @@
         <a href="implementation.html">Implementation</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Draft · Updated 11 September 2026</p>
+      <p class="meta">Canonical design · Draft · Updated 14 September 2026</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
@@ -273,6 +273,7 @@
             <dt>LAN</dt><dd><code>192.168.1.0/24</code> · gateway <code>192.168.1.254</code></dd>
             <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
             <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
+            <dt>DHCP limitation</dt><dd>The F620 misaddresses concurrent VM offers at Layer 2; do not use it for multi-clone acceptance</dd>
           </dl>
         </section>
         <section>
@@ -563,6 +564,7 @@
             <li><span class="status accepted">D-026 Accepted</span> Limit management access to three named devices: the owner's phone, laptop, and desktop; give each its own WireGuard key and stable peer address.</li>
             <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
             <li><span class="status accepted">D-028 Accepted</span> Isolate <code>lab-git-01</code> on VLAN 40 so agent access to Git does not create a Layer-2 path to Nextcloud data.</li>
+            <li><span class="status accepted">D-036 Accepted</span> Do not depend on the F620 DHCP server for concurrent Proxmox guests. Packet capture showed an Offer for clone B carrying B's client MAC inside DHCP but addressed to clone A's MAC in the Ethernet frame, even when B requested a broadcast reply. Use excluded static addresses until DHCP moves to the target firewall router.</li>
           </ul>
         </section>
         <section>
@@ -597,7 +599,9 @@
             <li><span class="status accepted">D-030 Accepted</span> Keep repository working agreements in root <code>AGENTS.md</code>; every change must synchronize design impact in this document and progress in <code>implementation.html</code>.</li>
             <li><span class="status accepted">D-031 Accepted</span> Root Task commands orchestrate non-mutating checks and namespaced tool tasks; credentials must be preloaded from an ignored environment file and must never be printed.</li>
             <li><span class="status accepted">D-032 Accepted</span> Standardize guests on Ubuntu Server 26.04 LTS; pin the exact point-release ISO and SHA-256 used for each template build.</li>
-            <li><span class="status accepted">D-033 Accepted</span> Build template VM <code>9000</code> from an ISO downloaded directly by Proxmox; use a per-run ED25519 key and bind the temporary NoCloud server only to a trusted operator interface.</li>
+            <li><span class="status accepted">D-033 Accepted</span> Build template VM <code>9000</code> from an ISO downloaded directly by Proxmox; deliver each per-run ED25519 public key and autoinstall configuration on a temporary NoCloud <code>cidata</code> CD. Local-disk guests omit initramfs networking and rely on cloud-init plus the installed Ubuntu network service after mounting root; this template does not support a network-hosted root disk, and any initramfs regeneration error must stop the build.</li>
+            <li><span class="status accepted">D-034 Accepted</span> Verify each image with one Terraform-owned linked clone on reserved VM ID <code>9900</code>; require cloud-init-owned first-boot networking and identity, fail closed on fatal errors or a missing guest address, surface recoverable warnings, destroy only that test resource, and retain a non-secret report after a pass. Restore multi-clone uniqueness checks after the F620 DHCP dependency is removed.</li>
+            <li><span class="status accepted">D-035 Accepted</span> Every clone must receive an explicit Proxmox <code>ipconfig0</code>; the generic image deliberately has no installer-network fallback. Machine IDs, SMBIOS UUIDs, MAC addresses, and SSH host keys must remain unique, but DHCP client-ID changes are not a remedy for a server that misaddresses Ethernet frames.</li>
           </ul>
         </section>
         <section>

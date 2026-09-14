@@ -28,3 +28,8 @@ tasks:
     cmds:
       - task: format
       - ./scripts/packer-image.sh build
+
+  verify:
+    desc: Clone and verify template VM 9000, then destroy test VM 9900
+    cmds:
+      - ./scripts/verify-image.sh

@@ -5,9 +5,8 @@ export PKR_VAR_proxmox_api_url="https://proxmox.example:8006/api2/json"
 export PKR_VAR_proxmox_user="terraform@pve!homelab"
 export PKR_VAR_proxmox_token="replace-me"
 export PKR_VAR_node="blue"
-# Interface on this operator machine that Proxmox can reach (for example, en0 on macOS).
-export PKR_VAR_packer_http_interface="replace-me"
 
 export TF_VAR_pm_api_url="https://proxmox.example:8006/api2/json"
 export TF_VAR_pm_api_token_id="terraform@pve!homelab"
 export TF_VAR_pm_api_token_secret="replace-me"
+export TF_VAR_verification_node="blue"

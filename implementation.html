@@ -93,7 +93,7 @@
         <a href="implementation.html" aria-current="page">Implementation</a>
       </nav>
       <h1>Homelab Implementation</h1>
-      <p class="meta">Executable specification · Planning · Updated 11 September 2026</p>
+      <p class="meta">Executable specification · Planning · Updated 14 September 2026</p>
       <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
     </header>
 
@@ -128,15 +128,17 @@
 ├── packer/
 │   ├── README.md              # image pipeline and NoCloud handoff
 │   ├── images/ubuntu-26.04/   # one generic Ubuntu image definition
-│   └── http/ubuntu/           # NoCloud autoinstall template
+│   └── seed/ubuntu/           # NoCloud autoinstall template
 ├── terraform/
 │   ├── modules/proxmox-vm/    # reusable VM primitive
+│   ├── image-verification/    # disposable single-clone acceptance stack
 │   └── *.tf                   # five-VM root composition
 ├── ansible/
 │   ├── playbooks/             # host bootstrap, site convergence, verification
 │   └── roles/                 # reusable host and application roles
 ├── scripts/
 │   ├── packer-image.sh        # secure image validation and build wrapper
+│   ├── verify-image.sh        # clone assertions and guaranteed cleanup
 │   ├── inventory/             # Terraform output → Ansible inventory
 │   ├── backup/
 │   └── validation/
@@ -165,7 +167,7 @@
             <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
             <tr><td>Task interface</td><td><span class="status complete">Initial slice complete</span></td><td>Add infrastructure and configuration tasks with their implementation phases</td></tr>
-            <tr><td>Packer build workflow</td><td><span class="status complete">Ready</span></td><td>Run the first template build, then implement disposable-clone verification</td></tr>
+            <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
             <tr><td>Terraform layout</td><td><span class="status complete">Complete</span></td><td>Populate the approved five-VM topology and generate inventory</td></tr>
             <tr><td>Ansible layout</td><td><span class="status complete">Complete</span></td><td>Implement and verify the remaining application roles</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
@@ -188,18 +190,18 @@
     <section id="packer-panel" role="tabpanel" aria-labelledby="packer-tab" hidden>
       <h2>Packer plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Secure build path ready; first build pending</span></dd>
+        <dt>Status</dt><dd><span class="status complete">Template built and single-clone functional verification passed</span></dd>
         <dt>Artifact</dt><dd>Template VM <code>9000</code>, <code>ubuntu-26.04-template</code>, on Proxmox <code>local-lvm</code></dd>
         <dt>Scope</dt><dd>Generic Ubuntu Server 26.04.1 LTS with cloud-init, SSH, and QEMU guest agent</dd>
         <dt>Consumers</dt><dd>All five Terraform-managed VMs</dd>
-        <dt>Architecture alignment</dt><dd>D-002, D-005, D-012, D-029, and D-031–D-033</dd>
+        <dt>Architecture alignment</dt><dd>D-002, D-005, D-012, D-029, and D-031–D-036</dd>
       </dl>
 
       <figure>
         <div class="diagram-scroll">
           <svg viewBox="0 0 1100 360" role="img" aria-labelledby="packer-flow-title packer-flow-desc">
             <title id="packer-flow-title">Packer build and verification flow</title>
-            <desc id="packer-flow-desc">Task validates the Packer files, then Packer creates a temporary Proxmox VM, serves Ubuntu autoinstall data, cleans instance identity, and converts the VM into a generic template. A disposable clone verifies the template before Terraform uses it.</desc>
+            <desc id="packer-flow-desc">Task validates the Packer files, then Packer creates a temporary Proxmox VM, attaches Ubuntu autoinstall data as a NoCloud CD, cleans instance identity, and converts the VM into a generic template. One disposable linked clone runs functional acceptance checks before Terraform uses it.</desc>
             <defs>
               <marker id="packer-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
                 <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
@@ -215,7 +217,7 @@
             <rect class="node" x="245" y="105" width="165" height="120" rx="10"></rect>
             <text class="eyebrow" x="265" y="135">PACKER</text>
             <text class="label" x="265" y="168">Temporary VM</text>
-            <text class="small" x="265" y="195">ISO · HTTP seed</text>
+            <text class="small" x="265" y="195">Ubuntu ISO · cidata CD</text>
 
             <rect class="node" x="455" y="105" width="165" height="120" rx="10"></rect>
             <text class="eyebrow" x="475" y="135">UBUNTU</text>
@@ -237,11 +239,11 @@
             <path d="M620 165 H665" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
             <path d="M830 165 H875" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
             <path d="M970 225 V285 H760" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#packer-arrow)"></path>
-            <text class="small" x="775" y="275">Disposable clone acceptance test</text>
+            <text class="small" x="775" y="275">Single-clone functional acceptance test</text>
             <text class="small" x="35" y="320">Only a verified template name or ID crosses into Terraform; no application state crosses this boundary.</text>
           </svg>
         </div>
-        <figcaption>The template is an immutable build artifact. Terraform consumes it only after a clone passes acceptance checks.</figcaption>
+        <figcaption>The template is an immutable build artifact. One clone runs functional checks now; multi-clone uniqueness is deferred until DHCP is replaced.</figcaption>
       </figure>
 
       <h3>Current baseline assessment</h3>
@@ -250,14 +252,27 @@
           <thead><tr><th>Concern</th><th>Current state</th><th>Plan</th></tr></thead>
           <tbody>
             <tr><td>Builder resources</td><td>Configured for 2 cores, 4 GB RAM, and a 16 GB base disk</td><td><span class="status complete">Complete</span> Retain as the generic image-build footprint</td></tr>
-            <tr><td>Guest identity</td><td>Cloud-init and machine ID cleanup already present</td><td><span class="status existing">Retain</span> Add an automated uniqueness check on clones</td></tr>
+            <tr><td>Guest identity</td><td>Wait for first-boot cloud-init, remove build-time network state, omit <code>dyn-netconf</code> and <code>systemd-networkd</code> from initramfs, then clean cloud-init state and machine ID</td><td><span class="status complete">Validated</span> Proxmox supplies each clone's identity and explicit network definition after root mounts</td></tr>
             <tr><td>Bootstrap account</td><td>Locked password, password SSH disabled, per-run ED25519 key</td><td><span class="status complete">Implemented</span> Remove the account and temporary sudo rule before templating</td></tr>
             <tr><td>ISO</td><td>Ubuntu Server 26.04.1 LTS with an exact upstream SHA-256</td><td><span class="status complete">Implemented</span> Proxmox downloads the pinned ISO directly</td></tr>
-            <tr><td>Network</td><td>NoCloud is served on fixed port <code>8800</code></td><td><span class="status complete">Implemented</span> Derive and bind the IPv4 address of the configured trusted interface</td></tr>
-            <tr><td>Output</td><td>Creates VM <code>9000</code>, <code>ubuntu-26.04-template</code>, plus a non-secret manifest</td><td><span class="status planned">Next</span> Run the first build and add a disposable clone test</td></tr>
+            <tr><td>Seed delivery</td><td>NoCloud files are attached as a temporary ISO labelled <code>cidata</code></td><td><span class="status complete">Implemented</span> No operator port or guest network is required to start autoinstall</td></tr>
+            <tr><td>Output</td><td>VM <code>9000</code>, <code>ubuntu-26.04-template</code>, and its non-secret manifest were created successfully</td><td><span class="status complete">Validated</span> Disposable clone <code>9900</code> passed the automated functional suite and was destroyed</td></tr>
           </tbody>
         </table>
       </div>
+
+      <h3>Boot networking contract</h3>
+      <ol class="compact">
+        <li>The kernel and initramfs mount the local LVM-thin root disk without bringing up a network.</li>
+        <li>Cloud-init reads the per-VM Proxmox seed, applies the hostname, SSH key, and network definition, then the installed Ubuntu <code>systemd-networkd</code> service configures the NIC.</li>
+        <li>Terraform must attach a cloud-init drive and supply a valid <code>ipconfig0</code>; there is deliberately no installer-network fallback.</li>
+      </ol>
+      <ul class="compact">
+        <li>The Dracut omission file persists, so future kernel upgrades regenerate initramfs without <code>dyn-netconf</code> or initramfs <code>systemd-networkd</code>.</li>
+        <li>DHCP, static addressing, and VLAN-tagged NICs remain supported after root mounts. Network availability may occur a few seconds later, and Terraform waits for the guest agent.</li>
+        <li>The current F620 DHCP service is not suitable for concurrent clone validation; prefer excluded static test addresses until the target firewall router owns DHCP.</li>
+        <li>A VM whose root disk is hosted over NFS, iSCSI, or another network-root technology requires a separate image with initramfs networking enabled.</li>
+      </ul>
 
       <h3>Task interface</h3>
       <div class="table-wrap">
@@ -268,7 +283,7 @@
             <tr><td><code>task image:format</code></td><td>Check canonical HCL formatting</td><td>No</td></tr>
             <tr><td><code>task image:validate</code></td><td>Validate templates and required variables</td><td>No</td></tr>
             <tr><td><code>task image:build</code></td><td>Refuse occupied VM ID <code>9000</code>, generate temporary credentials, build, clean up, and record a manifest</td><td>Yes</td></tr>
-            <tr><td><code>task image:verify</code></td><td><span class="status planned">Planned</span> Clone, boot, inspect, and remove a disposable test VM</td><td>Yes</td></tr>
+            <tr><td><code>task image:verify</code></td><td>Create clone <code>9900</code> in an isolated state, assert addressing and image properties, write a report, and destroy the clone</td><td>Yes, temporarily</td></tr>
           </tbody>
         </table>
       </div>
@@ -279,16 +294,23 @@
         <li>The build uses a pinned Ubuntu release and verified checksum.</li>
         <li>The template resides on NVMe/LVM-thin and its disk is no larger than the smallest planned VM root disk.</li>
         <li>A clone obtains its intended cloud-init identity, address, and administrator SSH key.</li>
-        <li>Two clones have unique machine IDs and SSH host keys.</li>
+        <li>The clone has non-empty machine and SSH host-key identities; cross-clone uniqueness is explicitly reported as not run.</li>
         <li>The temporary <code>packer</code> account, installer network configuration, logs, and credentials are absent.</li>
         <li>QEMU guest agent reports successfully to Proxmox.</li>
         <li>No application, durable data, or application secret is embedded in the template.</li>
       </ul>
 
-      <h3>Inputs before the first build</h3>
+      <h3>Verification safety</h3>
       <ul class="compact">
-        <li><span class="status open">Runtime input</span> Set <code>PKR_VAR_packer_http_interface</code> to the operator interface reachable from the temporary VM, such as <code>en0</code> on macOS.</li>
-        <li><span class="status open">Preflight</span> Confirm that Proxmox storage <code>local</code> accepts ISO content and the API token can download it.</li>
+        <li><span class="status complete">Guarded</span> Refuse to run unless VM ID <code>9900</code> is free and VM <code>9000</code> is a template.</li>
+        <li><span class="status complete">Isolated</span> Keep verification state and credentials under ignored <code>.generated/</code>; destroy only resources in that state.</li>
+        <li><span class="status complete">Recoverable</span> Retain Terraform state and report cleanup failure instead of losing ownership of test VMs.</li>
+        <li><span class="status complete">Diagnostic</span> Name each guest assertion, distinguish fatal cloud-init errors from recoverable warnings, emit status and journal context on failure, and query the guest agent briefly when Terraform has not yet observed an address.</li>
+        <li><span class="status complete">Observed</span> Manual clones <code>200</code> and <code>201</code> initially had no <code>ipconfig0</code>; their Proxmox seeds contained DNS only. Adding <code>ipconfig0=ip=dhcp</code> gave clone <code>200</code> IPv4 and IPv6 link-local connectivity, proving the local-root Dracut design.</li>
+        <li><span class="status open">Router blocker</span> Clone <code>201</code> had a distinct MAC, SMBIOS UUID, machine ID, and DHCP identity, but the F620 sent its Offer to clone <code>200</code>'s Ethernet MAC. Neither <code>dhcp-identifier: mac</code> nor DHCP's broadcast flag corrected the malformed frame. Select excluded static test addresses or wait for the firewall-router DHCP cutover.</li>
+        <li><span class="status complete">Single clone</span> On 2026-09-14, <code>task image:verify</code> created VM <code>9900</code>, obtained <code>192.168.1.15</code>, passed all functional assertions with two recoverable cloud-init warnings, wrote the non-secret report, and destroyed the VM.</li>
+        <li><span class="status complete">Fail closed</span> Treat either a non-zero Dracut exit, a logged Dracut error, or a generated initramfs that still contains <code>dracut-default.network</code> as a build failure.</li>
+        <li><span class="status open">Deferred</span> Restore the two-clone identity and independent-address assertions after the current F620 DHCP dependency is removed.</li>
       </ul>
     </section>
 
