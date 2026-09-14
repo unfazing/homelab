@@ -1,10 +1,6 @@
 ---
-- name: Apply common guest configuration
-  hosts: all
-  become: true
-  gather_facts: true
-  roles:
-    - common
+- name: Apply the common guest baseline
+  ansible.builtin.import_playbook: common.yml
 
 - name: Configure the access boundary
   hosts: access

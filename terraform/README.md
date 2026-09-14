@@ -49,4 +49,4 @@ terraform -chdir=terraform output -json ansible_inventory
 
 The equivalent operator commands are `task infra:init`, `task infra:validate`, `task infra:plan`, `task infra:apply`, and `task infra:output`. Apply remains interactive and refuses to start without the static-range confirmation variable.
 
-The final output is consumed by the planned inventory generator, which will write `.generated/ansible/hosts.yml`. Continue with [the Ansible guide](/Users/lian/dev/homelab/ansible/README.md) only after Terraform apply and inventory generation succeed.
+The final output is consumed by `task config:inventory`, which atomically writes ignored `.generated/ansible/hosts.json`. Continue with [the Ansible guide](/Users/lian/dev/homelab/ansible/README.md) only after Terraform apply and inventory generation succeed.

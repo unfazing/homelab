@@ -101,6 +101,7 @@
       <button id="repository-tab" role="tab" aria-selected="true" aria-controls="repository-panel" type="button">Repository structure</button>
       <button id="packer-tab" role="tab" aria-selected="false" aria-controls="packer-panel" type="button">Packer plan</button>
       <button id="terraform-tab" role="tab" aria-selected="false" aria-controls="terraform-panel" type="button">Terraform plan</button>
+      <button id="ansible-tab" role="tab" aria-selected="false" aria-controls="ansible-panel" type="button">Ansible plan</button>
     </nav>
 
     <section id="repository-panel" role="tabpanel" aria-labelledby="repository-tab">
@@ -124,7 +125,7 @@
 │   ├── host.yml
 │   ├── image.yml
 │   ├── infrastructure.yml
-│   ├── applications.yml
+│   ├── configuration.yml      # inventory, connectivity, common convergence
 │   └── data.yml
 ├── packer/
 │   ├── README.md              # image pipeline and NoCloud handoff
@@ -140,7 +141,7 @@
 ├── scripts/
 │   ├── packer-image.sh        # secure image validation and build wrapper
 │   ├── verify-image.sh        # clone assertions and guaranteed cleanup
-│   ├── inventory/             # Terraform output → Ansible inventory
+│   ├── inventory/generate.sh  # Terraform output → Ansible JSON inventory
 │   ├── backup/
 │   └── validation/
 └── .generated/                # ignored transient hand-off files</code></pre>
@@ -167,10 +168,10 @@
             <tr><td>Root architecture document</td><td><span class="status complete">Complete</span></td><td>Maintain as design decisions change</td></tr>
             <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
-            <tr><td>Task interface</td><td><span class="status complete">Initial slice complete</span></td><td>Add infrastructure and configuration tasks with their implementation phases</td></tr>
+            <tr><td>Task interface</td><td><span class="status complete">Infrastructure and configuration slices complete</span></td><td>Add data and application tasks with their implementation phases</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform deployment</td><td><span class="status complete">Three-VM topology applied</span></td><td>Generate Ansible inventory and begin guest convergence</td></tr>
-            <tr><td>Ansible layout</td><td><span class="status complete">Three groups aligned</span></td><td>Implement pinned Compose roles; keep WireGuard native</td></tr>
+            <tr><td>Terraform deployment</td><td><span class="status complete">Three-VM topology applied</span></td><td>Remain the sole machine-inventory source</td></tr>
+            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated and converged</span></td><td>Design the persistent ZFS storage contract before application roles</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -182,7 +183,7 @@
         <li>Explicit network and Proxmox-host tasks establish prerequisites; they are never hidden inside normal deployment.</li>
         <li>Packer creates the generic template.</li>
         <li>Terraform creates the VM topology and emits machine-readable outputs.</li>
-        <li>An inventory script writes <code>.generated/ansible/hosts.yml</code> from those outputs.</li>
+        <li>An inventory script writes <code>.generated/ansible/hosts.json</code> atomically from those outputs.</li>
         <li>Ansible converges applications, then verification tasks test health and network policy.</li>
         <li>Backup and data-destruction tasks remain separate from compute deployment and destruction.</li>
       </ol>
@@ -356,7 +357,40 @@
         <li><span class="status complete">Passed</span> Only rebuildable root disks exist; persistent ZFS-backed data disks remain a separate implementation step.</li>
         <li><span class="status complete">Passed</span> No VLAN tag is applied until the VLAN-capable router and switch exist.</li>
         <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes after consolidation.</li>
-        <li><span class="status active">Operator action</span> Remove the obsolete SSH known-host entries for <code>192.168.1.101</code> and <code>192.168.1.102</code>, verify the displayed fingerprints, and trust the replacement guest keys before Ansible convergence.</li>
+        <li><span class="status complete">Passed</span> Replacement SSH host keys for <code>192.168.1.101</code> and <code>192.168.1.102</code> were verified and trusted before Ansible convergence.</li>
+      </ul>
+    </section>
+
+    <section id="ansible-panel" role="tabpanel" aria-labelledby="ansible-tab" hidden>
+      <h2>Ansible hand-off</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status complete">Implemented and verified</span> Inventory generation and common convergence</dd>
+        <dt>Input</dt><dd>Terraform <code>ansible_inventory</code> output</dd>
+        <dt>Generated artifact</dt><dd>Ignored <code>.generated/ansible/hosts.json</code>, written atomically with mode <code>0600</code></dd>
+        <dt>Trust</dt><dd>SSH host-key checking enabled; credentials remain outside inventory</dd>
+        <dt>Initial scope</dt><dd>Connectivity plus the shared package and QEMU guest-agent baseline only</dd>
+      </dl>
+
+      <h3>Task interface</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Task</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>task config:inventory</code></td><td>Transform current Terraform output into Ansible JSON inventory</td></tr>
+            <tr><td><code>task config:validate</code></td><td>Parse inventory and syntax-check both playbooks</td></tr>
+            <tr><td><code>task config:ping</code></td><td>Authenticate to every guest without changing it</td></tr>
+            <tr><td><code>task config:common-check</code></td><td>Preview the common baseline in check mode with diffs</td></tr>
+            <tr><td><code>task config:common</code></td><td>Apply only common packages and QEMU guest-agent service state</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li><span class="status complete">Passed</span> Generated inventory contains exactly access, services, and agents with their current Terraform-managed addresses and mode <code>0600</code>.</li>
+        <li><span class="status complete">Passed</span> Ansible ping succeeded for all three hosts with SSH host-key checking enabled.</li>
+        <li><span class="status complete">Passed</span> Common check mode and convergence completed without invoking WireGuard or application roles.</li>
+        <li><span class="status complete">Passed</span> A second common check reported zero changes on every host.</li>
       </ul>
     </section>
 

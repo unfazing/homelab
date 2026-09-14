@@ -14,6 +14,8 @@ output "ansible_inventory" {
     for name, vm in local.vms : name => {
       ansible_host   = vm.ansible_host
       ansible_groups = sort(tolist(vm.ansible_groups))
+      ansible_port   = 22
+      ansible_user   = var.cloud_init_user
     }
   }
 }

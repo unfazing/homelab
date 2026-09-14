@@ -7,6 +7,8 @@ includes:
     taskfile: ./taskfiles/image.yml
   infra:
     taskfile: ./taskfiles/infrastructure.yml
+  config:
+    taskfile: ./taskfiles/configuration.yml
 
 tasks:
   default:
@@ -36,11 +38,13 @@ tasks:
           packer/seed/ubuntu/user-data.pkrtpl \
           scripts/packer-image.sh \
           scripts/verify-image.sh \
+          scripts/inventory/generate.sh \
           terraform/image-verification/main.tf \
           terraform/image-verification/.terraform.lock.hcl \
           terraform/providers.tf \
           terraform/keys/keys.pub \
           ansible/playbooks/site.yml \
+          ansible/playbooks/common.yml \
           ansible/inventories/homelab/hosts.example.yml; do
           test -f "$path" || {
             echo "Missing required file: $path" >&2
@@ -100,6 +104,4 @@ tasks:
       - terraform -chdir=terraform validate
       - terraform -chdir=terraform/image-verification init -backend=false -input=false
       - terraform -chdir=terraform/image-verification validate
-      - mkdir -p .generated/ansible/tmp
-      - ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_LOCAL_TEMP=.generated/ansible/tmp ansible-inventory -i ansible/inventories/homelab/hosts.example.yml --list >/dev/null
-      - ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_LOCAL_TEMP=.generated/ansible/tmp ansible-playbook --syntax-check -i ansible/inventories/homelab/hosts.example.yml ansible/playbooks/site.yml
+      - task: config:validate

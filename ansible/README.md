@@ -4,7 +4,8 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 
 ## Layout
 
-- `playbooks/site.yml` composes guest roles.
+- `playbooks/common.yml` is the safe first convergence boundary and applies no workload configuration.
+- `playbooks/site.yml` imports the common baseline, then composes approved workload roles.
 - `roles/common` applies shared guest configuration.
 - `roles/wireguard` configures the native WireGuard service on `lab-access-01`.
 - `roles/adguard` will configure an AdGuard Compose project on `lab-access-01` after its deployment contract is approved.
@@ -15,15 +16,19 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 
 ## Inventory contract
 
-Terraform exposes the `ansible_inventory` output. A later Task command will convert that output into `.generated/ansible/hosts.yml`; committed inventory files are examples only.
+Terraform exposes the `ansible_inventory` output. `task config:inventory` converts it into ignored `.generated/ansible/hosts.json`; committed inventory files are examples only. The generated file contains addresses, groups, SSH user, port, and the generic image's stable `/usr/bin/python3` interpreter path—not credentials.
 
-Until the generator exists, copy the example outside version control and pass it explicitly:
+Use the generated inventory through Task:
 
 ```sh
-ansible-playbook \
-  -i .generated/ansible/hosts.yml \
-  ansible/playbooks/site.yml
+task config:inventory
+task config:validate
+task config:ping
+task config:common-check
+task config:common
 ```
+
+`config:common` invokes only `playbooks/common.yml`. It does not install WireGuard, Docker, or applications. SSH host-key checking is enabled; trust a changed guest key explicitly before convergence.
 
 ## Current limitations
 

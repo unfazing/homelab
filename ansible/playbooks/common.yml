@@ -1,0 +1,7 @@
+---
+- name: Apply common guest configuration
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - common

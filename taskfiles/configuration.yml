@@ -1,0 +1,50 @@
+version: "3"
+
+silent: true
+
+vars:
+  INVENTORY: .generated/ansible/hosts.json
+  LOCAL_TEMP: .generated/ansible/tmp
+
+env:
+  ANSIBLE_CONFIG: ansible/ansible.cfg
+  ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
+
+tasks:
+  inventory:
+    desc: Generate Ansible inventory from Terraform outputs
+    cmds:
+      - scripts/inventory/generate.sh
+
+  validate:
+    desc: Validate generated inventory and Ansible playbooks
+    deps: [inventory]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - |
+        expected_hosts=$(terraform -chdir=terraform output -json ansible_inventory | jq -cS 'keys')
+        parsed_hosts=$(ansible-inventory -i "{{.INVENTORY}}" --list | jq -cS '._meta.hostvars | keys')
+        test "$expected_hosts" = "$parsed_hosts"
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/common.yml
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/site.yml
+
+  ping:
+    desc: Verify Ansible connectivity to every Terraform VM
+    deps: [inventory]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - ansible all -i "{{.INVENTORY}}" -m ansible.builtin.ping
+
+  common-check:
+    desc: Preview the common guest baseline in Ansible check mode
+    deps: [inventory]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - ansible-playbook --check --diff -i "{{.INVENTORY}}" ansible/playbooks/common.yml
+
+  common:
+    desc: Apply the common guest baseline only
+    deps: [inventory]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - ansible-playbook --diff -i "{{.INVENTORY}}" ansible/playbooks/common.yml

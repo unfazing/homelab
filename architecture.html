@@ -697,6 +697,7 @@
             <li><span class="status accepted">D-041 Accepted</span> Consolidate to three VMs: access, shared services, and agents. Assign IDs <code>1000</code>–<code>1002</code>, addresses <code>192.168.1.100</code>–<code>192.168.1.102</code>, and 1.5 GB, 4 GB, and 3 GB RAM respectively.</li>
             <li><span class="status accepted">D-042 Accepted</span> Nextcloud, Gitea, and Vaultwarden share <code>lab-services-01</code>. Accept the shared VM failure and compromise boundary; isolate operations with separate Compose projects, container networks, secrets, and ZFS datasets.</li>
             <li><span class="status accepted">D-043 Accepted</span> Keep WireGuard native for simple host networking. Deploy AdGuard, Nextcloud, Gitea, Vaultwarden, and Hermes with Ansible-managed Docker Compose and pinned images.</li>
+            <li><span class="status accepted">D-044 Accepted</span> Generate ignored Ansible inventory from Terraform outputs, keep SSH host-key verification enabled, and expose separate connectivity, check-mode, and common-baseline Task commands. The common command must not invoke workload roles.</li>
           </ul>
         </section>
         <section>
