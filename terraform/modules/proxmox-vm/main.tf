@@ -19,14 +19,15 @@ resource "proxmox_vm_qemu" "this" {
   }
 
   disk {
-    slot    = "scsi0"
-    size    = var.disk_gb
+    type    = "cloudinit"
+    slot    = "ide2"
     storage = var.disk_storage
   }
 
   disk {
-    type    = "cloudinit"
-    slot    = "ide2"
+    format  = "raw"
+    slot    = "scsi0"
+    size    = var.disk_gb
     storage = var.disk_storage
   }
 
@@ -53,5 +54,13 @@ resource "proxmox_vm_qemu" "this" {
   efidisk {
     efitype = "4m"
     storage = var.disk_storage
+  }
+
+  lifecycle {
+    ignore_changes = [
+      bootdisk,
+      startup_shutdown,
+      vm_state,
+    ]
   }
 }

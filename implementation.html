@@ -169,7 +169,7 @@
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
             <tr><td>Task interface</td><td><span class="status complete">Initial slice complete</span></td><td>Add infrastructure and configuration tasks with their implementation phases</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform layout</td><td><span class="status planned">Five-VM topology ready</span></td><td>Reduce the F620 DHCP pool, review <code>task infra:plan</code>, then apply</td></tr>
+            <tr><td>Terraform deployment</td><td><span class="status complete">Applied and verified</span></td><td>Generate Ansible inventory and begin guest convergence</td></tr>
             <tr><td>Ansible layout</td><td><span class="status complete">Complete</span></td><td>Implement and verify the remaining application roles</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
@@ -318,12 +318,13 @@
     <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
       <h2>Terraform plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status planned">Configuration and plan ready; network and administrator prerequisites open</span></dd>
+        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Five VMs created on 14 September 2026; the post-apply plan is empty.</dd>
         <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
         <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–104</code></dd>
         <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
-        <dt>Admin identity</dt><dd><span class="status planned">Username open</span> The key bundle now contains only this Mac's confirmed ED25519 administrator key; replace the generic <code>user</code> account before apply.</dd>
+        <dt>Admin identity</dt><dd><span class="status complete">Resolved</span> Cloud-Init creates <code>user</code> with only this Mac's confirmed ED25519 administrator key.</dd>
+        <dt>Provider normalization</dt><dd>Cloud-Init disk first, raw LVM-thin root disk second; ignore provider-only boot, startup/shutdown-default, and runtime-state noise. The provider still emits a non-actionable deprecation warning for <code>vm_state</code>.</dd>
       </dl>
 
       <div class="table-wrap">
@@ -341,20 +342,21 @@
 
       <h3>Operator sequence</h3>
       <ol class="compact">
-        <li>Choose the Cloud-Init administrator username; the intended single SSH public key is already pinned.</li>
-        <li>Reduce the F620 DHCP end address to <code>192.168.1.99</code>.</li>
-        <li>Run <code>task infra:validate</code> and <code>task infra:plan</code>.</li>
-        <li>Review all five VM IDs, addresses, root disks, and the absence of VLAN tags.</li>
-        <li>Export <code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> and run <code>task infra:apply</code>.</li>
-        <li>Use <code>task infra:output</code> as the inventory-generation input.</li>
+        <li><span class="status complete">Complete</span> Use Cloud-Init administrator <code>user</code> with the pinned single SSH public key.</li>
+        <li><span class="status complete">Complete</span> Reduce the F620 DHCP end address to <code>192.168.1.99</code>.</li>
+        <li><span class="status complete">Complete</span> Run <code>task infra:validate</code> and <code>task infra:plan</code>.</li>
+        <li><span class="status complete">Complete</span> Review all five VM IDs, addresses, root disks, and the absence of VLAN tags.</li>
+        <li><span class="status complete">Complete</span> Export <code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> and run <code>task infra:apply</code>; five full clones completed in 11 minutes 7 seconds.</li>
+        <li><span class="status complete">Available</span> Use <code>task infra:output</code> as the inventory-generation input.</li>
       </ol>
 
       <h3>Acceptance criteria</h3>
       <ul class="compact">
-        <li>All five guests boot from template <code>9000</code> with their intended hostname and static IPv4 address.</li>
-        <li>Each VM reports through QEMU guest agent and accepts key-only SSH.</li>
-        <li>Only rebuildable root disks exist; persistent ZFS-backed data disks remain a separate implementation step.</li>
-        <li>No VLAN tag is applied until the VLAN-capable router and switch exist.</li>
+        <li><span class="status complete">Passed</span> All five guests booted from template <code>9000</code> with their intended hostname and static IPv4 address.</li>
+        <li><span class="status complete">Passed</span> Cloud-init reports <code>done</code> and key-only SSH succeeds as <code>user</code> on every VM.</li>
+        <li><span class="status complete">Passed</span> Only rebuildable root disks exist; persistent ZFS-backed data disks remain a separate implementation step.</li>
+        <li><span class="status complete">Passed</span> No VLAN tag is applied until the VLAN-capable router and switch exist.</li>
+        <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes.</li>
       </ul>
     </section>
 
