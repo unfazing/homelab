@@ -8,6 +8,7 @@ resource "proxmox_vm_qemu" "this" {
   os_type            = "cloud-init"
   agent              = 1
   agent_timeout      = var.agent_timeout
+  power_state        = "running"
   start_at_node_boot = var.start_at_node_boot
 
   memory = var.memory_mb
@@ -59,8 +60,8 @@ resource "proxmox_vm_qemu" "this" {
   lifecycle {
     ignore_changes = [
       bootdisk,
+      power_state,
       startup_shutdown,
-      vm_state,
     ]
   }
 }

@@ -324,7 +324,7 @@
         <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–104</code></dd>
         <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
         <dt>Admin identity</dt><dd><span class="status complete">Resolved</span> Cloud-Init creates <code>user</code> with only this Mac's confirmed ED25519 administrator key.</dd>
-        <dt>Provider normalization</dt><dd>Cloud-Init disk first, raw LVM-thin root disk second; ignore provider-only boot, startup/shutdown-default, and runtime-state noise. The provider still emits a non-actionable deprecation warning for <code>vm_state</code>.</dd>
+        <dt>Provider normalization</dt><dd>Cloud-Init disk first, raw LVM-thin root disk second; ignore provider-only boot and startup/shutdown-default noise. Create VMs with <code>power_state=running</code>, then lifecycle-ignore power state so manual starts and stops remain operator-controlled without using deprecated <code>vm_state</code>.</dd>
       </dl>
 
       <div class="table-wrap">

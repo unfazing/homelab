@@ -723,7 +723,7 @@
             <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
             <li><span class="status accepted">D-038 Accepted</span> Initially authorize only the administrator key from this Mac, fingerprint <code>SHA256:gAlPyAsihuQua3grrkeUr7Gp1mmc1hlD49WyHV3gdyU</code>, on all five VMs. Exclude the retired GitHub-imported key, the unidentified key, and <code>root@blue</code>; adding access requires an explicit source-controlled key change.</li>
             <li><span class="status accepted">D-039 Accepted</span> Use <code>user</code> as the Cloud-Init administrator account on the initial five VMs.</li>
-            <li><span class="status accepted">D-040 Accepted</span> Keep Terraform plans idempotent against Telmate provider normalization: declare the Cloud-Init disk before the raw LVM-thin root disk and ignore provider-only boot-disk, startup/shutdown-default, and runtime-state noise. Terraform continues to own disk slots, storage, sizes, and boot order.</li>
+            <li><span class="status accepted">D-040 Accepted</span> Keep Terraform plans idempotent against Telmate provider normalization: declare the Cloud-Init disk before the raw LVM-thin root disk and ignore provider-only boot-disk and startup/shutdown-default noise. Set the supported <code>power_state</code> to <code>running</code> for creation but lifecycle-ignore later power changes, allowing manual VM starts and stops. Terraform continues to own disk slots, storage, sizes, and boot order.</li>
           </ul>
         </section>
         <section>
