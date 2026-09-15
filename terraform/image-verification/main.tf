@@ -18,7 +18,7 @@ module "verification_vm" {
   disk_gb            = 16
   disk_storage       = "local-lvm"
   bridge             = "vmbr0"
-  ipconfig0          = "ip=dhcp"
+  ipv4_address       = "dhcp"
   cloud_init_user    = "verifier"
   ssh_public_key     = var.ssh_public_key
   start_at_node_boot = false

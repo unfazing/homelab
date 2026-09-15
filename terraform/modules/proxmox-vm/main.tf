@@ -1,17 +1,26 @@
-resource "proxmox_vm_qemu" "this" {
-  vmid               = var.vmid
-  name               = var.name
-  target_node        = var.target_node
-  clone              = var.clone
-  clone_id           = var.clone_id
-  full_clone         = var.full_clone
-  os_type            = "cloud-init"
-  agent              = 1
-  agent_timeout      = var.agent_timeout
-  power_state        = "running"
-  start_at_node_boot = var.start_at_node_boot
+resource "proxmox_virtual_environment_vm" "this" {
+  vm_id       = var.vmid
+  name        = var.name
+  node_name   = var.target_node
+  description = "Managed by Terraform."
 
-  memory = var.memory_mb
+  clone {
+    vm_id = var.clone_id
+    full  = var.full_clone
+  }
+
+  agent {
+    enabled = true
+    timeout = "${var.agent_timeout}s"
+
+    wait_for_ip {
+      ipv4 = true
+    }
+  }
+
+  started = true
+  on_boot = var.start_at_node_boot
+
   cpu {
     cores   = var.cpu_cores
     sockets = 1
@@ -19,49 +28,63 @@ resource "proxmox_vm_qemu" "this" {
     type    = "host"
   }
 
-  disk {
-    type    = "cloudinit"
-    slot    = "ide2"
-    storage = var.disk_storage
+  memory {
+    dedicated = var.memory_mb
   }
 
   disk {
-    format  = "raw"
-    slot    = "scsi0"
-    size    = var.disk_gb
-    storage = var.disk_storage
+    datastore_id = var.disk_storage
+    file_format  = "raw"
+    interface    = "scsi0"
+    replicate    = false
+    size         = var.disk_gb
   }
 
-  network {
-    id      = 0
-    model   = "virtio"
-    bridge  = var.bridge
-    tag     = var.vlan_tag
-    macaddr = var.mac_address
+  network_device {
+    bridge      = var.bridge
+    mac_address = var.mac_address
+    model       = "virtio"
+    vlan_id     = var.vlan_tag
   }
 
-  scsihw   = "virtio-scsi-pci"
-  boot     = "order=scsi0"
-  bootdisk = "scsi0"
-  bios     = "ovmf"
-  machine  = "q35"
+  scsi_hardware = "virtio-scsi-pci"
+  boot_order    = ["scsi0"]
+  bios          = "ovmf"
+  machine       = "q35"
 
-  ciuser     = var.cloud_init_user
-  cipassword = var.debug_password
-  sshkeys    = var.ssh_public_key
-  ipconfig0  = var.ipconfig0
-  skip_ipv6  = true
+  initialization {
+    datastore_id = var.disk_storage
+    interface    = "ide2"
 
-  efidisk {
-    efitype = "4m"
-    storage = var.disk_storage
+    ip_config {
+      ipv4 {
+        address = var.ipv4_address
+        gateway = var.ipv4_gateway
+      }
+    }
+
+    user_account {
+      keys     = [var.ssh_public_key]
+      password = var.debug_password
+      username = var.cloud_init_user
+    }
+  }
+
+  operating_system {
+    type = "l26"
+  }
+
+  efi_disk {
+    datastore_id      = var.disk_storage
+    file_format       = "raw"
+    pre_enrolled_keys = false
+    type              = "4m"
   }
 
   lifecycle {
     ignore_changes = [
-      bootdisk,
-      power_state,
-      startup_shutdown,
+      clone,
+      started,
     ]
   }
 }

@@ -1,0 +1,20 @@
+version: "3"
+
+silent: true
+
+vars:
+  WIPE_CONFIRMATION: ata-CT1000MX500SSD1_2424E8B7E144
+
+tasks:
+  status:
+    desc: Show the Proxmox ZFS data-pool and dataset status
+    cmds:
+      - scripts/storage/zfs.sh status
+
+  bootstrap:
+    desc: Create or reconcile the authorized single-disk ZFS pool and datasets
+    preconditions:
+      - sh: test "${HOMELAB_CONFIRM_DATA_WIPE:-}" = "{{.WIPE_CONFIRMATION}}"
+        msg: Set HOMELAB_CONFIRM_DATA_WIPE={{.WIPE_CONFIRMATION}} only after verifying and authorizing the disk wipe
+    cmds:
+      - scripts/storage/zfs.sh bootstrap

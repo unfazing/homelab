@@ -193,7 +193,7 @@
         <a href="implementation.html">Implementation</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Draft · Updated 15 September 2026</p>
+      <p class="meta">Canonical design · Draft · Updated 16 September 2026</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
@@ -210,7 +210,7 @@
         <div class="diagram-scroll">
         <svg viewBox="0 0 1000 520" role="img" aria-labelledby="hardware-title hardware-desc">
           <title id="hardware-title">Physical hardware and storage roles</title>
-          <desc id="hardware-desc">The blue Proxmox laptop provides one compute envelope connected to two storage tiers. Its existing 512 gigabyte NVMe LVM-thin tier holds Proxmox and rebuildable VM operating systems. Its one terabyte SATA SSD will be reformatted as single-disk ZFS for durable application datasets.</desc>
+          <desc id="hardware-desc">The blue Proxmox laptop provides one compute envelope connected to two storage tiers. Its 512 gigabyte NVMe LVM-thin tier holds Proxmox and rebuildable VM operating systems. Its one terabyte SATA SSD provides the single-disk tank ZFS pool for durable application datasets.</desc>
           <defs>
             <marker id="hardware-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
@@ -241,13 +241,13 @@
           <text class="small" x="85" y="407">Proxmox OS + three VM OS disks</text>
 
           <rect class="node storage" x="530" y="290" width="410" height="155" rx="10"></rect>
-          <text class="eyebrow" x="555" y="320">PLANNED · DURABLE / BACKED UP</text>
+          <text class="eyebrow" x="555" y="320">ACTIVE · DURABLE / SINGLE DISK</text>
           <text class="label" x="555" y="353">1 TB Crucial MX500 SATA</text>
-          <text class="small" x="555" y="380">/dev/sda · single-disk ZFS</text>
+          <text class="small" x="555" y="380">tank · 899 GiB available · single-disk ZFS</text>
           <text class="small" x="555" y="407">Datasets + snapshots · no redundancy</text>
         </svg>
         </div>
-        <figcaption>Compute and durable data use separate physical storage tiers. Off-host backup remains required.</figcaption>
+        <figcaption>Compute and durable data use separate physical storage tiers. The ZFS pool has no redundancy; off-host backup is deferred, not replaced by snapshots.</figcaption>
       </figure>
 
       <template data-flyout data-title="Hardware">
@@ -255,7 +255,9 @@
           <h3>Decisions</h3>
           <ul class="compact">
             <li><span class="status accepted">D-004 Accepted</span> Keep Proxmox and VM OS disks on NVMe/LVM-thin.</li>
-            <li><span class="status accepted">D-005 Accepted</span> Reformat the 1 TB SATA SSD as a single-disk ZFS data pool.</li>
+            <li><span class="status accepted">D-005 Implemented</span> Use the 1 TB SATA SSD as the single-disk ZFS pool <code>tank</code>; it was created on 16 September 2026.</li>
+            <li><span class="status accepted">D-047 Accepted</span> Identify the destructive storage target only by <code>/dev/disk/by-id/ata-CT1000MX500SSD1_2424E8B7E144</code>. The bootstrap must verify the Crucial model, serial, approximate size, unmounted state, and separation from the root filesystem before creating <code>tank</code>.</li>
+            <li><span class="status accepted">D-046 Accepted</span> Do not enable ZFS encryption at rest. Physical access to the laptop or SATA SSD can expose application data; application secrets still require encrypted secret management.</li>
             <li><span class="status proposed">D-008 Proposed</span> Reserve at least 4 GB for the host and keep the normal guest working set below 12 GB.</li>
             <li><span class="status deferred">D-009 Deferred</span> GPU passthrough and local Ollama hosting.</li>
           </ul>
@@ -648,7 +650,7 @@
           <rect class="node storage" x="590" y="445" width="440" height="130" rx="10"></rect>
           <text class="eyebrow" x="615" y="475">DATA TIER · SATA / ZFS</text>
           <text class="label" x="615" y="510">One dataset per stateful application</text>
-          <text class="small" x="615" y="540">Durable state · snapshots · off-host backup required</text>
+          <text class="small" x="615" y="540">Durable state · snapshots · off-host backup deferred</text>
 
           <text class="small" x="70" y="600">The services share a VM boundary but retain separate Compose projects, secrets, networks, and durable datasets.</text>
         </svg>
@@ -693,11 +695,12 @@
             <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
             <li><span class="status accepted">D-038 Accepted</span> Initially authorize only the administrator key from this Mac, fingerprint <code>SHA256:gAlPyAsihuQua3grrkeUr7Gp1mmc1hlD49WyHV3gdyU</code>, on all three VMs. Exclude the retired GitHub-imported key, the unidentified key, and <code>root@blue</code>; adding access requires an explicit source-controlled key change.</li>
             <li><span class="status accepted">D-039 Accepted</span> Use <code>user</code> as the Cloud-Init administrator account on the initial three VMs.</li>
-            <li><span class="status accepted">D-040 Accepted</span> Keep Terraform plans idempotent against Telmate provider normalization: declare the Cloud-Init disk before the raw LVM-thin root disk and ignore provider-only boot-disk and startup/shutdown-default noise. Set the supported <code>power_state</code> to <code>running</code> for creation but lifecycle-ignore later power changes, allowing manual VM starts and stops. Terraform continues to own disk slots, storage, sizes, and boot order.</li>
+            <li><span class="status deferred">D-040 Superseded</span> Telmate-specific disk ordering and normalization rules ended with the provider migration.</li>
             <li><span class="status accepted">D-041 Accepted</span> Consolidate to three VMs: access, shared services, and agents. Assign IDs <code>1000</code>–<code>1002</code>, addresses <code>192.168.1.100</code>–<code>192.168.1.102</code>, and 1.5 GB, 4 GB, and 3 GB RAM respectively.</li>
             <li><span class="status accepted">D-042 Accepted</span> Nextcloud, Gitea, and Vaultwarden share <code>lab-services-01</code>. Accept the shared VM failure and compromise boundary; isolate operations with separate Compose projects, container networks, secrets, and ZFS datasets.</li>
             <li><span class="status accepted">D-043 Accepted</span> Keep WireGuard native for simple host networking. Deploy AdGuard, Nextcloud, Gitea, Vaultwarden, and Hermes with Ansible-managed Docker Compose and pinned images.</li>
             <li><span class="status accepted">D-044 Accepted</span> Generate ignored Ansible inventory from Terraform outputs, keep SSH host-key verification enabled, and expose separate connectivity, check-mode, and common-baseline Task commands. The common command must not invoke workload roles.</li>
+            <li><span class="status accepted">D-045 Accepted</span> Use <code>bpg/proxmox</code> <code>0.112.0</code>. Import the three live VM IDs without recreation, pin their existing MAC addresses, ignore create-time clone provenance and manual power state, and require an empty post-migration plan. This provider is the planned Terraform interface for Proxmox VirtioFS mappings.</li>
           </ul>
         </section>
         <section>
@@ -755,8 +758,8 @@
         <section>
           <h3>Before implementation</h3>
           <ul class="compact">
-            <li><span class="status open">D-006 Open</span> Decide whether ordinary <code>terraform destroy</code> must preserve ZFS application datasets. Recommendation: preserve by default and require a separate explicit data-destruction action.</li>
-            <li><span class="status open">D-007 Open</span> Select an encrypted off-host backup target, retention, and restore objective.</li>
+            <li><span class="status accepted">D-006 Accepted</span> Ordinary compute destruction must preserve ZFS application datasets. Data destruction requires a separate explicit action.</li>
+            <li><span class="status deferred">D-007 Deferred</span> Off-host backup target, retention, and restore objectives are postponed. Until resolved, the single SATA disk is a known single point of permanent data loss and ZFS snapshots are not backups.</li>
             <li><span class="status accepted">D-017 Accepted</span> Use Ansible-managed Docker Compose for applications, with native WireGuard as the host-networking exception.</li>
             <li><span class="status open">D-018 Open</span> Choose encrypted secret storage. Terraform must not receive application secret plaintext; recommendation: SOPS with age keys, decrypted by Ansible at deployment time.</li>
             <li><span class="status accepted">D-019 Accepted</span> Use Vaultwarden as the password manager.</li>

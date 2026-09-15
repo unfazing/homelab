@@ -14,22 +14,9 @@ variable "target_node" {
   description = "Proxmox node that hosts the VM."
 }
 
-variable "clone" {
-  type        = string
-  description = "Packer-built template name to clone."
-  default     = null
-  nullable    = true
-
-  validation {
-    condition     = (var.clone != null) != (var.clone_id != null)
-    error_message = "Set exactly one of clone or clone_id."
-  }
-}
-
 variable "clone_id" {
   type        = number
-  description = "Optional exact Proxmox template VM ID to clone."
-  default     = null
+  description = "Exact Packer-built Proxmox template VM ID to clone."
 }
 
 variable "full_clone" {
@@ -87,9 +74,15 @@ variable "mac_address" {
   default     = null
 }
 
-variable "ipconfig0" {
+variable "ipv4_address" {
   type        = string
-  description = "Cloud-init network configuration for the primary NIC."
+  description = "Cloud-init IPv4 address in CIDR notation, or dhcp."
+}
+
+variable "ipv4_gateway" {
+  type        = string
+  description = "Optional Cloud-init IPv4 gateway."
+  default     = null
 }
 
 variable "cloud_init_user" {

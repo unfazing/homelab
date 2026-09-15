@@ -2,6 +2,8 @@
 
 Terraform clones the generic Packer image and owns rebuildable VM infrastructure: CPU, memory, OS disks, NICs, VLAN tags, cloud-init identity, and machine-readable outputs. Application configuration remains in Ansible.
 
+The deployment uses `bpg/proxmox` `0.112.0`. The three existing VMs were imported from the former Telmate resource addresses without recreation. The module keeps its clone block for new machines but lifecycle-ignores clone provenance because Proxmox cannot report that create-time information after import.
+
 ## Layout
 
 - `main.tf` composes one reusable module instance per entry in `var.vms`.
@@ -21,14 +23,15 @@ Each `vms` entry is keyed by its workload-independent hostname. It selects the t
 vms = {
   lab-access-01 = {
     target_node    = "blue"
-    clone          = "ubuntu-26.04-template"
+    clone_id       = 9000
     cpu_cores      = 1
     memory_mb      = 1536
     disk_gb        = 16
     disk_storage   = "local-lvm"
     bridge         = "vmbr0"
     vlan_tag       = 20
-    ipconfig0      = "ip=10.73.20.10/24,gw=10.73.20.1"
+    ipv4_address   = "10.73.20.10/24"
+    ipv4_gateway   = "10.73.20.1"
     ansible_host   = "10.73.20.10"
     ansible_groups = ["access"]
   }

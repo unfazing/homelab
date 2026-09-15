@@ -93,7 +93,7 @@
         <a href="implementation.html" aria-current="page">Implementation</a>
       </nav>
       <h1>Homelab Implementation</h1>
-      <p class="meta">Executable specification · Planning · Updated 15 September 2026</p>
+      <p class="meta">Executable specification · Planning · Updated 16 September 2026</p>
       <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
     </header>
 
@@ -101,6 +101,7 @@
       <button id="repository-tab" role="tab" aria-selected="true" aria-controls="repository-panel" type="button">Repository structure</button>
       <button id="packer-tab" role="tab" aria-selected="false" aria-controls="packer-panel" type="button">Packer plan</button>
       <button id="terraform-tab" role="tab" aria-selected="false" aria-controls="terraform-panel" type="button">Terraform plan</button>
+      <button id="data-tab" role="tab" aria-selected="false" aria-controls="data-panel" type="button">Data plan</button>
       <button id="ansible-tab" role="tab" aria-selected="false" aria-controls="ansible-panel" type="button">Ansible plan</button>
     </nav>
 
@@ -142,6 +143,7 @@
 │   ├── packer-image.sh        # secure image validation and build wrapper
 │   ├── verify-image.sh        # clone assertions and guaranteed cleanup
 │   ├── inventory/generate.sh  # Terraform output → Ansible JSON inventory
+│   ├── storage/zfs.sh         # guarded ZFS bootstrap and status
 │   ├── backup/
 │   └── validation/
 └── .generated/                # ignored transient hand-off files</code></pre>
@@ -168,10 +170,10 @@
             <tr><td>Root architecture document</td><td><span class="status complete">Complete</span></td><td>Maintain as design decisions change</td></tr>
             <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
-            <tr><td>Task interface</td><td><span class="status complete">Infrastructure and configuration slices complete</span></td><td>Add data and application tasks with their implementation phases</td></tr>
+            <tr><td>Task interface</td><td><span class="status complete">Infrastructure, configuration, and data bootstrap complete</span></td><td>Add application tasks with their implementation phases</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform deployment</td><td><span class="status complete">Three-VM topology applied</span></td><td>Remain the sole machine-inventory source</td></tr>
-            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated and converged</span></td><td>Design the persistent ZFS storage contract before application roles</td></tr>
+            <tr><td>Terraform deployment</td><td><span class="status complete">BPG migration complete</span></td><td>Use the BPG provider for the persistent-data attachment proof</td></tr>
+            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated and converged</span></td><td>Wait for the persistent ZFS attachment proof before application roles</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -319,13 +321,13 @@
     <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
       <h2>Terraform plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three-VM topology reconciled on 15 September 2026; the post-apply plan is empty.</dd>
+        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three live VMs imported into <code>bpg/proxmox</code> <code>0.112.0</code>; the post-migration plan is empty.</dd>
         <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
         <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–102</code></dd>
         <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
         <dt>Admin identity</dt><dd><span class="status complete">Resolved</span> Cloud-Init creates <code>user</code> with only this Mac's confirmed ED25519 administrator key.</dd>
-        <dt>Provider normalization</dt><dd>Cloud-Init disk first, raw LVM-thin root disk second; ignore provider-only boot and startup/shutdown-default noise. Create VMs with <code>power_state=running</code>, then lifecycle-ignore power state so manual starts and stops remain operator-controlled without using deprecated <code>vm_state</code>.</dd>
+        <dt>Provider lifecycle</dt><dd>BPG owns VM configuration and waits specifically for IPv4. Existing MAC addresses are pinned. Create-time clone provenance and later manual power changes are lifecycle-ignored.</dd>
       </dl>
 
       <div class="table-wrap">
@@ -358,6 +360,38 @@
         <li><span class="status complete">Passed</span> No VLAN tag is applied until the VLAN-capable router and switch exist.</li>
         <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes after consolidation.</li>
         <li><span class="status complete">Passed</span> Replacement SSH host keys for <code>192.168.1.101</code> and <code>192.168.1.102</code> were verified and trusted before Ansible convergence.</li>
+        <li><span class="status complete">Passed</span> State migrated from Telmate to BPG by importing VM IDs <code>1000–1002</code>; the guarded apply allowed no create or destroy actions and the final plan is empty.</li>
+      </ul>
+    </section>
+
+    <section id="data-panel" role="tabpanel" aria-labelledby="data-tab" hidden>
+      <h2>Persistent data plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status complete">Pool online</span> Dataset-to-guest attachment proof remains</dd>
+        <dt>Device</dt><dd><code>/dev/disk/by-id/ata-CT1000MX500SSD1_2424E8B7E144</code></dd>
+        <dt>Pool</dt><dd><code>tank</code> is healthy with 899 GiB available and no data errors</dd>
+        <dt>Properties</dt><dd><code>ashift=12</code>, <code>autotrim=on</code>, <code>compression=lz4</code>, <code>atime=off</code>, <code>dedup=off</code></dd>
+        <dt>Encryption</dt><dd>None; physical-access exposure is accepted</dd>
+        <dt>Backup</dt><dd>Deferred; snapshots do not protect against disk loss or theft</dd>
+        <dt>Attachment</dt><dd>Proxmox VirtioFS, managed through BPG Terraform after a disposable proof</dd>
+      </dl>
+
+      <h3>Implementation sequence</h3>
+      <ol class="compact">
+        <li><span class="status complete">Complete</span> Mount the NTFS partition read-only; it contains only filesystem metadata and uses 128 MiB.</li>
+        <li><span class="status complete">Complete</span> Receive explicit authorization to wipe stable device ID <code>ata-CT1000MX500SSD1_2424E8B7E144</code>.</li>
+        <li><span class="status complete">Complete</span> Run guarded, idempotent <code>task data:bootstrap</code>; a second run reconciled cleanly and <code>zpool status -x</code> reports the pool healthy.</li>
+        <li><span class="status complete">Complete</span> Create datasets for AdGuard, Nextcloud files and database, Gitea, Vaultwarden, and Hermes without fixed reservations.</li>
+        <li>Map one disposable dataset into a test guest through VirtioFS and verify permissions, restart behavior, synchronous writes, and remounting.</li>
+        <li>Destroy and recreate the test guest; accept the design only if the dataset and sentinel data survive.</li>
+      </ol>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>No normal infrastructure destroy path deletes or recreates <code>tank</code> or its application datasets.</li>
+        <li>Persistent-data destruction is a separate command with explicit device and pool confirmation.</li>
+        <li>Each application receives only its own dataset; the shared services VM does not imply a shared application directory.</li>
+        <li>The documentation states that this pool has neither redundancy nor off-host recovery.</li>
       </ul>
     </section>
 

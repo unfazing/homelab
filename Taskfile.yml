@@ -9,6 +9,8 @@ includes:
     taskfile: ./taskfiles/infrastructure.yml
   config:
     taskfile: ./taskfiles/configuration.yml
+  data:
+    taskfile: ./taskfiles/data.yml
 
 tasks:
   default:
@@ -39,6 +41,8 @@ tasks:
           scripts/packer-image.sh \
           scripts/verify-image.sh \
           scripts/inventory/generate.sh \
+          scripts/storage/zfs.sh \
+          taskfiles/data.yml \
           terraform/image-verification/main.tf \
           terraform/image-verification/.terraform.lock.hcl \
           terraform/providers.tf \
