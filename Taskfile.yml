@@ -3,6 +3,8 @@ version: "3"
 silent: true
 
 includes:
+  apps:
+    taskfile: ./taskfiles/applications.yml
   host:
     taskfile: ./taskfiles/host.yml
   image:
@@ -43,11 +45,13 @@ tasks:
           scripts/packer-image.sh \
           scripts/verify-image.sh \
           scripts/inventory/generate.sh \
+          scripts/app/gitea-bootstrap-secret.sh \
           scripts/host/terraform-mapping-role.sh \
           scripts/storage/verify-virtiofs.sh \
           scripts/storage/zfs.sh \
           taskfiles/host.yml \
           taskfiles/data.yml \
+          taskfiles/applications.yml \
           terraform/image-verification/main.tf \
           terraform/image-verification/.terraform.lock.hcl \
           terraform/storage-verification/main.tf \
@@ -56,6 +60,9 @@ tasks:
           terraform/keys/keys.pub \
           ansible/playbooks/site.yml \
           ansible/playbooks/common.yml \
+          ansible/playbooks/gitea.yml \
+          ansible/roles/docker-engine/tasks/main.yml \
+          ansible/roles/gitea/tasks/main.yml \
           ansible/roles/persistent-data/tasks/main.yml \
           ansible/inventories/homelab/hosts.example.yml; do
           test -f "$path" || {

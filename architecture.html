@@ -171,6 +171,7 @@
     .placeholder { min-height: 180px; display: grid; place-items: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
     .compact { margin: 8px 0; padding-left: 21px; }
     .compact li + li { margin-top: 5px; }
+    .callout { max-width: none; margin: 16px 0; padding: 12px 14px; border-left: 3px solid var(--amber); background: var(--amber-soft); }
     @media (max-width: 620px) {
       main { width: min(100% - 18px, 1100px); padding-top: 22px; }
       th, td { padding: 8px; }
@@ -732,11 +733,103 @@
       </section>
 
       <section id="services-app-panel" role="tabpanel" aria-labelledby="services-app-tab" hidden>
-        <h3>Nextcloud + Gitea + Vaultwarden</h3>
-        <p>These applications share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Each runs as a separate Compose project with its own container network, secrets, and ZFS-backed dataset.</p>
-        <p><strong>Nextcloud durable state:</strong> files, database, configuration, and encryption material. <strong>Gitea durable state:</strong> repositories, LFS, packages, artifacts, configuration, and database. <strong>Vaultwarden durable state:</strong> database, keys, attachments, and configuration.</p>
-        <p>Private clients reach only published application ports. Agents receive network access only to Gitea's HTTPS and SSH endpoints, not Nextcloud, Vaultwarden, or the container networks.</p>
-        <p><strong>Runner boundary:</strong> CI jobs never execute on this VM or on <code>lab-agents-01</code>. A future <code>lab-runner-01</code> is disposable and receives no application datasets. Gitea documents that host mode has no job isolation and Docker mode shares its daemon; <a href="https://docs.gitea.com/runner/">runner isolation is an explicit security boundary</a>.</p>
+        <h3>Shared services boundary</h3>
+        <nav class="tabs subtabs" role="tablist" aria-label="Services VM applications">
+          <button id="services-overview-tab" role="tab" aria-selected="true" aria-controls="services-overview-panel" type="button">Overview</button>
+          <button id="services-gitea-tab" role="tab" aria-selected="false" aria-controls="services-gitea-panel" type="button">Gitea</button>
+          <button id="services-nextcloud-tab" role="tab" aria-selected="false" aria-controls="services-nextcloud-panel" type="button">Nextcloud</button>
+          <button id="services-vaultwarden-tab" role="tab" aria-selected="false" aria-controls="services-vaultwarden-panel" type="button">Vaultwarden</button>
+        </nav>
+
+        <section id="services-overview-panel" role="tabpanel" aria-labelledby="services-overview-tab">
+          <p>Nextcloud, Gitea, and Vaultwarden share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Each application has a separate Compose project, container network, secret set, and ZFS-backed dataset.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Application</th><th>Durable state</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Gitea</td><td>SQLite database, repositories, LFS, packages, attachments, configuration, keys, and indexes</td><td><span class="status accepted">Implemented</span></td></tr>
+                <tr><td>Nextcloud</td><td>User files, database, configuration, application state, and encryption material</td><td><span class="status proposed">Planned</span></td></tr>
+                <tr><td>Vaultwarden</td><td>Database, attachments, keys, and configuration</td><td><span class="status proposed">Planned</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Private clients reach only published application ports. The intended segmented network permits agents to reach only Gitea's application ports, not Nextcloud, Vaultwarden, Docker networks, or the Proxmox management plane.</p>
+        </section>
+
+        <section id="services-gitea-panel" role="tabpanel" aria-labelledby="services-gitea-tab" hidden>
+          <h3>Effective Gitea configuration</h3>
+          <p class="callout"><strong>Current-stage exposure:</strong> Gitea is not public, but before the VLAN firewall is implemented any device on <code>192.168.1.0/24</code> can reach its two bound ports. The final network policy must limit access to approved WireGuard clients, trusted management devices, and the agents-to-Gitea rule.</p>
+
+          <dl class="context-list">
+            <dt>Host boundary</dt><dd><code>lab-services-01</code>, shared with future Nextcloud and Vaultwarden containers</dd>
+            <dt>Container</dt><dd><code>gitea</code> in the standalone Compose project <code>gitea</code></dd>
+            <dt>Release</dt><dd><code>1.27.3</code>, immutable image digest <code>sha256:87a67e…c43bef</code></dd>
+            <dt>Identity</dt><dd>Application files use UID/GID <code>1000</code>; administrator is <code>homelab-admin</code>, with the generated bootstrap password already replaced</dd>
+            <dt>Restart policy</dt><dd><code>unless-stopped</code> with a one-minute graceful stop window</dd>
+          </dl>
+
+          <h3>Network and service surface</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Surface</th><th>Effective value</th><th>Boundary</th></tr></thead>
+              <tbody>
+                <tr><td>Web and API</td><td><code>http://192.168.1.101:3000/</code></td><td>Bound to the services VM address, not wildcard host interfaces; no TLS or reverse proxy yet</td></tr>
+                <tr><td>Git over SSH</td><td><code>192.168.1.101:2222</code> → container port <code>22</code></td><td>Separate from guest administration SSH on port <code>22</code></td></tr>
+                <tr><td>Container health</td><td><code>GET /api/healthz</code> every 15 seconds</td><td>Five-second timeout, 12 retries, 30-second start period</td></tr>
+                <tr><td>Public ingress</td><td>None</td><td>No router forwarding; WireGuard remains the only planned public UDP ingress</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Application policy</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Setting</th><th>Effective value</th><th>Intent</th></tr></thead>
+              <tbody>
+                <tr><td>Database</td><td>SQLite at <code>/data/gitea/gitea.db</code>, journal mode <code>WAL</code></td><td>Minimize memory and operational overhead for the small installation</td></tr>
+                <tr><td>Installation</td><td><code>INSTALL_LOCK=true</code></td><td>Disable the web installer after automated configuration</td></tr>
+                <tr><td>Registration</td><td>Disabled</td><td>Only administrators create accounts</td></tr>
+                <tr><td>Default visibility</td><td>Users and repositories default to private</td><td>Avoid accidental LAN-wide discovery</td></tr>
+                <tr><td>OpenID</td><td>Sign-in and sign-up disabled</td><td>No unreviewed external identity path</td></tr>
+                <tr><td>Actions</td><td>Disabled</td><td>No CI execution in the services or agents trust boundaries</td></tr>
+                <tr><td>Logging</td><td>Gitea logs to container stdout; Docker uses the bounded <code>local</code> log driver</td><td>Prevent unbounded JSON log growth on the VM OS disk</td></tr>
+                <tr><td>SMTP</td><td>Not configured</td><td><code>admin@gmail.com</code> is metadata only; email recovery is unavailable</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Persistence and security</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Control</th><th>Effective configuration</th></tr></thead>
+              <tbody>
+                <tr><td>Durable mount</td><td><code>tank/homelab/services/gitea</code> → Proxmox mapping <code>homelab-gitea</code> → guest <code>/srv/homelab/gitea</code> → container <code>/data</code></td></tr>
+                <tr><td>Guest mount flags</td><td><code>rw,nosuid,nodev</code>; failure is visible because <code>nofail</code> is not used</td></tr>
+                <tr><td>Ownership</td><td>UID/GID <code>1000</code>, mode <code>0750</code> at the application dataset root</td></tr>
+                <tr><td>Container hardening</td><td><code>no-new-privileges</code>; administrator is not added to the root-equivalent Docker group</td></tr>
+                <tr><td>Bootstrap secret</td><td>Random controller-side ignored file streamed over standard input to the Gitea CLI; never stored in Terraform state, command arguments, or the VM filesystem</td></tr>
+                <tr><td>Host keys and app secrets</td><td>Stored below durable <code>/data</code>, so container and VM replacement preserve identity</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Deliberate limits</h3>
+          <ul class="compact">
+            <li>SQLite is suitable for the initial low-concurrency workload but is the scaling limit; migration to PostgreSQL requires a planned conversion and restore test.</li>
+            <li>TLS, an internal reverse proxy, SMTP, off-host backups, restore automation, upgrades, and removal workflows are not implemented.</li>
+            <li>CI jobs never execute on this VM or on <code>lab-agents-01</code>. A future disposable <code>lab-runner-01</code> receives no application datasets. <a href="https://docs.gitea.com/runner/">Runner isolation remains an explicit security boundary.</a></li>
+          </ul>
+        </section>
+
+        <section id="services-nextcloud-panel" role="tabpanel" aria-labelledby="services-nextcloud-tab" hidden>
+          <h3>Nextcloud</h3>
+          <p><span class="status proposed">Planned</span> Detailed image, database, ports, secrets, resource limits, and restore contract will be recorded here before implementation.</p>
+        </section>
+
+        <section id="services-vaultwarden-panel" role="tabpanel" aria-labelledby="services-vaultwarden-tab" hidden>
+          <h3>Vaultwarden</h3>
+          <p><span class="status proposed">Planned</span> Detailed image, ports, TLS dependency, secrets, emergency recovery, and restore contract will be recorded here before implementation.</p>
+        </section>
       </section>
 
       <section id="agents-app-panel" role="tabpanel" aria-labelledby="agents-app-tab" hidden>
@@ -758,6 +851,10 @@
           <h3>Decisions</h3>
           <ul class="compact">
             <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
+            <li><span class="status accepted">D-052 Implemented</span> Begin application deployment with Gitea. Use SQLite with WAL mode to minimize memory on the 4 GB shared-services VM; accept that it does not scale well and later database conversion is not well tested.</li>
+            <li><span class="status accepted">D-053 Implemented</span> Pin Gitea <code>1.27.3</code> by immutable image digest. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration, OpenID login, and Actions. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
+            <li><span class="status accepted">D-054 Implemented</span> Install Docker CE from Docker's official Ubuntu 26.04 repository with exact package versions, hold those packages until reviewed upgrades, use the local log driver and live restore, and do not add the administrator to the root-equivalent Docker group.</li>
+            <li><span class="status open">D-055 Open</span> Choose the internal TLS and reverse-proxy design before treating Gitea's final access policy as complete. Its current HTTP endpoint is private but reachable across the flat home LAN until VLAN firewall enforcement exists.</li>
           </ul>
         </section>
         <section>

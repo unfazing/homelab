@@ -1,0 +1,6 @@
+---
+docker_ce_version: "5:29.8.1-1~ubuntu.26.04~resolute"
+docker_ce_cli_version: "5:29.8.1-1~ubuntu.26.04~resolute"
+docker_containerd_version: "2.3.5-1~ubuntu.26.04~resolute"
+docker_buildx_version: "0.37.1-1~ubuntu.26.04~resolute"
+docker_compose_version: "5.5.1-1~ubuntu.26.04~resolute"

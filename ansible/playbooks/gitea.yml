@@ -1,0 +1,11 @@
+---
+- name: Apply the common guest baseline
+  ansible.builtin.import_playbook: common.yml
+
+- name: Deploy Gitea
+  hosts: services
+  become: true
+  gather_facts: true
+  roles:
+    - docker-engine
+    - gitea

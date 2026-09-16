@@ -43,6 +43,7 @@
     .tabs button { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 9px 15px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
     .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 15%, transparent); }
     .tabs button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+    .subtabs { width: max-content; max-width: 100%; margin: 18px 0; }
     [role="tabpanel"] { padding-top: 5px; }
     [hidden] { display: none !important; }
 
@@ -62,6 +63,7 @@
     tr:last-child td { border-bottom: 0; }
     .compact { margin: 8px 0; padding-left: 21px; }
     .compact li + li { margin-top: 6px; }
+    .callout { max-width: none; margin: 16px 0; padding: 12px 14px; border-left: 3px solid var(--amber); background: var(--amber-soft); }
 
     figure { margin: 20px 0 0; }
     figcaption { margin-top: 8px; color: var(--muted); }
@@ -103,6 +105,7 @@
       <button id="terraform-tab" role="tab" aria-selected="false" aria-controls="terraform-panel" type="button">Terraform plan</button>
       <button id="data-tab" role="tab" aria-selected="false" aria-controls="data-panel" type="button">Data plan</button>
       <button id="ansible-tab" role="tab" aria-selected="false" aria-controls="ansible-panel" type="button">Ansible plan</button>
+      <button id="gitea-tab" role="tab" aria-selected="false" aria-controls="gitea-panel" type="button">Gitea</button>
     </nav>
 
     <section id="repository-panel" role="tabpanel" aria-labelledby="repository-tab">
@@ -127,7 +130,8 @@
 │   ├── image.yml
 │   ├── infrastructure.yml
 │   ├── configuration.yml      # inventory, connectivity, common convergence
-│   └── data.yml
+│   ├── data.yml
+│   └── applications.yml       # Gitea check, deploy, and credential tasks
 ├── packer/
 │   ├── README.md              # image pipeline and NoCloud handoff
 │   ├── images/ubuntu-26.04/   # one generic Ubuntu image definition
@@ -143,6 +147,8 @@
 ├── scripts/
 │   ├── packer-image.sh        # secure image validation and build wrapper
 │   ├── verify-image.sh        # clone assertions and guaranteed cleanup
+│   ├── host/                   # explicit Proxmox-host prerequisites
+│   ├── app/                    # application bootstrap helpers
 │   ├── inventory/generate.sh  # Terraform output → Ansible JSON inventory
 │   ├── storage/zfs.sh         # guarded ZFS bootstrap and status
 │   ├── storage/verify-virtiofs.sh # destroy/recreate attachment proof
@@ -172,10 +178,10 @@
             <tr><td>Root architecture document</td><td><span class="status complete">Complete</span></td><td>Maintain as design decisions change</td></tr>
             <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
-            <tr><td>Task interface</td><td><span class="status complete">Infrastructure, configuration, and data bootstrap complete</span></td><td>Add application tasks with their implementation phases</td></tr>
+            <tr><td>Task interface</td><td><span class="status complete">Infrastructure, configuration, data, and Gitea deployment complete</span></td><td>Add each later application through the same check/deploy pattern</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
             <tr><td>Terraform deployment</td><td><span class="status complete">BPG migration complete</span></td><td>Use the BPG provider for the persistent-data attachment proof</td></tr>
-            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated and converged</span></td><td>Wait for the persistent ZFS attachment proof before application roles</td></tr>
+            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated, mounted, and Gitea converged</span></td><td>Use the established Docker and Compose pattern for the next application</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -446,6 +452,148 @@
         <li><span class="status complete">Passed</span> Common check mode and convergence completed without invoking WireGuard or application roles.</li>
         <li><span class="status complete">Passed</span> A second common check reported zero changes on every host.</li>
       </ul>
+    </section>
+
+    <section id="gitea-panel" role="tabpanel" aria-labelledby="gitea-tab" hidden>
+      <h2>Gitea deployment</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status complete">Implemented</span> Live deployment and repeat convergence passed</dd>
+        <dt>Host</dt><dd><code>lab-services-01</code> · <code>192.168.1.101</code></dd>
+        <dt>Runtime</dt><dd>Official Docker CE <code>29.8.1</code> packages and Compose plugin <code>5.5.1</code>, held at reviewed versions</dd>
+        <dt>Image</dt><dd><code>docker.gitea.com/gitea:1.27.3</code> pinned by digest</dd>
+        <dt>Endpoints</dt><dd>HTTP <code>192.168.1.101:3000</code> · Git SSH <code>192.168.1.101:2222</code></dd>
+        <dt>State</dt><dd>SQLite WAL plus repositories, LFS, packages, configuration, and keys under <code>/srv/homelab/gitea</code></dd>
+        <dt>Bootstrap</dt><dd>Administrator <code>homelab-admin</code> / <code>admin@gmail.com</code>; first-login password replacement is complete and the ignored generated bootstrap password is intentionally stale. SMTP is not configured, so the email cannot yet receive password recovery.</dd>
+      </dl>
+
+      <nav class="tabs subtabs" role="tablist" aria-label="Gitea implementation details">
+        <button id="gitea-install-tab" role="tab" aria-selected="true" aria-controls="gitea-install-panel" type="button">Installation flow</button>
+        <button id="gitea-files-tab" role="tab" aria-selected="false" aria-controls="gitea-files-panel" type="button">Files &amp; state</button>
+        <button id="gitea-operations-tab" role="tab" aria-selected="false" aria-controls="gitea-operations-panel" type="button">Operate &amp; verify</button>
+      </nav>
+
+      <section id="gitea-install-panel" role="tabpanel" aria-labelledby="gitea-install-tab">
+        <h3>Controller-to-container flow</h3>
+        <figure>
+          <div class="diagram-scroll">
+            <svg viewBox="0 0 1100 285" role="img" aria-labelledby="gitea-flow-title gitea-flow-desc">
+              <title id="gitea-flow-title">Gitea installation flow</title>
+              <desc id="gitea-flow-desc">The Task interface prepares generated inventory and a local bootstrap secret. Ansible applies the common and persistent-data roles, installs pinned Docker packages, renders and starts the Gitea Compose project, and verifies health before creating the administrator.</desc>
+              <defs>
+                <marker id="gitea-install-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+                </marker>
+              </defs>
+              <text class="title" x="30" y="42">One command, five owned stages</text>
+              <path d="M210 155 H242" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#gitea-install-arrow)"></path>
+              <path d="M420 155 H452" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#gitea-install-arrow)"></path>
+              <path d="M630 155 H662" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#gitea-install-arrow)"></path>
+              <path d="M840 155 H872" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#gitea-install-arrow)"></path>
+
+              <rect class="node control" x="30" y="90" width="180" height="130" rx="10"></rect>
+              <text class="eyebrow" x="50" y="118">TASK · CONTROLLER</text>
+              <text class="label" x="50" y="150">Prepare</text>
+              <text class="small" x="50" y="177">Inventory + ignored</text>
+              <text class="small" x="50" y="198">bootstrap password</text>
+
+              <rect class="node" x="242" y="90" width="178" height="130" rx="10"></rect>
+              <text class="eyebrow" x="262" y="118">ANSIBLE · BASELINE</text>
+              <text class="label" x="262" y="150">Mount state</text>
+              <text class="small" x="262" y="177">Common packages +</text>
+              <text class="small" x="262" y="198">VirtioFS verification</text>
+
+              <rect class="node" x="452" y="90" width="178" height="130" rx="10"></rect>
+              <text class="eyebrow" x="472" y="118">ANSIBLE · DOCKER</text>
+              <text class="label" x="472" y="150">Install runtime</text>
+              <text class="small" x="472" y="177">Exact packages + holds</text>
+              <text class="small" x="472" y="198">Daemon policy</text>
+
+              <rect class="node" x="662" y="90" width="178" height="130" rx="10"></rect>
+              <text class="eyebrow" x="682" y="118">ANSIBLE · COMPOSE</text>
+              <text class="label" x="682" y="150">Start Gitea</text>
+              <text class="small" x="682" y="177">Render, pull digest,</text>
+              <text class="small" x="682" y="198">up --wait</text>
+
+              <rect class="node output" x="872" y="90" width="198" height="130" rx="10"></rect>
+              <text class="eyebrow" x="892" y="118">ANSIBLE · ACCEPTANCE</text>
+              <text class="label" x="892" y="150">Verify &amp; bootstrap</text>
+              <text class="small" x="892" y="177">Health first, then admin;</text>
+              <text class="small" x="892" y="198">stream secret over stdin</text>
+            </svg>
+          </div>
+          <figcaption>Task exposes the workflow; Ansible owns every in-guest change. Terraform is not invoked and receives no application secret.</figcaption>
+        </figure>
+
+        <ol class="compact">
+          <li><code>task apps:gitea:deploy</code> generates the current Ansible inventory from Terraform outputs and calls the bootstrap-secret helper.</li>
+          <li>The helper creates a mode-<code>0600</code> random password only under ignored <code>.generated/secrets/</code>; it never enters Git or Terraform state.</li>
+          <li><code>ansible/playbooks/gitea.yml</code> imports the common baseline for all three VMs, then targets only the <code>services</code> group for Docker and Gitea.</li>
+          <li>The <code>persistent-data</code> role verifies the <code>homelab-gitea</code> VirtioFS mount before the application role assigns UID/GID <code>1000</code>.</li>
+          <li>The <code>docker-engine</code> role adds Docker's signed Ubuntu 26.04 repository, installs exact package versions, holds them, and starts Docker with the reviewed daemon settings.</li>
+          <li>The <code>gitea</code> role renders <code>/opt/homelab/gitea/compose.yml</code>, pulls the digest-pinned image when absent, validates Compose, and runs <code>docker compose up --detach --remove-orphans --wait</code>.</li>
+          <li>Only after the health endpoint passes does Ansible create <code>homelab-admin</code>. Ansible streams the password over standard input to the Gitea CLI; the secret is not placed in command arguments or written to the VM filesystem.</li>
+        </ol>
+      </section>
+
+      <section id="gitea-files-panel" role="tabpanel" aria-labelledby="gitea-files-tab" hidden>
+        <h3>Source and deployed artifacts</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Repository source</th><th>Result</th><th>Owner</th></tr></thead>
+            <tbody>
+              <tr><td><code>taskfiles/applications.yml</code></td><td>Public check, deploy, and credential commands</td><td>Task orchestration</td></tr>
+              <tr><td><code>scripts/app/gitea-bootstrap-secret.sh</code></td><td><code>.generated/secrets/gitea-admin-password</code>, mode <code>0600</code></td><td>Local helper; ignored transient secret</td></tr>
+              <tr><td><code>ansible/roles/docker-engine/</code></td><td>Docker apt source, exact packages, package holds, and <code>/etc/docker/daemon.json</code></td><td>Ansible</td></tr>
+              <tr><td><code>ansible/roles/gitea/templates/compose.yml.j2</code></td><td><code>/opt/homelab/gitea/compose.yml</code>, root-owned mode <code>0640</code></td><td>Ansible</td></tr>
+              <tr><td><code>ansible/roles/gitea/</code></td><td>Container lifecycle, health assertion, and idempotent administrator bootstrap</td><td>Ansible</td></tr>
+              <tr><td>Terraform VirtioFS attachment</td><td><code>homelab-gitea</code> mounted at <code>/srv/homelab/gitea</code></td><td>Terraform attachment; Ansible mount and permissions</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>State boundary</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Rebuildable on VM OS disk</th><th>Durable on ZFS-backed dataset</th></tr></thead>
+            <tbody>
+              <tr><td>Docker Engine packages and apt metadata</td><td>SQLite database and WAL files</td></tr>
+              <tr><td>Compose definition under <code>/opt/homelab/gitea</code></td><td>Git repositories, LFS objects, packages, attachments, and indexes</td></tr>
+              <tr><td>Container image, writable container layer, and Docker-managed stdout logs</td><td>Generated Gitea configuration, SSH host keys, secrets, and indexes below <code>/data</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="callout"><strong>Deletion boundary:</strong> ordinary VM or container replacement must not remove <code>tank/homelab/services/gitea</code>. No Gitea data-destruction task exists; deleting that dataset remains a separate, explicitly authorized operation.</p>
+      </section>
+
+      <section id="gitea-operations-panel" role="tabpanel" aria-labelledby="gitea-operations-tab" hidden>
+        <h3>Operator interface</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>task apps:gitea:check</code></td><td>Runs Ansible check mode with diffs; it does not install Docker, pull the image, start the container, or create the administrator.</td></tr>
+              <tr><td><code>task apps:gitea:deploy</code></td><td>Converges the common baseline, Docker, Compose project, health check, and missing administrator.</td></tr>
+              <tr><td><code>task apps:gitea:credentials</code></td><td>Prints the local bootstrap identity and password; after the required password change, that password is intentionally stale.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Verified outcomes</h3>
+        <ul class="compact">
+          <li><span class="status complete">Passed</span> Only the services VM has Docker and the Gitea Compose project; access and agents remain Docker-free.</li>
+          <li><span class="status complete">Passed</span> The image is digest-pinned and Docker packages are exact-version pinned and held.</li>
+          <li><span class="status complete">Passed</span> Gitea is healthy, registration and Actions are disabled, and a second convergence reported zero changes.</li>
+          <li><span class="status complete">Passed</span> Gitea data is owned by UID/GID 1000 on the <code>homelab-gitea</code> VirtioFS mount, never the root disk.</li>
+          <li><span class="status complete">Passed</span> HTTP and Git SSH listen only on <code>192.168.1.101:3000</code> and <code>192.168.1.101:2222</code>.</li>
+        </ul>
+
+        <h3>Operator follow-up</h3>
+        <ol class="compact">
+          <li><span class="status complete">Complete</span> Signed in and replaced the generated bootstrap password.</li>
+          <li><span class="status planned">Pending</span> Store the replacement credential in the password manager when Vaultwarden is available.</li>
+        </ol>
+        <p class="callout"><strong>Not implemented:</strong> there is no Task command for Gitea removal, upgrade, restore, or data destruction. Those workflows require explicit design and acceptance criteria before automation is added.</p>
+      </section>
     </section>
 
     <footer>

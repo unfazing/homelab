@@ -1,0 +1,49 @@
+version: "3"
+
+silent: true
+
+vars:
+  INVENTORY: .generated/ansible/hosts.json
+  LOCAL_TEMP: .generated/ansible/tmp
+  GITEA_SECRET_FILE: .generated/secrets/gitea-admin-password
+
+env:
+  ANSIBLE_CONFIG: ansible/ansible.cfg
+  ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
+
+tasks:
+  gitea:secret:
+    internal: true
+    cmds:
+      - scripts/app/gitea-bootstrap-secret.sh
+
+  gitea:check:
+    desc: Preview the pinned Docker and Gitea deployment
+    deps: [":config:inventory", "gitea:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --check --diff -i "{{.INVENTORY}}"
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/gitea.yml
+
+  gitea:deploy:
+    desc: Install pinned Docker CE and deploy Gitea on lab-services-01
+    deps: [":config:inventory", "gitea:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --diff -i "{{.INVENTORY}}"
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/gitea.yml
+
+  gitea:credentials:
+    desc: Show the one-time Gitea bootstrap administrator credentials
+    preconditions:
+      - sh: test -f "{{.GITEA_SECRET_FILE}}"
+        msg: Run task apps:gitea:deploy first
+    cmds:
+      - |
+        printf 'Username: homelab-admin\nEmail: admin@gmail.com\nPassword: '
+        cat "{{.GITEA_SECRET_FILE}}"
+        printf '\nChange this password at first login.\n'

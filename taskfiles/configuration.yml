@@ -27,6 +27,10 @@ tasks:
         test "$expected_hosts" = "$parsed_hosts"
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/common.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/site.yml
+      - >-
+        ansible-playbook --syntax-check -i "{{.INVENTORY}}"
+        -e "gitea_admin_password_file=/tmp/gitea-syntax-placeholder"
+        ansible/playbooks/gitea.yml
 
   ping:
     desc: Verify Ansible connectivity to every Terraform VM
