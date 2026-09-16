@@ -701,6 +701,10 @@
             <li><span class="status accepted">D-043 Accepted</span> Keep WireGuard native for simple host networking. Deploy AdGuard, Nextcloud, Gitea, Vaultwarden, and Hermes with Ansible-managed Docker Compose and pinned images.</li>
             <li><span class="status accepted">D-044 Accepted</span> Generate ignored Ansible inventory from Terraform outputs, keep SSH host-key verification enabled, and expose separate connectivity, check-mode, and common-baseline Task commands. The common command must not invoke workload roles.</li>
             <li><span class="status accepted">D-045 Accepted</span> Use <code>bpg/proxmox</code> <code>0.112.0</code>. Import the three live VM IDs without recreation, pin their existing MAC addresses, ignore create-time clone provenance and manual power state, and require an empty post-migration plan. This provider is the planned Terraform interface for Proxmox VirtioFS mappings.</li>
+            <li><span class="status accepted">D-048 Accepted</span> Grant the Terraform API token only <code>Mapping.Audit</code>, <code>Mapping.Modify</code>, and <code>Mapping.Use</code> at <code>/mapping/dir</code> through a separate <code>TerraformMapping</code> role; do not expand its general VM role at the cluster root.</li>
+            <li><span class="status accepted">D-049 Implemented</span> Attach host-mounted ZFS datasets with Terraform-managed Proxmox VirtioFS directory mappings using automatic caching, direct I/O, POSIX ACLs, and extended attributes. The isolated proof passed reboot and VM destroy/recreate persistence on 16 September 2026.</li>
+            <li><span class="status accepted">D-050 Implemented</span> Give each application dataset its own mapping tag and attach it only to the VM that runs that workload: AdGuard to access, Nextcloud, Gitea, and Vaultwarden to services, and Hermes to agents. All six production tags passed guest-side read-only mount verification; Ansible receives the tags and owns persistent mount points and filesystem ownership.</li>
+            <li><span class="status accepted">D-051 Implemented</span> Mount application datasets at <code>/srv/homelab/&lt;application&gt;</code> through managed <code>/etc/fstab</code> entries with <code>rw,nosuid,nodev</code>. Do not use <code>nofail</code>: a missing durable dataset must fail visibly instead of letting a container write into the disposable root disk. Application roles set final ownership only after their container UID contract is known.</li>
           </ul>
         </section>
         <section>
@@ -748,6 +752,7 @@
         <li>Ansible installs and configures applications.</li>
         <li>Application data is restored or mounted from ZFS-backed storage.</li>
       </ol>
+      <p class="muted">Terraform owns only each VirtioFS mapping and VM attachment. ZFS datasets live outside Terraform state, so ordinary VM destruction cannot delete durable data.</p>
       <template data-flyout data-title="Applications">
         <section>
           <h3>Decisions</h3>

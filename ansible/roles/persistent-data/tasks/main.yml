@@ -1,0 +1,87 @@
+---
+- name: Validate persistent-data mount definitions
+  ansible.builtin.assert:
+    that:
+      - item.tag is match('^homelab-[a-z0-9-]+$')
+      - item.path is match('^/srv/homelab/[a-z0-9-]+$')
+    fail_msg: "Invalid VirtioFS mount definition: {{ item }}"
+    quiet: true
+  loop: "{{ homelab_virtiofs_mounts }}"
+  loop_control:
+    label: "{{ item.tag | default('invalid') }}"
+
+- name: Create persistent-data mount points
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+  loop: "{{ homelab_virtiofs_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Persist VirtioFS mounts in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^{{ item.tag | regex_escape }}\s+'
+    line: "{{ item.tag }} {{ item.path }} virtiofs rw,nosuid,nodev 0 0"
+    state: present
+    backup: true
+  loop: "{{ homelab_virtiofs_mounts }}"
+  loop_control:
+    label: "{{ item.tag }} -> {{ item.path }}"
+
+- name: Read current mount state
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --noheadings
+      - --output
+      - SOURCE,FSTYPE
+      - --mountpoint
+      - "{{ item.path }}"
+  register: persistent_data_before_mount
+  check_mode: false
+  changed_when: false
+  failed_when: persistent_data_before_mount.rc not in [0, 1]
+  loop: "{{ homelab_virtiofs_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Mount persistent datasets
+  ansible.builtin.command:
+    argv:
+      - mount
+      - "{{ item.item.path }}"
+  when: item.rc == 1
+  changed_when: true
+  loop: "{{ persistent_data_before_mount.results }}"
+  loop_control:
+    label: "{{ item.item.tag }}"
+
+- name: Verify persistent-data mounts
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --noheadings
+      - --output
+      - SOURCE,FSTYPE
+      - --mountpoint
+      - "{{ item.path }}"
+  register: persistent_data_mount_check
+  when: not ansible_check_mode
+  changed_when: false
+  loop: "{{ homelab_virtiofs_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Assert the expected VirtioFS source and type
+  ansible.builtin.assert:
+    that:
+      - item.stdout.split() | length == 2
+      - item.stdout.split()[0] == item.item.tag
+      - item.stdout.split()[1] == 'virtiofs'
+    fail_msg: "Unexpected mount for {{ item.item.path }}: {{ item.stdout }}"
+    quiet: true
+  loop: "{{ persistent_data_mount_check.results }}"
+  when: not ansible_check_mode
+  loop_control:
+    label: "{{ item.item.tag }}"

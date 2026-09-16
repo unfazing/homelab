@@ -37,7 +37,15 @@ terraform -chdir="$terraform_dir" output -json ansible_inventory |
                         .[$machine.key] = {
                           "ansible_host": $machine.value.ansible_host,
                           "ansible_port": $machine.value.ansible_port,
-                          "ansible_user": $machine.value.ansible_user
+                          "ansible_user": $machine.value.ansible_user,
+                          "homelab_virtiofs_mappings": ($machine.value.virtiofs_mappings // []),
+                          "homelab_virtiofs_mounts": (
+                            ($machine.value.virtiofs_mappings // [])
+                            | map({
+                                "tag": .,
+                                "path": ("/srv/homelab/" + sub("^homelab-"; ""))
+                              })
+                          )
                         }
                       else
                         .

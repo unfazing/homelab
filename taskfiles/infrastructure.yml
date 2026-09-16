@@ -30,10 +30,12 @@ tasks:
       - sh: test -f "{{.TERRAFORM_DIR}}/{{.VAR_FILE}}"
         msg: Missing terraform/deployment.tfvars.json
     cmds:
+      - scripts/host/terraform-mapping-role.sh status
       - terraform -chdir="{{.TERRAFORM_DIR}}" plan -input=false -var-file="{{.VAR_FILE}}"
 
   apply:
     desc: Apply the three-VM Terraform deployment
+    deps: [":host:mapping-access"]
     preconditions:
       - sh: test "${HOMELAB_STATIC_RANGE_RESERVED:-}" = "yes"
         msg: Set HOMELAB_STATIC_RANGE_RESERVED=yes only after the F620 DHCP pool ends at or below 192.168.1.99

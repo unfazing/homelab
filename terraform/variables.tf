@@ -36,19 +36,20 @@ variable "cloud_init_user" {
 variable "vms" {
   description = "VM definitions keyed by deployed VM name."
   type = map(object({
-    vmid           = number
-    target_node    = string
-    clone_id       = number
-    cpu_cores      = optional(number, 2)
-    memory_mb      = optional(number, 4096)
-    disk_gb        = optional(number, 100)
-    disk_storage   = optional(string, "local-lvm")
-    bridge         = optional(string, "vmbr0")
-    vlan_tag       = optional(number)
-    ipv4_address   = optional(string, "dhcp")
-    ipv4_gateway   = optional(string)
-    mac_address    = optional(string)
-    ansible_host   = optional(string)
-    ansible_groups = optional(set(string), [])
+    vmid              = number
+    target_node       = string
+    clone_id          = number
+    cpu_cores         = optional(number, 2)
+    memory_mb         = optional(number, 4096)
+    disk_gb           = optional(number, 100)
+    disk_storage      = optional(string, "local-lvm")
+    bridge            = optional(string, "vmbr0")
+    vlan_tag          = optional(number)
+    ipv4_address      = optional(string, "dhcp")
+    ipv4_gateway      = optional(string)
+    mac_address       = optional(string)
+    ansible_host      = optional(string)
+    ansible_groups    = optional(set(string), [])
+    virtiofs_mappings = optional(map(string), {})
   }))
 }

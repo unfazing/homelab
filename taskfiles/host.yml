@@ -1,0 +1,14 @@
+version: "3"
+
+silent: true
+
+tasks:
+  mapping-access-status:
+    desc: Check scoped Terraform directory-mapping privileges
+    cmds:
+      - scripts/host/terraform-mapping-role.sh status
+
+  mapping-access:
+    desc: Grant the Terraform token scoped directory-mapping privileges
+    cmds:
+      - scripts/host/terraform-mapping-role.sh apply

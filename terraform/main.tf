@@ -1,3 +1,17 @@
+resource "proxmox_hardware_mapping_dir" "application_data" {
+  for_each = local.data_mappings
+
+  name    = each.key
+  comment = "Persistent homelab application data for ${each.value.vm_name}."
+
+  map = [
+    {
+      node = each.value.node
+      path = each.value.path
+    },
+  ]
+}
+
 module "vm" {
   source   = "./modules/proxmox-vm"
   for_each = local.vms
@@ -18,4 +32,14 @@ module "vm" {
   cloud_init_user = var.cloud_init_user
   debug_password  = var.debug_password
   ssh_public_key  = local.ssh_public_key
+
+  virtiofs_mappings = [
+    for mapping_name in sort(keys(each.value.virtiofs_mappings)) : {
+      mapping      = proxmox_hardware_mapping_dir.application_data[mapping_name].name
+      cache        = "auto"
+      direct_io    = true
+      expose_acl   = true
+      expose_xattr = true
+    }
+  ]
 }

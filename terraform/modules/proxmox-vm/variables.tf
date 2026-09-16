@@ -101,3 +101,15 @@ variable "ssh_public_key" {
   type        = string
   description = "SSH public key injected by cloud-init."
 }
+
+variable "virtiofs_mappings" {
+  description = "Proxmox directory mappings exposed to the guest through VirtioFS."
+  type = list(object({
+    mapping      = string
+    cache        = optional(string, "auto")
+    direct_io    = optional(bool, true)
+    expose_acl   = optional(bool, true)
+    expose_xattr = optional(bool, true)
+  }))
+  default = []
+}

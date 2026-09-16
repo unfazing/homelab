@@ -8,11 +8,26 @@ all:
       hosts:
         lab-access-01:
           ansible_host: 10.73.20.10
+          homelab_virtiofs_mounts:
+            - tag: homelab-adguard
+              path: /srv/homelab/adguard
     services:
       hosts:
         lab-services-01:
           ansible_host: 10.73.30.10
+          homelab_virtiofs_mounts:
+            - tag: homelab-gitea
+              path: /srv/homelab/gitea
+            - tag: homelab-nextcloud-db
+              path: /srv/homelab/nextcloud-db
+            - tag: homelab-nextcloud-files
+              path: /srv/homelab/nextcloud-files
+            - tag: homelab-vaultwarden
+              path: /srv/homelab/vaultwarden
     agents:
       hosts:
         lab-agents-01:
           ansible_host: 10.73.40.10
+          homelab_virtiofs_mounts:
+            - tag: homelab-hermes
+              path: /srv/homelab/hermes

@@ -7,6 +7,7 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 - `playbooks/common.yml` is the safe first convergence boundary and applies no workload configuration.
 - `playbooks/site.yml` imports the common baseline, then composes approved workload roles.
 - `roles/common` applies shared guest configuration.
+- `roles/persistent-data` mounts only the VirtioFS tags assigned by Terraform; application roles own dataset permissions.
 - `roles/wireguard` configures the native WireGuard service on `lab-access-01`.
 - `roles/adguard` will configure an AdGuard Compose project on `lab-access-01` after its deployment contract is approved.
 - `roles/nextcloud`, `roles/gitea`, and `roles/password-manager` are Compose placeholders for `lab-services-01`.
@@ -16,7 +17,7 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 
 ## Inventory contract
 
-Terraform exposes the `ansible_inventory` output. `task config:inventory` converts it into ignored `.generated/ansible/hosts.json`; committed inventory files are examples only. The generated file contains addresses, groups, SSH user, port, and the generic image's stable `/usr/bin/python3` interpreter path—not credentials.
+Terraform exposes the `ansible_inventory` output. `task config:inventory` converts it into ignored `.generated/ansible/hosts.json`; committed inventory files are examples only. The generated file contains addresses, groups, SSH user, port, assigned VirtioFS tags and mount points, and the generic image's stable `/usr/bin/python3` interpreter path—not credentials.
 
 Use the generated inventory through Task:
 

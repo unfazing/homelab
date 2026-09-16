@@ -135,6 +135,7 @@
 ├── terraform/
 │   ├── modules/proxmox-vm/    # reusable VM primitive
 │   ├── image-verification/    # disposable single-clone acceptance stack
+│   ├── storage-verification/  # disposable VirtioFS persistence proof
 │   └── *.tf                   # three-VM root composition
 ├── ansible/
 │   ├── playbooks/             # host bootstrap, site convergence, verification
@@ -144,6 +145,7 @@
 │   ├── verify-image.sh        # clone assertions and guaranteed cleanup
 │   ├── inventory/generate.sh  # Terraform output → Ansible JSON inventory
 │   ├── storage/zfs.sh         # guarded ZFS bootstrap and status
+│   ├── storage/verify-virtiofs.sh # destroy/recreate attachment proof
 │   ├── backup/
 │   └── validation/
 └── .generated/                # ignored transient hand-off files</code></pre>
@@ -321,7 +323,7 @@
     <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
       <h2>Terraform plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three live VMs imported into <code>bpg/proxmox</code> <code>0.112.0</code>; the post-migration plan is empty.</dd>
+        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three live VMs and six production VirtioFS mappings are in BPG state.</dd>
         <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
         <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–102</code></dd>
@@ -367,14 +369,25 @@
     <section id="data-panel" role="tabpanel" aria-labelledby="data-tab" hidden>
       <h2>Persistent data plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Pool online</span> Dataset-to-guest attachment proof remains</dd>
+        <dt>Status</dt><dd><span class="status complete">Production mappings attached</span> All six tags passed guest-side read-only mount verification</dd>
         <dt>Device</dt><dd><code>/dev/disk/by-id/ata-CT1000MX500SSD1_2424E8B7E144</code></dd>
         <dt>Pool</dt><dd><code>tank</code> is healthy with 899 GiB available and no data errors</dd>
         <dt>Properties</dt><dd><code>ashift=12</code>, <code>autotrim=on</code>, <code>compression=lz4</code>, <code>atime=off</code>, <code>dedup=off</code></dd>
         <dt>Encryption</dt><dd>None; physical-access exposure is accepted</dd>
         <dt>Backup</dt><dd>Deferred; snapshots do not protect against disk loss or theft</dd>
-        <dt>Attachment</dt><dd>Proxmox VirtioFS, managed through BPG Terraform after a disposable proof</dd>
+        <dt>Attachment</dt><dd>Terraform-managed Proxmox VirtioFS with automatic caching, direct I/O, POSIX ACLs, and extended attributes</dd>
       </dl>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>VM</th><th>Mapping tags</th><th>Host datasets</th></tr></thead>
+          <tbody>
+            <tr><td><code>lab-access-01</code></td><td><code>homelab-adguard</code></td><td><code>tank/homelab/access/adguard</code></td></tr>
+            <tr><td><code>lab-services-01</code></td><td><code>homelab-nextcloud-files</code>, <code>homelab-nextcloud-db</code>, <code>homelab-gitea</code>, <code>homelab-vaultwarden</code></td><td>One independent services dataset per tag</td></tr>
+            <tr><td><code>lab-agents-01</code></td><td><code>homelab-hermes</code></td><td><code>tank/homelab/agents/hermes</code></td></tr>
+          </tbody>
+        </table>
+      </div>
 
       <h3>Implementation sequence</h3>
       <ol class="compact">
@@ -382,27 +395,34 @@
         <li><span class="status complete">Complete</span> Receive explicit authorization to wipe stable device ID <code>ata-CT1000MX500SSD1_2424E8B7E144</code>.</li>
         <li><span class="status complete">Complete</span> Run guarded, idempotent <code>task data:bootstrap</code>; a second run reconciled cleanly and <code>zpool status -x</code> reports the pool healthy.</li>
         <li><span class="status complete">Complete</span> Create datasets for AdGuard, Nextcloud files and database, Gitea, Vaultwarden, and Hermes without fixed reservations.</li>
-        <li>Map one disposable dataset into a test guest through VirtioFS and verify permissions, restart behavior, synchronous writes, and remounting.</li>
-        <li>Destroy and recreate the test guest; accept the design only if the dataset and sentinel data survive.</li>
+        <li><span class="status complete">Complete</span> Reconcile the dedicated <code>TerraformMapping</code> role at <code>/mapping/dir</code> with only audit, modify, and use privileges.</li>
+        <li><span class="status complete">Complete</span> Run <code>task data:verify-virtiofs</code> with isolated dataset <code>tank/homelab/verification/virtiofs-proof</code>, mapping <code>homelab-virtiofs-proof</code>, and VM <code>9900</code>.</li>
+        <li><span class="status complete">Passed</span> Verify UID permissions, VirtioFS type, synchronous data and directory writes, extended attributes, reboot/remount behavior, host visibility, and sentinel survival after Terraform destroy/recreate.</li>
+        <li><span class="status complete">Cleaned</span> Terraform destroyed VM <code>9900</code> and its mapping; the script removed the verification dataset while preserving all application datasets.</li>
+        <li><span class="status complete">Complete</span> Plan and apply six production directory mappings and in-place VM attachments. <code>infra:plan</code> checks mapping privileges; <code>infra:apply</code> reconciles them.</li>
+        <li><span class="status complete">Verified</span> Terraform state and generated Ansible inventory agree on every tag; all three VMs answer Ansible and each tag mounts read-only as VirtioFS on its assigned guest.</li>
+        <li><span class="status complete">Complete</span> Common Ansible convergence persists each tag at <code>/srv/homelab/&lt;application&gt;</code> and verifies source and filesystem type. A second convergence changed nothing; workload-specific roles retain ownership decisions.</li>
       </ol>
 
       <h3>Acceptance criteria</h3>
       <ul class="compact">
-        <li>No normal infrastructure destroy path deletes or recreates <code>tank</code> or its application datasets.</li>
-        <li>Persistent-data destruction is a separate command with explicit device and pool confirmation.</li>
-        <li>Each application receives only its own dataset; the shared services VM does not imply a shared application directory.</li>
-        <li>The documentation states that this pool has neither redundancy nor off-host recovery.</li>
+        <li><span class="status complete">Satisfied by design</span> No normal infrastructure destroy path deletes or recreates <code>tank</code> or its application datasets.</li>
+        <li><span class="status complete">Satisfied by design</span> Persistent-data destruction is separate from VM lifecycle and the pool bootstrap requires explicit device confirmation.</li>
+        <li><span class="status complete">Satisfied by design</span> Each application receives only its own dataset; the shared services VM does not imply a shared application directory.</li>
+        <li><span class="status complete">Documented</span> The pool has neither redundancy nor off-host recovery.</li>
+        <li><span class="status complete">Passed</span> The ignored proof report records a passing destroy/recreate persistence test at <code>2026-09-15T22:54:18Z</code>.</li>
+        <li><span class="status complete">Passed</span> Applied state contains six mapping resources and three existing VM resources with only their assigned attachments. Existing SSH host trust remained valid, ruling out VM replacement.</li>
       </ul>
     </section>
 
     <section id="ansible-panel" role="tabpanel" aria-labelledby="ansible-tab" hidden>
       <h2>Ansible hand-off</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Implemented and verified</span> Inventory generation and common convergence</dd>
+        <dt>Status</dt><dd><span class="status complete">Implemented and idempotent</span> Inventory, common baseline, and six persistent mounts verified</dd>
         <dt>Input</dt><dd>Terraform <code>ansible_inventory</code> output</dd>
         <dt>Generated artifact</dt><dd>Ignored <code>.generated/ansible/hosts.json</code>, written atomically with mode <code>0600</code></dd>
         <dt>Trust</dt><dd>SSH host-key checking enabled; credentials remain outside inventory</dd>
-        <dt>Initial scope</dt><dd>Connectivity plus the shared package and QEMU guest-agent baseline only</dd>
+        <dt>Initial scope</dt><dd>Connectivity, shared package and QEMU guest-agent baseline, and assigned persistent-data mounts; no application configuration</dd>
       </dl>
 
       <h3>Task interface</h3>

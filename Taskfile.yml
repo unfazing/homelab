@@ -3,6 +3,8 @@ version: "3"
 silent: true
 
 includes:
+  host:
+    taskfile: ./taskfiles/host.yml
   image:
     taskfile: ./taskfiles/image.yml
   infra:
@@ -41,14 +43,20 @@ tasks:
           scripts/packer-image.sh \
           scripts/verify-image.sh \
           scripts/inventory/generate.sh \
+          scripts/host/terraform-mapping-role.sh \
+          scripts/storage/verify-virtiofs.sh \
           scripts/storage/zfs.sh \
+          taskfiles/host.yml \
           taskfiles/data.yml \
           terraform/image-verification/main.tf \
           terraform/image-verification/.terraform.lock.hcl \
+          terraform/storage-verification/main.tf \
+          terraform/storage-verification/.terraform.lock.hcl \
           terraform/providers.tf \
           terraform/keys/keys.pub \
           ansible/playbooks/site.yml \
           ansible/playbooks/common.yml \
+          ansible/roles/persistent-data/tasks/main.yml \
           ansible/inventories/homelab/hosts.example.yml; do
           test -f "$path" || {
             echo "Missing required file: $path" >&2
@@ -108,4 +116,6 @@ tasks:
       - terraform -chdir=terraform validate
       - terraform -chdir=terraform/image-verification init -backend=false -input=false
       - terraform -chdir=terraform/image-verification validate
+      - terraform -chdir=terraform/storage-verification init -backend=false -input=false
+      - terraform -chdir=terraform/storage-verification validate
       - task: config:validate

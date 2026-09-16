@@ -47,6 +47,18 @@ resource "proxmox_virtual_environment_vm" "this" {
     vlan_id     = var.vlan_tag
   }
 
+  dynamic "virtiofs" {
+    for_each = var.virtiofs_mappings
+
+    content {
+      mapping      = virtiofs.value.mapping
+      cache        = virtiofs.value.cache
+      direct_io    = virtiofs.value.direct_io
+      expose_acl   = virtiofs.value.expose_acl
+      expose_xattr = virtiofs.value.expose_xattr
+    }
+  }
+
   scsi_hardware = "virtio-scsi-pci"
   boot_order    = ["scsi0"]
   bios          = "ovmf"
