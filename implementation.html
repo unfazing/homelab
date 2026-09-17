@@ -183,7 +183,7 @@
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
             <tr><td>Terraform deployment</td><td><span class="status complete">Three-VM BPG baseline complete</span></td><td>Add isolated <code>lab-runner-01</code> without changing the three live VMs or six mappings</td></tr>
             <tr><td>Ansible hand-off</td><td><span class="status complete">Generated, mounted, and Gitea converged</span></td><td>Deploy Hermes next; plan n8n on services; add the runner only after internal TLS</td></tr>
-            <tr><td>Internal TLS</td><td><span class="status open">Cloudflare, DNSSEC, and DDNS active</span></td><td>Select the reverse proxy, install the separate ACME token, and implement certificate renewal</td></tr>
+            <tr><td>Internal TLS</td><td><span class="status open">Caddy selected; Cloudflare, DNSSEC, and DDNS active</span></td><td>Pin and build the custom Caddy image, install the separate ACME token, and prove certificate issuance and renewal</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -609,7 +609,9 @@
       <h2>Internal TLS plan</h2>
       <dl class="context-list">
         <dt>Status</dt><dd><span class="status complete">DNS foundation implemented</span> Namecheap remains registrar; Cloudflare is authoritative and DDNS is live. Reverse-proxy and ACME certificate deployment remain planned</dd>
-        <dt>Termination</dt><dd>One reverse proxy on <code>lab-services-01</code>; application containers do not receive the certificate private key</dd>
+        <dt>Termination</dt><dd>One Caddy reverse proxy on <code>lab-services-01</code>; application containers do not receive the certificate private key</dd>
+        <dt>Image</dt><dd>Locally built multi-stage image using pinned official Caddy builder and runtime bases plus only a pinned <code>caddy-dns/cloudflare</code> module; no third-party prebuilt image</dd>
+        <dt>Discovery</dt><dd>Declarative Caddyfile routes; Caddy receives no Docker socket</dd>
         <dt>Candidate names</dt><dd><code>gitea.home.&lt;domain&gt;</code> and <code>n8n.home.&lt;domain&gt;</code> below a wildcard <code>*.home.&lt;domain&gt;</code></dd>
         <dt>Domain dependencies</dt><dd>Homelab only; no existing email, website, or other service requires migration</dd>
         <dt>Current DNSSEC</dt><dd><span class="status complete">Active</span> Verified through the Cloudflare API after the authoritative DNS cutover</dd>
@@ -663,7 +665,7 @@
         <li><span class="status complete">Cloudflare activation</span> The API reports one active zone, DNSSEC is active, and the delegated public resolver answers the DDNS record.</li>
         <li><span class="status complete">Credentials created</span> Separate zone-scoped Cloudflare tokens exist for ACME and DDNS. The DDNS token is installed as a protected host file; install the ACME token only with the future reverse proxy.</li>
         <li><span class="status complete">DDNS</span> Ansible deployed the Cloudflare updater on <code>lab-access-01</code>; its five-minute systemd timer keeps the DNS-only WireGuard A record aligned with the dynamic public IPv4.</li>
-        <li><span class="status open">Proxy</span> Compare reverse proxies by maintained Cloudflare DNS-01 support, digest-pinned deployment, secret-file support, health checks, and renewal observability.</li>
+        <li><span class="status complete">Proxy selection</span> Use Caddy with a reproducibly built Cloudflare module, declarative routes, persistent certificate state, and no Docker-socket mount.</li>
         <li><span class="status planned">Data</span> Create and attach the dedicated reverse-proxy dataset without replacing VM <code>1001</code>.</li>
         <li><span class="status planned">Deploy</span> Add Task and Ansible check/deploy paths for the proxy, AdGuard records, Cloudflare ACME token, and persistent ACME state.</li>
         <li><span class="status planned">Issue</span> Obtain the wildcard against the ACME staging endpoint, prove automatic renewal, then switch to production while router TCP 80/443 remain closed.</li>

@@ -700,6 +700,7 @@
             <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
             <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
             <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
+            <li><span class="status accepted">D-067 Accepted</span> Use Caddy as the internal reverse proxy. Build the image from pinned official Caddy builder and runtime bases with only the pinned <code>caddy-dns/cloudflare</code> module; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket.</li>
           </ul>
         </section>
         <section>
@@ -718,7 +719,7 @@
             <li><span class="status accepted">Confirmed</span> DNSSEC is not enabled at Namecheap, so there is no existing DS record to remove before cutover.</li>
             <li><span class="status accepted">Complete</span> Cloudflare reports the delegated zone active. The DDNS record was verified through both the Cloudflare API and a public resolver, and the Cloudflare API reports DNSSEC active.</li>
             <li><span class="status accepted">Complete</span> Separate Cloudflare API tokens exist for ACME DNS-01 and WireGuard DDNS; their values remain outside the repository and documentation. The DDNS token is installed on <code>lab-access-01</code>; the ACME token is reserved for the reverse-proxy phase.</li>
-            <li><span class="status open">Open</span> Select the reverse proxy and its maintained Cloudflare DNS module before implementing D-064.</li>
+            <li><span class="status accepted">Selected</span> Caddy will terminate internal TLS. Its custom image will be built reproducibly from official Caddy stages because the stock image does not contain the Cloudflare DNS module.</li>
           </ul>
         </section>
       </template>
