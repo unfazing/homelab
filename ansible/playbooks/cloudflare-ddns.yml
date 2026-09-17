@@ -1,0 +1,13 @@
+---
+- name: Apply the common guest baseline
+  ansible.builtin.import_playbook: common.yml
+
+- name: Deploy the Cloudflare DDNS updater
+  hosts: access
+  become: true
+  gather_facts: true
+  vars:
+    cloudflare_ddns_account_id: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_ACCOUNT_ID') }}"
+    cloudflare_ddns_api_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_DDNS_API_TOKEN') }}"
+  roles:
+    - cloudflare-ddns

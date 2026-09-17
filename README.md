@@ -17,6 +17,13 @@ task validate
 
 Use `task --list` to see the available root and image tasks.
 
+Deploy the DNS-only WireGuard dynamic record after Cloudflare becomes authoritative:
+
+```sh
+task apps:ddns:check
+task apps:ddns:deploy
+```
+
 ## Terraform Providers
 ### BGP (Selected)
 

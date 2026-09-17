@@ -12,6 +12,32 @@ env:
   ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
 
 tasks:
+  ddns:credentials:
+    internal: true
+    preconditions:
+      - sh: test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+        msg: Set CLOUDFLARE_ACCOUNT_ID in the ignored root .envrc
+      - sh: test -n "${CLOUDFLARE_DDNS_API_TOKEN:-}"
+        msg: Set CLOUDFLARE_DDNS_API_TOKEN in the ignored root .envrc
+
+  ddns:check:
+    desc: Preview the Cloudflare DNS-only WireGuard DDNS updater
+    deps: [":config:inventory", "ddns:credentials"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --check --diff -i "{{.INVENTORY}}"
+        ansible/playbooks/cloudflare-ddns.yml
+
+  ddns:deploy:
+    desc: Deploy and verify Cloudflare DDNS on lab-access-01
+    deps: [":config:inventory", "ddns:credentials"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --diff -i "{{.INVENTORY}}"
+        ansible/playbooks/cloudflare-ddns.yml
+
   gitea:secret:
     internal: true
     cmds:

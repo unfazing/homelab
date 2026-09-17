@@ -1,0 +1,8 @@
+---
+cloudflare_ddns_account_id: ""
+cloudflare_ddns_api_token: ""
+cloudflare_ddns_record_label: vpn
+cloudflare_ddns_ttl: 300
+cloudflare_ddns_interval: 5min
+cloudflare_ddns_randomized_delay: 30s
+cloudflare_ddns_ipv4_source_url: https://www.cloudflare.com/cdn-cgi/trace

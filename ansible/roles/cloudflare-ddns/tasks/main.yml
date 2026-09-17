@@ -1,0 +1,113 @@
+---
+- name: Validate the Cloudflare DDNS deployment contract
+  ansible.builtin.assert:
+    that:
+      - cloudflare_ddns_account_id is match('^[0-9a-f]{32}$')
+      - cloudflare_ddns_api_token | length >= 20
+      - cloudflare_ddns_record_label is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$')
+      - cloudflare_ddns_ttl | int >= 60
+      - cloudflare_ddns_ipv4_source_url is match('^https://')
+    fail_msg: "Cloudflare DDNS requires a valid account ID, scoped API token, DNS label, TTL, and HTTPS IPv4 source."
+    quiet: true
+  no_log: true
+
+- name: Install Cloudflare DDNS runtime packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - jq
+    update_cache: true
+    state: present
+
+- name: Create the Cloudflare DDNS service account
+  ansible.builtin.user:
+    name: cloudflare-ddns
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+
+- name: Create the Cloudflare DDNS configuration directory
+  ansible.builtin.file:
+    path: /etc/homelab/ddns
+    state: directory
+    owner: root
+    group: cloudflare-ddns
+    mode: "0750"
+
+- name: Install the Cloudflare DDNS updater
+  ansible.builtin.template:
+    src: cloudflare-ddns.sh.j2
+    dest: /usr/local/sbin/homelab-cloudflare-ddns
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the Cloudflare DDNS secret environment
+  ansible.builtin.template:
+    src: cloudflare.env.j2
+    dest: /etc/homelab/ddns/cloudflare.env
+    owner: root
+    group: cloudflare-ddns
+    mode: "0640"
+  no_log: true
+
+- name: Install the Cloudflare DDNS systemd service
+  ansible.builtin.template:
+    src: cloudflare-ddns.service.j2
+    dest: /etc/systemd/system/cloudflare-ddns.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: cloudflare_ddns_service_unit
+
+- name: Install the Cloudflare DDNS systemd timer
+  ansible.builtin.template:
+    src: cloudflare-ddns.timer.j2
+    dest: /etc/systemd/system/cloudflare-ddns.timer
+    owner: root
+    group: root
+    mode: "0644"
+  register: cloudflare_ddns_timer_unit
+
+- name: Reload systemd after Cloudflare DDNS unit changes
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: cloudflare_ddns_service_unit.changed or cloudflare_ddns_timer_unit.changed
+
+- name: Enable the Cloudflare DDNS timer
+  ansible.builtin.systemd:
+    name: cloudflare-ddns.timer
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Reconcile the DNS-only WireGuard record now
+  ansible.builtin.systemd:
+    name: cloudflare-ddns.service
+    state: started
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify the Cloudflare DDNS timer is active
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - cloudflare-ddns.timer
+  register: cloudflare_ddns_timer_status
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify the latest Cloudflare DDNS run succeeded
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - --property=Result
+      - --value
+      - cloudflare-ddns.service
+  register: cloudflare_ddns_service_result
+  changed_when: false
+  failed_when: cloudflare_ddns_service_result.stdout != 'success'
+  when: not ansible_check_mode

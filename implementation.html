@@ -95,7 +95,7 @@
         <a href="implementation.html" aria-current="page">Implementation</a>
       </nav>
       <h1>Homelab Implementation</h1>
-      <p class="meta">Executable specification · Planning · Updated 16 September 2026</p>
+      <p class="meta">Executable specification · Planning · Updated 18 September 2026</p>
       <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
     </header>
 
@@ -106,6 +106,10 @@
       <button id="data-tab" role="tab" aria-selected="false" aria-controls="data-panel" type="button">Data plan</button>
       <button id="ansible-tab" role="tab" aria-selected="false" aria-controls="ansible-panel" type="button">Ansible plan</button>
       <button id="gitea-tab" role="tab" aria-selected="false" aria-controls="gitea-panel" type="button">Gitea</button>
+      <button id="tls-tab" role="tab" aria-selected="false" aria-controls="tls-panel" type="button">Internal TLS</button>
+      <button id="n8n-tab" role="tab" aria-selected="false" aria-controls="n8n-panel" type="button">n8n</button>
+      <button id="hermes-tab" role="tab" aria-selected="false" aria-controls="hermes-panel" type="button">Hermes</button>
+      <button id="cicd-tab" role="tab" aria-selected="false" aria-controls="cicd-panel" type="button">CI/CD</button>
     </nav>
 
     <section id="repository-panel" role="tabpanel" aria-labelledby="repository-tab">
@@ -140,7 +144,7 @@
 │   ├── modules/proxmox-vm/    # reusable VM primitive
 │   ├── image-verification/    # disposable single-clone acceptance stack
 │   ├── storage-verification/  # disposable VirtioFS persistence proof
-│   └── *.tf                   # three-VM root composition
+│   └── *.tf                   # current three VMs; isolated runner extension planned
 ├── ansible/
 │   ├── playbooks/             # host bootstrap, site convergence, verification
 │   └── roles/                 # reusable host and application roles
@@ -180,8 +184,9 @@
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
             <tr><td>Task interface</td><td><span class="status complete">Infrastructure, configuration, data, and Gitea deployment complete</span></td><td>Add each later application through the same check/deploy pattern</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform deployment</td><td><span class="status complete">BPG migration complete</span></td><td>Use the BPG provider for the persistent-data attachment proof</td></tr>
-            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated, mounted, and Gitea converged</span></td><td>Use the established Docker and Compose pattern for the next application</td></tr>
+            <tr><td>Terraform deployment</td><td><span class="status complete">Three-VM BPG baseline complete</span></td><td>Add isolated <code>lab-runner-01</code> without changing the three live VMs or six mappings</td></tr>
+            <tr><td>Ansible hand-off</td><td><span class="status complete">Generated, mounted, and Gitea converged</span></td><td>Deploy Hermes next; plan n8n on services; add the runner only after internal TLS</td></tr>
+            <tr><td>Internal TLS</td><td><span class="status open">Cloudflare active; DDNS deployed</span></td><td>Verify or enable DNSSEC, select the reverse proxy, install the separate ACME token, and implement certificate renewal</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -329,10 +334,10 @@
     <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
       <h2>Terraform plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three live VMs and six production VirtioFS mappings are in BPG state.</dd>
+        <dt>Status</dt><dd><span class="status complete">Applied and verified</span> Three live VMs and six production VirtioFS mappings are in BPG state; a fourth CI-only VM is accepted but not implemented.</dd>
         <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
-        <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–102</code></dd>
+        <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–103</code>; <code>.103</code> is reserved for the planned runner</dd>
         <dt>Apply guard</dt><dd><code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> after the F620 DHCP pool ends at or below <code>.99</code></dd>
         <dt>Admin identity</dt><dd><span class="status complete">Resolved</span> Cloud-Init creates <code>user</code> with only this Mac's confirmed ED25519 administrator key.</dd>
         <dt>Provider lifecycle</dt><dd>BPG owns VM configuration and waits specifically for IPv4. Existing MAC addresses are pinned. Create-time clone provenance and later manual power changes are lifecycle-ignored.</dd>
@@ -345,6 +350,7 @@
             <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1 vCPU · 1.5 GiB · 16 GiB</td><td><code>access</code></td></tr>
             <tr><td><code>lab-services-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2 vCPU · 4 GiB · 32 GiB</td><td><code>services</code></td></tr>
             <tr><td><code>lab-agents-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>2 vCPU · 3 GiB · 32 GiB</td><td><code>agents</code></td></tr>
+            <tr><td><code>lab-runner-01</code> <span class="status planned">Planned</span></td><td>1003</td><td><code>192.168.1.103</code></td><td>2 vCPU · 2 GiB · 32 GiB</td><td><code>runner</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -358,6 +364,7 @@
         <li><span class="status complete">Complete</span> Reconcile the live five-VM baseline: preserve VM 1001 through a Terraform state move, remove empty superseded guests, and recreate the agent VM as 1002.</li>
         <li><span class="status complete">Complete</span> Export <code>HOMELAB_STATIC_RANGE_RESERVED=yes</code> and run <code>task infra:apply</code>; the final apply completed in 2 minutes 15 seconds.</li>
         <li><span class="status complete">Available</span> Use <code>task infra:output</code> as the inventory-generation input.</li>
+        <li><span class="status planned">Planned</span> Add VM <code>1003</code> without a VirtioFS mapping, confirm the plan contains one create and no changes to VM IDs <code>1000–1002</code>, then regenerate inventory.</li>
       </ol>
 
       <h3>Acceptance criteria</h3>
@@ -369,6 +376,7 @@
         <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes after consolidation.</li>
         <li><span class="status complete">Passed</span> Replacement SSH host keys for <code>192.168.1.101</code> and <code>192.168.1.102</code> were verified and trusted before Ansible convergence.</li>
         <li><span class="status complete">Passed</span> State migrated from Telmate to BPG by importing VM IDs <code>1000–1002</code>; the guarded apply allowed no create or destroy actions and the final plan is empty.</li>
+        <li><span class="status planned">Runner gate</span> VM <code>1003</code> must boot with its planned static address, unique identity, key-only SSH, and no application dataset before runner configuration begins.</li>
       </ul>
     </section>
 
@@ -389,7 +397,9 @@
           <thead><tr><th>VM</th><th>Mapping tags</th><th>Host datasets</th></tr></thead>
           <tbody>
             <tr><td><code>lab-access-01</code></td><td><code>homelab-adguard</code></td><td><code>tank/homelab/access/adguard</code></td></tr>
-            <tr><td><code>lab-services-01</code></td><td><code>homelab-nextcloud-files</code>, <code>homelab-nextcloud-db</code>, <code>homelab-gitea</code>, <code>homelab-vaultwarden</code></td><td>One independent services dataset per tag</td></tr>
+            <tr><td><code>lab-services-01</code></td><td><code>homelab-nextcloud-files</code>, <code>homelab-nextcloud-db</code>, <code>homelab-gitea</code>, <code>homelab-vaultwarden</code></td><td>Four attached, independent services datasets</td></tr>
+            <tr><td><code>lab-services-01</code> <span class="status planned">Planned</span></td><td><code>homelab-reverse-proxy</code></td><td><code>tank/homelab/services/reverse-proxy</code>; certificate, private key, ACME account, and renewal state</td></tr>
+            <tr><td><code>lab-services-01</code> <span class="status planned">Planned</span></td><td><code>homelab-n8n</code></td><td><code>tank/homelab/services/n8n</code>; create and attach before deployment</td></tr>
             <tr><td><code>lab-agents-01</code></td><td><code>homelab-hermes</code></td><td><code>tank/homelab/agents/hermes</code></td></tr>
           </tbody>
         </table>
@@ -408,6 +418,8 @@
         <li><span class="status complete">Complete</span> Plan and apply six production directory mappings and in-place VM attachments. <code>infra:plan</code> checks mapping privileges; <code>infra:apply</code> reconciles them.</li>
         <li><span class="status complete">Verified</span> Terraform state and generated Ansible inventory agree on every tag; all three VMs answer Ansible and each tag mounts read-only as VirtioFS on its assigned guest.</li>
         <li><span class="status complete">Complete</span> Common Ansible convergence persists each tag at <code>/srv/homelab/&lt;application&gt;</code> and verifies source and filesystem type. A second convergence changed nothing; workload-specific roles retain ownership decisions.</li>
+        <li><span class="status planned">TLS</span> Add <code>homelab-reverse-proxy</code> with the same guarded dataset, mapping, attachment, inventory, and mount controls; Cloudflare credentials remain outside this dataset.</li>
+        <li><span class="status planned">n8n</span> Extend the guarded ZFS bootstrap, Terraform mapping, VM attachment, generated inventory, and Ansible mount contract with <code>homelab-n8n</code>; require a no-replacement plan for the services VM.</li>
       </ol>
 
       <h3>Acceptance criteria</h3>
@@ -590,10 +602,232 @@
         <h3>Operator follow-up</h3>
         <ol class="compact">
           <li><span class="status complete">Complete</span> Signed in and replaced the generated bootstrap password.</li>
-          <li><span class="status planned">Pending</span> Store the replacement credential in the password manager when Vaultwarden is available.</li>
+          <li><span class="status deferred">Deferred</span> Move the replacement credential into a password manager only when that service returns to the roadmap.</li>
         </ol>
         <p class="callout"><strong>Not implemented:</strong> there is no Task command for Gitea removal, upgrade, restore, or data destruction. Those workflows require explicit design and acceptance criteria before automation is added.</p>
       </section>
+    </section>
+
+    <section id="tls-panel" role="tabpanel" aria-labelledby="tls-tab" hidden>
+      <h2>Internal TLS plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status complete">DNS foundation implemented</span> Namecheap remains registrar; Cloudflare is authoritative and DDNS is live. Reverse-proxy and ACME certificate deployment remain planned</dd>
+        <dt>Termination</dt><dd>One reverse proxy on <code>lab-services-01</code>; application containers do not receive the certificate private key</dd>
+        <dt>Candidate names</dt><dd><code>gitea.home.&lt;domain&gt;</code> and <code>n8n.home.&lt;domain&gt;</code> below a wildcard <code>*.home.&lt;domain&gt;</code></dd>
+        <dt>Domain dependencies</dt><dd>Homelab only; no existing email, website, or other service requires migration</dd>
+        <dt>Current DNSSEC</dt><dd>Not yet verified after the Cloudflare cutover; enable it through Cloudflare if it is still disabled</dd>
+        <dt>Private DNS</dt><dd>AdGuard resolves application names to the services-zone address for LAN and WireGuard clients</dd>
+        <dt>Public DNS</dt><dd>Cloudflare hosts the full authoritative zone, the DNS-only WireGuard DDNS record, and temporary ACME TXT challenges; no public application A/AAAA records</dd>
+        <dt>Ingress</dt><dd>No public TCP 80 or 443; WireGuard UDP remains the sole planned public ingress</dd>
+        <dt>Durable state</dt><dd>Planned <code>homelab-reverse-proxy</code> mapping at <code>/srv/homelab/reverse-proxy</code></dd>
+      </dl>
+
+      <h3>Candidate paths</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Method</th><th>Implementation effect</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>ACME DNS-01 with Cloudflare</td><td>Automated wildcard lifecycle after moving authoritative DNS from Namecheap and creating a zone-scoped token</td><td><span class="status complete">Selected</span></td></tr>
+            <tr><td>Home-hosted <code>acme-dns</code></td><td>Would require public TCP and UDP 53 and careful separation from AdGuard on the access VM</td><td><span class="status deferred">Rejected</span></td></tr>
+            <tr><td>ACME HTTP-01</td><td>Would require public TCP 80 and cannot issue the planned wildcard</td><td><span class="status deferred">Rejected</span></td></tr>
+            <tr><td>Purchased wildcard</td><td>Manual CNAME/email validation, secure import, expiry monitoring, and reissue/install runbook about every 200 days</td><td><span class="status deferred">Not selected</span></td></tr>
+            <tr><td>Private CA</td><td>Automated local issuance plus root-certificate enrollment for every human and machine client</td><td><span class="status deferred">Not selected</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>State and secret placement</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Material</th><th>Planned location</th><th>Handling</th></tr></thead>
+          <tbody>
+            <tr><td>Certificate, private key, ACME account, and renewal metadata</td><td><code>tank/homelab/services/reverse-proxy</code> through its dedicated VirtioFS mapping</td><td>Readable only by root and the reverse-proxy container; never mounted into Gitea or n8n</td></tr>
+            <tr><td>Cloudflare ACME API token</td><td><code>/etc/homelab/reverse-proxy/cloudflare.env</code> on <code>lab-services-01</code></td><td>Separate token with Zone DNS Edit and Zone Read only for the selected zone; root-owned mode <code>0600</code>; excluded from Git, Terraform, logs, and durable application data</td></tr>
+            <tr><td>Cloudflare DDNS API token</td><td><code>/etc/homelab/ddns/cloudflare.env</code> on <code>lab-access-01</code></td><td>Installed by Ansible as <code>root:cloudflare-ddns</code> mode <code>0640</code>; the separate zone-scoped token is passed to the API without appearing in process arguments</td></tr>
+            <tr><td>Workflow and proxy configuration</td><td>Repository templates rendered by Ansible</td><td>Contains names and routing only, never secret values</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Cloudflare DDNS implementation</h3>
+      <dl class="context-list">
+        <dt>Operator interface</dt><dd><code>task apps:ddns:check</code> and <code>task apps:ddns:deploy</code></dd>
+        <dt>Runtime</dt><dd>An unprivileged <code>cloudflare-ddns</code> system user and a hardened systemd oneshot triggered every five minutes with a randomized delay</dd>
+        <dt>Scope</dt><dd>Derive the single active zone visible to the token and reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record with TTL 300</dd>
+        <dt>Public IPv4 source</dt><dd>Cloudflare trace over outbound HTTPS; no new inbound port is opened</dd>
+        <dt>Safety</dt><dd>Refuse zero or multiple visible zones and duplicate matching A records; create a missing record and update only when its address, TTL, or proxy state differs</dd>
+        <dt>Verification</dt><dd>Deployment is idempotent; the Cloudflare API and a public DNS-over-HTTPS resolver returned the same DNS-only WireGuard record</dd>
+      </dl>
+
+      <h3>Implementation sequence</h3>
+      <ol class="compact">
+        <li><span class="status complete">Domain</span> Use <code>home.&lt;domain&gt;</code> as the private application suffix.</li>
+        <li><span class="status open">DNS verification</span> Cloudflare is active and the VPN record resolves publicly. Review the remaining migrated zone, including verification and CAA records, and confirm no unexpected public application, mail, or website record exists.</li>
+        <li><span class="status complete">Cloudflare activation</span> The API reports one active zone and the delegated public resolver answers the DDNS record. <span class="status open">DNSSEC</span> Verify or enable it now that the cutover is complete.</li>
+        <li><span class="status complete">Credentials created</span> Separate zone-scoped Cloudflare tokens exist for ACME and DDNS. The DDNS token is installed as a protected host file; install the ACME token only with the future reverse proxy.</li>
+        <li><span class="status complete">DDNS</span> Ansible deployed the Cloudflare updater on <code>lab-access-01</code>; its five-minute systemd timer keeps the DNS-only WireGuard A record aligned with the dynamic public IPv4.</li>
+        <li><span class="status open">Proxy</span> Compare reverse proxies by maintained Cloudflare DNS-01 support, digest-pinned deployment, secret-file support, health checks, and renewal observability.</li>
+        <li><span class="status planned">Data</span> Create and attach the dedicated reverse-proxy dataset without replacing VM <code>1001</code>.</li>
+        <li><span class="status planned">Deploy</span> Add Task and Ansible check/deploy paths for the proxy, AdGuard records, Cloudflare ACME token, and persistent ACME state.</li>
+        <li><span class="status planned">Issue</span> Obtain the wildcard against the ACME staging endpoint, prove automatic renewal, then switch to production while router TCP 80/443 remain closed.</li>
+        <li><span class="status planned">Migrate</span> Place Gitea behind HTTPS, update its advertised URLs, then validate Git, API, clone, and callback behavior before enabling any reusable token.</li>
+        <li><span class="status planned">Extend</span> Route n8n through the same proxy only after the Gitea migration and renewal test pass.</li>
+      </ol>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>Cloudflare is authoritative for the registered domain; all pre-existing public DNS behavior remains intact after migration.</li>
+        <li>The DNS-only WireGuard record follows the dynamic public IPv4 through the Cloudflare updater.</li>
+        <li>A fresh LAN or WireGuard client resolves application names through AdGuard and validates HTTPS without warnings.</li>
+        <li>A LAN-only agent reaches Gitea and approved n8n endpoints over HTTPS without contacting the public CA.</li>
+        <li>The chosen certificate lifecycle introduces no public ingress beyond WireGuard; HTTP-01 and home-hosted authoritative DNS remain disabled.</li>
+        <li>The wildcard private key is readable only by the reverse proxy and is absent from application containers, Git, Terraform state, process arguments, and logs.</li>
+        <li>The Cloudflare zone has no public application A/AAAA records; ACME exposes only temporary TXT challenge data.</li>
+        <li>Automated renewal succeeds in staging and exposes an actionable failure signal before production issuance.</li>
+        <li>Recreating the services VM preserves ACME state through ZFS and Ansible restores the separately managed Cloudflare token.</li>
+      </ul>
+    </section>
+
+    <section id="n8n-panel" role="tabpanel" aria-labelledby="n8n-tab" hidden>
+      <h2>n8n automation plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status planned">Accepted, not implemented</span> The first concrete workflows will be selected later</dd>
+        <dt>Host</dt><dd><code>lab-services-01</code> · <code>192.168.1.101</code> · independent Compose project and network</dd>
+        <dt>Purpose</dt><dd>Deterministic integrations and reusable tools invoked by Hermes; n8n does not replace the agent reasoning layer</dd>
+        <dt>Durable mount</dt><dd>Planned <code>homelab-n8n</code> mapping at <code>/srv/homelab/n8n</code></dd>
+        <dt>Git provider</dt><dd>Private Gitea repository over SSH or HTTPS; workflow definitions contain no credential values</dd>
+        <dt>Hermes authority</dt><dd>May propose workflow-definition changes on feature branches and execute approved tools; may not administer n8n, publish workflows, or read credentials</dd>
+        <dt>TLS gate</dt><dd>Internal HTTPS must be trusted by clients before authentication tokens or workflow credentials cross the network</dd>
+      </dl>
+
+      <h3>Gitea synchronization paths</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>n8n edition</th><th>Workflow path</th><th>Constraint</th></tr></thead>
+          <tbody>
+            <tr><td>Business or Enterprise</td><td>Connect n8n's native source-control environment to Gitea through an SSH deploy key or HTTPS token</td><td>Licensed feature; credentials and variable values remain environment-specific, and UI setup is not assumed to be declarative</td></tr>
+            <tr><td>Community</td><td>Task wraps reviewed n8n CLI/API export and import of workflow JSON stored in Gitea</td><td>We must build and test the promotion guardrails; this is not the native environments feature</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="callout"><strong>One-way review flow:</strong> Hermes changes a feature branch, a human reviews and tests it, and only the trusted operator promotes it to n8n. Do not allow Hermes to connect to n8n's instance-level MCP administration surface, which can create or edit workflows.</p>
+
+      <h3>Implementation sequence</h3>
+      <ol class="compact">
+        <li><span class="status open">Edition</span> Select the n8n edition and record whether native source control or Task-owned JSON promotion applies.</li>
+        <li><span class="status open">Database</span> Confirm SQLite for a single-process pilot or PostgreSQL if expected concurrency and recovery requirements justify it.</li>
+        <li><span class="status planned">TLS</span> Implement the internal HTTPS endpoint and client trust before installing any reusable automation credential.</li>
+        <li><span class="status planned">Data</span> Create <code>tank/homelab/services/n8n</code>, add the <code>homelab-n8n</code> mapping, attach it to VM <code>1001</code>, and verify persistence without replacing the VM.</li>
+        <li><span class="status planned">Deploy</span> Add a dedicated Ansible role and Task check/deploy interface using a reviewed, digest-pinned n8n image and a separately generated encryption key.</li>
+        <li><span class="status planned">Repository</span> Create the private Gitea workflow repository, protect its default branch, and implement the edition-appropriate one-way promotion path.</li>
+        <li><span class="status planned">Identity</span> Give Hermes branch-only repository access and a separate execution credential that cannot administer n8n or enumerate unrelated credentials.</li>
+        <li><span class="status open">Workflows</span> Select the first workflows and classify each as read-only, reversible write, approval-required, or prohibited.</li>
+        <li><span class="status planned">Expose</span> Publish only approved per-workflow MCP or HTTP tools with strict schemas, timeouts, bounded output, and narrowly scoped downstream credentials.</li>
+      </ol>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>The editor, API, and execution endpoints have no public ingress and use trusted internal TLS.</li>
+        <li>Hermes can execute only explicitly approved workflow tools and cannot list credentials, edit active workflows, or publish a version.</li>
+        <li>Hermes-proposed changes reach only a feature branch; protected-branch merge and n8n promotion require human action.</li>
+        <li>Workflow definitions are recoverable from Gitea while credential values and the encryption key are absent from Git, Terraform state, command arguments, and logs.</li>
+        <li>n8n state survives container and VM recreation through the dedicated ZFS dataset, and ordinary compute destruction cannot delete it.</li>
+        <li>The services VM remains within its memory budget under representative Gitea and n8n activity; otherwise the automation workload is moved to a dedicated VM.</li>
+        <li>A second Ansible convergence reports no changes.</li>
+      </ul>
+    </section>
+
+    <section id="hermes-panel" role="tabpanel" aria-labelledby="hermes-tab" hidden>
+      <h2>Hermes Agent plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status planned">Next application</span> Design accepted; implementation has not started</dd>
+        <dt>Host</dt><dd><code>lab-agents-01</code> · <code>192.168.1.102</code></dd>
+        <dt>Model provider</dt><dd><span class="status open">Open</span> Compare cost, authentication, data handling, and usable models before selecting Nous Portal, OpenRouter, OpenAI, or another endpoint</dd>
+        <dt>Runtime</dt><dd>Ansible-managed Docker Compose using a reviewed release pinned by immutable digest</dd>
+        <dt>Durable mount</dt><dd>Existing <code>homelab-hermes</code> VirtioFS mapping at <code>/srv/homelab/hermes</code></dd>
+        <dt>Gitea access</dt><dd>Dedicated non-administrator identity; Git over SSH first, limited to selected sandbox repositories</dd>
+        <dt>Deployment authority</dt><dd>None; Hermes creates branches and commits, including proposed n8n workflow definitions, but cannot bypass protected branches, publish workflows, alter Actions secrets, or invoke homelab deployment</dd>
+      </dl>
+
+      <h3>State layout</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Path</th><th>Purpose</th><th>Recovery expectation</th></tr></thead>
+          <tbody>
+            <tr><td><code>/srv/homelab/hermes/state</code></td><td>Memory, sessions, skills, configuration, and runtime state</td><td>Durable; ownership follows the reviewed container UID</td></tr>
+            <tr><td><code>/srv/homelab/hermes/credentials</code></td><td>Model-provider and agent-specific credentials</td><td>Durable, narrowly readable, never committed or passed through Terraform</td></tr>
+            <tr><td><code>/srv/homelab/hermes/workspaces</code></td><td>Repository clones, generated code, and transient artifacts</td><td>Cache only; accepted code must exist in Gitea</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Implementation sequence</h3>
+      <ol class="compact">
+        <li><span class="status planned">Decide</span> Select the model provider and define a monthly budget, credential type, and permitted outbound endpoints.</li>
+        <li><span class="status planned">Research</span> Select a stable Hermes release, verify its official image and runtime UID, record its configuration paths, and pin the image digest.</li>
+        <li><span class="status planned">Identity</span> Create a non-administrator Gitea user for Hermes, generate its Git SSH key on the agent VM, and grant only selected sandbox-repository access.</li>
+        <li><span class="status planned">Secrets</span> Use an ignored mode-<code>0600</code> controller file for the provider credential and install it without shell tracing, Terraform state, command arguments, or Ansible output.</li>
+        <li><span class="status planned">Deploy</span> Add a dedicated playbook and role that verify the VirtioFS mount, set final ownership, render Compose, start Hermes, and assert health.</li>
+        <li><span class="status planned">Exercise</span> Have Hermes clone a sandbox repository over SSH, push a feature branch, and preserve its memory across container and VM restarts.</li>
+        <li><span class="status planned">Review</span> Create the pull request manually until internal TLS allows safe Gitea API-token use.</li>
+        <li><span class="status planned">Automation</span> After n8n is deployed, expose only approved execution tools to Hermes and keep n8n administration unavailable.</li>
+      </ol>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>The container receives no host Docker socket, Proxmox credential, router credential, infrastructure-repository write, or protected-branch bypass.</li>
+        <li>The provider credential is absent from Git, Terraform state, Compose output, process arguments, and Ansible logs.</li>
+        <li>Hermes can write only approved sandbox and workflow-definition repositories and cannot administer Gitea or n8n, publish workflows, or read Actions secrets.</li>
+        <li>State, skills, and sessions survive container and VM recreation; cloned code is recoverable from Gitea.</li>
+        <li>A second Ansible convergence reports no changes.</li>
+      </ul>
+    </section>
+
+    <section id="cicd-panel" role="tabpanel" aria-labelledby="cicd-tab" hidden>
+      <h2>Gitea CI/CD plan</h2>
+      <dl class="context-list">
+        <dt>Status</dt><dd><span class="status planned">Accepted, not implemented</span></dd>
+        <dt>Runner</dt><dd><code>lab-runner-01</code> · VM ID <code>1003</code> · <code>192.168.1.103</code> · 2 vCPU · 2 GiB RAM · 32 GiB OS disk</dd>
+        <dt>Isolation</dt><dd>Dedicated VM, isolated disposable job containers, no application dataset, no host application Docker socket</dd>
+        <dt>Initial authority</dt><dd>CI only: clone, test, lint, and build; deployment credentials are explicitly excluded</dd>
+        <dt>Current blocker</dt><dd>Internal TLS for Gitea before runner registration, Actions tokens, API access, or OCI registry authentication</dd>
+        <dt>Deployment</dt><dd>Human reviews and merges; the trusted administrator Mac runs Task/Ansible manually</dd>
+      </dl>
+
+      <h3>Trust split</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Actor</th><th>May do</th><th>Must not do</th></tr></thead>
+          <tbody>
+            <tr><td>Hermes</td><td>Create code and push feature branches in selected repositories</td><td>Merge protected branches, modify pipeline secrets, or deploy</td></tr>
+            <tr><td>Gitea Runner</td><td>Execute repository-controlled test, lint, and build jobs</td><td>Reach Proxmox/router management, mount application data, or hold administrator SSH keys</td></tr>
+            <tr><td>Human operator</td><td>Review, merge, and invoke Task/Ansible deployment</td><td>Delegate final approval to agent-authored workflow code during the initial phase</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Implementation sequence</h3>
+      <ol class="compact">
+        <li><span class="status planned">TLS gate</span> Implement and trust the internal Gitea HTTPS endpoint; keep Actions disabled until this passes from the future runner.</li>
+        <li><span class="status planned">Infrastructure</span> Add Terraform VM <code>1003</code> with no VirtioFS mapping and verify the existing three VMs remain unchanged.</li>
+        <li><span class="status planned">Baseline</span> Regenerate inventory and converge the common role on all four VMs.</li>
+        <li><span class="status planned">Runner</span> Deploy a digest-pinned Gitea Runner using the strongest practical Docker-in-Docker isolation, with disposable registration state and no host application socket.</li>
+        <li><span class="status planned">Actions</span> Enable Gitea Actions and register the runner through an ignored, narrowly handled registration token.</li>
+        <li><span class="status planned">Proof</span> Run a sandbox workflow that checks out code, tests, lints, writes only to its job workspace, and leaves no container or credential behind.</li>
+        <li><span class="status planned">Guardrail</span> Protect the default branch and require human review before merging agent-authored changes.</li>
+        <li><span class="status planned">Artifacts</span> After TLS and CI are stable, build immutable OCI images and publish them to Gitea's registry with a package-scoped credential.</li>
+        <li><span class="status deferred">CD</span> Keep deployment manual until a separate, narrowly scoped deployment identity and approval mechanism are designed and tested.</li>
+      </ol>
+
+      <h3>Acceptance criteria</h3>
+      <ul class="compact">
+        <li>Runner jobs execute only on <code>lab-runner-01</code>; neither Gitea nor Hermes hosts accept a runner label.</li>
+        <li>The runner VM has no ZFS application mapping and cannot reach Proxmox, router management, or unrelated application ports.</li>
+        <li>A workflow cannot inspect other jobs, Gitea data, Hermes state, or an application host's Docker daemon.</li>
+        <li>Repository-controlled jobs receive no deployment, administrator SSH, Terraform, or Proxmox credentials.</li>
+        <li>An agent-authored change cannot reach a protected branch or deployment without human action.</li>
+        <li>Recreating the runner VM requires re-registration but loses no authoritative application data.</li>
+      </ul>
     </section>
 
     <footer>

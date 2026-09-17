@@ -10,6 +10,7 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 - `roles/persistent-data` mounts only the VirtioFS tags assigned by Terraform; application roles own dataset permissions.
 - `roles/docker-engine` installs reviewed Docker CE and Compose versions from Docker's official repository without granting the administrator user root-equivalent Docker-group access.
 - `roles/wireguard` configures the native WireGuard service on `lab-access-01`.
+- `roles/cloudflare-ddns` maintains the DNS-only WireGuard A record through a hardened systemd timer on `lab-access-01`.
 - `roles/adguard` will configure an AdGuard Compose project on `lab-access-01` after its deployment contract is approved.
 - `roles/gitea` deploys the pinned Gitea Compose project on `lab-services-01`; Nextcloud and password-manager remain placeholders.
 - `roles/hermes` is a Compose placeholder for `lab-agents-01`.
@@ -28,12 +29,16 @@ task config:validate
 task config:ping
 task config:common-check
 task config:common
+task apps:ddns:check
+task apps:ddns:deploy
 task apps:gitea:check
 task apps:gitea:deploy
 task apps:gitea:credentials
 ```
 
 `config:common` invokes only `playbooks/common.yml`. It does not install WireGuard, Docker, or applications. SSH host-key checking is enabled; trust a changed guest key explicitly before convergence.
+
+`apps:ddns:deploy` reads `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_DDNS_API_TOKEN` from the controller environment. It never passes the token on the command line or writes it to generated repository files. The token must be restricted to one zone with Zone Read and DNS Edit permissions.
 
 ## Current limitations
 

@@ -10,3 +10,7 @@ export TF_VAR_pm_api_url="https://proxmox.example:8006/api2/json"
 export TF_VAR_pm_api_token_id="terraform@pve!homelab"
 export TF_VAR_pm_api_token_secret="replace-me"
 export TF_VAR_verification_node="blue"
+
+export CLOUDFLARE_ACCOUNT_ID="replace-me"
+export CLOUDFLARE_ACME_API_TOKEN="replace-me"
+export CLOUDFLARE_DDNS_API_TOKEN="replace-me"

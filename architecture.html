@@ -194,7 +194,7 @@
         <a href="implementation.html">Implementation</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Draft · Updated 16 September 2026</p>
+      <p class="meta">Canonical design · Draft · Updated 18 September 2026</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
@@ -239,7 +239,7 @@
           <text class="eyebrow" x="85" y="320">EXISTING · FAST / REBUILDABLE</text>
           <text class="label" x="85" y="353">512 GB Intel NVMe</text>
           <text class="small" x="85" y="380">/dev/nvme0n1 · LVM-thin</text>
-          <text class="small" x="85" y="407">Proxmox OS + three VM OS disks</text>
+          <text class="small" x="85" y="407">Proxmox OS + disposable VM OS disks</text>
 
           <rect class="node storage" x="530" y="290" width="410" height="155" rx="10"></rect>
           <text class="eyebrow" x="555" y="320">ACTIVE · DURABLE / SINGLE DISK</text>
@@ -258,7 +258,7 @@
             <li><span class="status accepted">D-004 Accepted</span> Keep Proxmox and VM OS disks on NVMe/LVM-thin.</li>
             <li><span class="status accepted">D-005 Implemented</span> Use the 1 TB SATA SSD as the single-disk ZFS pool <code>tank</code>; it was created on 16 September 2026.</li>
             <li><span class="status accepted">D-047 Accepted</span> Identify the destructive storage target only by <code>/dev/disk/by-id/ata-CT1000MX500SSD1_2424E8B7E144</code>. The bootstrap must verify the Crucial model, serial, approximate size, unmounted state, and separation from the root filesystem before creating <code>tank</code>.</li>
-            <li><span class="status accepted">D-046 Accepted</span> Do not enable ZFS encryption at rest. Physical access to the laptop or SATA SSD can expose application data; application secrets still require encrypted secret management.</li>
+            <li><span class="status accepted">D-046 Accepted</span> Do not enable ZFS encryption at rest. Physical access to the laptop or SATA SSD can expose application data; application secrets still require strict access controls and future centralized management.</li>
             <li><span class="status proposed">D-008 Proposed</span> Reserve at least 4 GB for the host and keep the normal guest working set below 12 GB.</li>
             <li><span class="status deferred">D-009 Deferred</span> GPU passthrough and local Ollama hosting.</li>
           </ul>
@@ -277,7 +277,7 @@
             <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
             <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
             <dt>DHCP limitation</dt><dd>The F620 misaddresses concurrent VM offers at Layer 2; do not use it for multi-clone acceptance</dd>
-            <dt>Temporary VMs</dt><dd>Three Terraform-managed guests running at static <code>192.168.1.100–102</code>; F620 DHCP ends at <code>192.168.1.99</code></dd>
+            <dt>Temporary VMs</dt><dd>Three Terraform-managed guests run at static <code>192.168.1.100–102</code>; planned runner address <code>192.168.1.103</code> is also outside the F620 pool ending at <code>.99</code></dd>
           </dl>
         </section>
         <section>
@@ -285,12 +285,155 @@
           <dl class="context-list">
             <dt>WAN</dt><dd>F620 bridged to the new firewall router</dd>
             <dt>Ingress</dt><dd>One forwarded UDP port to WireGuard</dd>
-            <dt>Public DNS</dt><dd>Namecheap Dynamic DNS</dd>
+            <dt>Public DNS</dt><dd>Namecheap remains registrar; Cloudflare becomes authoritative DNS, provides WireGuard DDNS, and answers ACME DNS-01 challenges</dd>
+            <dt>Domain scope</dt><dd>Dedicated to the homelab; no email, website, or other service currently depends on it</dd>
             <dt>Private DNS</dt><dd>AdGuard for every home device and VPN peer</dd>
+            <dt>Application namespace</dt><dd><code>home.&lt;domain&gt;</code> with a public wildcard certificate for <code>*.home.&lt;domain&gt;</code></dd>
             <dt>Applications</dt><dd>No direct public exposure</dd>
           </dl>
         </section>
       </div>
+
+      <h3>Selected certificate model and considered alternatives</h3>
+      <p>A certificate enables encrypted, authenticated HTTPS; it does not make an application public. Routing and firewall policy still keep every application private.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Approach</th><th>Pros</th><th>Cons</th><th>Assessment</th></tr></thead>
+          <tbody>
+            <tr><td><strong>ACME DNS-01 with Cloudflare</strong></td><td>Automatic renewal; wildcard support; no public application port</td><td>Requires authoritative DNS migration and a protected Cloudflare token</td><td><span class="status accepted">Selected</span> Namecheap remains registrar; Cloudflare hosts DNS</td></tr>
+            <tr><td><strong>Home-hosted <code>acme-dns</code></strong></td><td>Keeps Namecheap DNS; narrowly scoped challenge API; automatic renewal</td><td>Requires public TCP and UDP 53; conflicts with AdGuard and concentrates edge services</td><td>Rejected: all inbound home traffic must enter through WireGuard</td></tr>
+            <tr><td><strong>ACME HTTP-01</strong></td><td>Simple; broad reverse-proxy support; no DNS API</td><td>Needs public TCP 80 and public address record; no wildcard</td><td>Rejected: conflicts with WireGuard-only ingress</td></tr>
+            <tr><td><strong>Purchased wildcard</strong></td><td>Public trust; manual CNAME or email validation; no public application port</td><td>Recurring cost; manual reissue and installation about every 200 days; only partly IaC</td><td>Viable interim option with expiry alerts and a tested runbook</td></tr>
+            <tr><td><strong>Private CA</strong></td><td>No public DNS API or ingress; local automated issuance; supports internal names</td><td>Install root on every client; protect CA signing key; some apps may reject user-added roots</td><td>Feasible fallback because clients and VMs are controlled</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>DNS-01 public certificate flow</h3>
+      <p>DNS-01 proves control of the public domain with a temporary TXT record. Cloudflare hosts the authoritative zone and its API creates the challenge record; private application addresses remain only in AdGuard.</p>
+
+      <figure>
+        <div class="diagram-scroll">
+        <svg class="wide-diagram" viewBox="0 0 1200 560" role="img" aria-labelledby="dns01-title dns01-desc">
+          <title id="dns01-title">DNS-01 certificate issuance and renewal</title>
+          <desc id="dns01-desc">The reverse proxy on lab-services-01 makes outbound HTTPS requests to the public certificate authority and Cloudflare authoritative DNS. It creates a temporary public TXT record, the certificate authority reads that record, and then issues a wildcard certificate. No public HTTP or HTTPS port is forwarded into the home network.</desc>
+          <defs>
+            <marker id="dns01-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <text class="title" x="40" y="42">Issuance and renewal · internet required only here</text>
+
+          <rect class="node control" x="40" y="135" width="320" height="250" rx="10"></rect>
+          <text class="eyebrow" x="65" y="166">HOME · SERVICES ZONE</text>
+          <text class="label" x="65" y="199">Reverse proxy</text>
+          <text class="small" x="65" y="229">lab-services-01 · outbound HTTPS</text>
+          <line class="divider" x1="65" y1="252" x2="335" y2="252"></line>
+          <text class="eyebrow" x="65" y="282">DURABLE ACME STATE</text>
+          <text class="small" x="65" y="307">/srv/homelab/reverse-proxy</text>
+          <text class="small" x="65" y="330">certificate + private key + account</text>
+          <text class="small" x="65" y="363">DNS API secret stays separate · root only</text>
+
+          <rect class="node" x="485" y="135" width="285" height="180" rx="10"></rect>
+          <text class="eyebrow" x="510" y="166">PUBLIC AUTHORITATIVE DNS</text>
+          <text class="label" x="510" y="199">Cloudflare DNS</text>
+          <text class="small" x="510" y="229">Temporary TXT record:</text>
+          <text class="small" x="510" y="253">_acme-challenge.home.&lt;domain&gt;</text>
+          <text class="small" x="510" y="283">No application address is required here</text>
+
+          <rect class="node output" x="895" y="135" width="265" height="180" rx="10"></rect>
+          <text class="eyebrow" x="920" y="166">PUBLIC CERTIFICATE AUTHORITY</text>
+          <text class="label" x="920" y="199">Let's Encrypt</text>
+          <text class="small" x="920" y="229">Reads the public TXT proof</text>
+          <text class="small" x="920" y="253">Issues *.home.&lt;domain&gt;</text>
+          <text class="small" x="920" y="283">Does not connect to Gitea or n8n</text>
+
+          <path d="M360 181 C520 65 760 65 895 181" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#dns01-arrow)"></path>
+          <text class="eyebrow" x="544" y="83">1 · ACME CERTIFICATE REQUEST</text>
+
+          <path d="M360 267 H485" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#dns01-arrow)"></path>
+          <text class="eyebrow" x="370" y="251">2 · DNS API</text>
+
+          <path d="M895 245 H770" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#dns01-arrow)"></path>
+          <text class="eyebrow" x="790" y="229">3 · READ TXT</text>
+
+          <path d="M895 286 C800 445 470 445 360 318" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#dns01-arrow)"></path>
+          <text class="eyebrow" x="535" y="444">4 · ISSUE / RENEW CERTIFICATE</text>
+
+          <rect class="boundary" x="390" y="480" width="500" height="50" rx="10"></rect>
+          <text class="label" x="438" y="512">Router forwards no public TCP 80 or 443</text>
+        </svg>
+        </div>
+        <figcaption>Only the reverse proxy needs controlled outbound access to the certificate authority and Cloudflare DNS API. The certificate authority validates public DNS, not the private application endpoint.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="diagram-scroll">
+        <svg class="wide-diagram" viewBox="0 0 1200 545" role="img" aria-labelledby="private-https-title private-https-desc">
+          <title id="private-https-title">Normal private HTTPS request after certificate issuance</title>
+          <desc id="private-https-desc">A LAN-only Hermes agent asks AdGuard for the private address of Gitea or n8n, connects to the reverse proxy over HTTPS using the private address, validates the public certificate locally with its installed root certificates, and the proxy forwards the request to the chosen application on a private container network. The public certificate authority is not contacted during this request.</desc>
+          <defs>
+            <marker id="private-https-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <text class="title" x="40" y="42">Normal use · private DNS + LAN routing + HTTPS</text>
+
+          <rect class="node" x="40" y="105" width="255" height="180" rx="10"></rect>
+          <text class="eyebrow" x="65" y="136">AGENTS ZONE · NO INTERNET NEEDED</text>
+          <text class="label" x="65" y="169">Hermes</text>
+          <text class="small" x="65" y="199">gitea.home.&lt;domain&gt;</text>
+          <text class="small" x="65" y="223">n8n.home.&lt;domain&gt;</text>
+          <text class="small" x="65" y="253">Validates certificate locally</text>
+
+          <rect class="node control" x="470" y="105" width="310" height="180" rx="10"></rect>
+          <text class="eyebrow" x="495" y="136">SERVICES ZONE · TLS TERMINATION</text>
+          <text class="label" x="495" y="169">Reverse proxy</text>
+          <text class="small" x="495" y="199">Presents *.home.&lt;domain&gt;</text>
+          <text class="small" x="495" y="223">Selects backend by hostname</text>
+          <text class="small" x="495" y="253">Private key never enters applications</text>
+
+          <rect class="node storage" x="920" y="85" width="240" height="105" rx="10"></rect>
+          <text class="eyebrow" x="945" y="116">PRIVATE CONTAINER NETWORK</text>
+          <text class="label" x="945" y="149">Gitea</text>
+          <text class="small" x="945" y="174">Internal HTTP backend</text>
+
+          <rect class="node storage" x="920" y="220" width="240" height="105" rx="10"></rect>
+          <text class="eyebrow" x="945" y="251">PRIVATE CONTAINER NETWORK</text>
+          <text class="label" x="945" y="284">n8n</text>
+          <text class="small" x="945" y="309">Internal HTTP backend</text>
+
+          <rect class="node network" x="40" y="380" width="300" height="105" rx="10"></rect>
+          <text class="eyebrow" x="65" y="411">PRIVATE DNS</text>
+          <text class="label" x="65" y="444">AdGuard</text>
+          <text class="small" x="65" y="469">Names → private services address</text>
+
+          <rect class="boundary" x="470" y="380" width="310" height="105" rx="10"></rect>
+          <text class="eyebrow" x="495" y="411">LOCAL TRUST STORE</text>
+          <text class="label" x="495" y="444">Public CA root already installed</text>
+          <text class="small" x="495" y="469">No CA connection for a normal request</text>
+
+          <rect class="boundary" x="920" y="395" width="240" height="75" rx="10"></rect>
+          <text class="eyebrow" x="945" y="426">NOT IN THE DATA PATH</text>
+          <text class="label" x="945" y="455">Public internet / CA</text>
+
+          <path d="M165 285 V380" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#private-https-arrow)"></path>
+          <text class="eyebrow" x="177" y="342">1 · PRIVATE DNS QUERY</text>
+
+          <path d="M295 190 H470" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#private-https-arrow)"></path>
+          <text class="eyebrow" x="318" y="174">2 · HTTPS OVER LAN</text>
+
+          <path d="M780 170 H920" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#private-https-arrow)"></path>
+          <path d="M780 230 H850 V272 H920" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#private-https-arrow)"></path>
+          <text class="eyebrow" x="793" y="154">3 · PRIVATE FORWARD</text>
+
+          <path d="M295 255 C360 335 410 400 470 430" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#private-https-arrow)"></path>
+          <text class="eyebrow" x="313" y="330">CERTIFICATE CHECK IS LOCAL</text>
+        </svg>
+        </div>
+        <figcaption>Once issued, the public CA is not part of ordinary traffic. LAN-only agents can use HTTPS because AdGuard returns a private address and the operating system validates the certificate locally.</figcaption>
+      </figure>
 
       <figure>
         <div class="diagram-scroll">
@@ -437,7 +580,7 @@
           <text class="small" x="40" y="735">Every zone reaches another zone through the firewall; VLAN tags provide separation and explicit ACLs provide security.</text>
         </svg>
         </div>
-        <figcaption>Hub-and-spoke routing prevents direct Layer-2 paths between trust zones. Agents reach only Gitea's published ports on the services VM.</figcaption>
+        <figcaption>Hub-and-spoke routing prevents direct Layer-2 paths between trust zones. Agents reach only Gitea and the narrowly exposed automation endpoint on the services VM.</figcaption>
       </figure>
 
       <div class="table-wrap">
@@ -446,8 +589,8 @@
           <tbody>
             <tr><td>Management</td><td>10</td><td><code>10.73.10.0/24</code></td><td>Proxmox and network equipment</td><td>Named admin devices and admin VPN peers only</td></tr>
             <tr><td>Edge</td><td>20</td><td><code>10.73.20.0/24</code></td><td><code>lab-access-01</code></td><td>Forwarded WireGuard UDP; tightly scoped internal routing</td></tr>
-            <tr><td>Services</td><td>30</td><td><code>10.73.30.0/24</code></td><td><code>lab-services-01</code></td><td>VPN and trusted clients on published application ports; agents on Gitea ports only</td></tr>
-            <tr><td>Agents</td><td>40</td><td><code>10.73.40.0/24</code></td><td><code>lab-agents-01</code></td><td>Outbound model APIs, DNS/NTP, and scoped access to Gitea</td></tr>
+            <tr><td>Services</td><td>30</td><td><code>10.73.30.0/24</code></td><td><code>lab-services-01</code></td><td>VPN and trusted clients on published application ports; agents on Gitea and approved n8n execution endpoints only</td></tr>
+            <tr><td>Agents</td><td>40</td><td><code>10.73.40.0/24</code></td><td><code>lab-agents-01</code></td><td>Outbound model APIs, DNS/NTP, scoped Gitea access, and approved n8n tools</td></tr>
             <tr><td>CI runners</td><td>50</td><td><code>10.73.50.0/24</code></td><td>Future <code>lab-runner-01</code></td><td>Isolated from agents, management, and application data</td></tr>
             <tr><td>Trusted clients</td><td>60</td><td><code>10.73.60.0/24</code></td><td>Home laptops and phones</td><td>DNS and selected private applications</td></tr>
             <tr><td>IoT</td><td>70</td><td><code>10.73.70.0/24</code></td><td>Two Xiaomi cameras</td><td>DNS/NTP and explicitly approved internet destinations; no internal zones</td></tr>
@@ -488,7 +631,7 @@
         <div class="diagram-scroll">
         <svg viewBox="0 0 1000 465" role="img" aria-labelledby="network-title network-desc">
           <title id="network-title">WireGuard ingress through dynamic DNS</title>
-          <desc id="network-desc">A remote client resolves a dedicated Namecheap Dynamic DNS hostname to the firewall router's changing public IPv4 address. The router forwards one UDP port to the WireGuard service on lab-access-01. That VM also runs AdGuard and the existing DDNS updater, and routes authenticated VPN clients to private application zones.</desc>
+          <desc id="network-desc">A remote client resolves a dedicated Cloudflare DNS-only hostname to the firewall router's changing public IPv4 address. The router forwards one UDP port to the WireGuard service on lab-access-01. That VM also runs AdGuard and the Cloudflare DDNS updater, and routes authenticated VPN clients to private application zones.</desc>
           <defs>
             <marker id="network-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
@@ -503,7 +646,7 @@
 
           <rect class="node control" x="275" y="120" width="190" height="115" rx="10"></rect>
           <text class="eyebrow" x="295" y="150">PUBLIC DNS</text>
-          <text class="label" x="295" y="183">Namecheap</text>
+          <text class="label" x="295" y="183">Cloudflare DNS</text>
           <text class="small" x="295" y="210">vpn.&lt;domain&gt; · A+DDNS</text>
 
           <rect class="node" x="530" y="120" width="190" height="115" rx="10"></rect>
@@ -524,7 +667,7 @@
           <text class="eyebrow" x="725" y="164">ONE UDP PORT</text>
 
           <path d="M875 120 V78 H370 V120" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#network-arrow)"></path>
-          <text class="eyebrow" x="520" y="68">EXISTING SCRIPT · PERIODIC HTTPS DDNS UPDATE</text>
+          <text class="eyebrow" x="510" y="68">CLOUDFLARE UPDATER · PERIODIC HTTPS DDNS UPDATE</text>
 
           <rect class="boundary" x="250" y="330" width="715" height="95" rx="12"></rect>
           <text class="eyebrow" x="275" y="360">PRIVATE ZONES · NO PUBLIC APPLICATION PORTS</text>
@@ -542,7 +685,7 @@
           <ul class="compact">
             <li><span class="status accepted">D-016 Accepted</span> Forward exactly one public UDP port from the router to WireGuard on <code>lab-access-01</code>.</li>
             <li><span class="status accepted">Accepted</span> WAN IPv4 matches the externally observed address; the port-forward design has worked previously.</li>
-            <li><span class="status accepted">Accepted</span> Run the existing Namecheap DDNS script on <code>lab-access-01</code>; review and automate it with Ansible when workloads are deployed.</li>
+            <li><span class="status deferred">Superseded</span> The existing Namecheap DDNS script will be retired when Cloudflare becomes authoritative DNS.</li>
             <li><span class="status accepted">D-020 Accepted</span> Maintain separate full-tunnel travel and DNS-only WireGuard client profiles.</li>
             <li><span class="status accepted">D-021 Accepted</span> Reserve <code>10.73.0.0/16</code> for the target network and <code>10.73.100.0/24</code> for WireGuard peers.</li>
             <li><span class="status accepted">D-022 Accepted</span> Bridge the F620 and make a new VLAN-capable firewall router the public-IP endpoint and policy authority.</li>
@@ -551,19 +694,31 @@
             <li><span class="status proposed">D-025 Proposed</span> Route <code>10.73.100.0/24</code> through <code>lab-access-01</code> without internal NAT; NAT only full-tunnel internet egress at the firewall router.</li>
             <li><span class="status accepted">D-026 Accepted</span> Limit management access to three named devices: the owner's phone, laptop, and desktop; give each its own WireGuard key and stable peer address.</li>
             <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
-            <li><span class="status deferred">D-028 Superseded</span> Gitea now shares the services VLAN with Nextcloud and Vaultwarden. Agents remain on VLAN 40 and may reach only Gitea's published ports; this is port-level isolation, not a separate Gitea VM boundary.</li>
+            <li><span class="status deferred">D-028 Superseded</span> Gitea and planned n8n share the services VLAN with future applications. Agents remain on VLAN 40 and may reach only Gitea plus explicitly approved n8n execution endpoints; this is port-level isolation, not a separate application VM boundary.</li>
             <li><span class="status accepted">D-036 Accepted</span> Do not depend on the F620 DHCP server for concurrent Proxmox guests. Packet capture showed an Offer for clone B carrying B's client MAC inside DHCP but addressed to clone A's MAC in the Ethernet frame, even when B requested a broadcast reply. Use excluded static addresses until DHCP moves to the target firewall router.</li>
             <li><span class="status accepted">D-037 Accepted</span> During the flat-LAN transition, Terraform assigns VM IDs <code>1000</code>–<code>1002</code> and static addresses <code>192.168.1.100</code>–<code>192.168.1.102</code> in capability order. The F620 DHCP pool must end at or below <code>192.168.1.99</code> before apply; the target VLAN migration replaces these temporary addresses.</li>
+            <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
+            <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
+            <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
           </ul>
         </section>
         <section>
           <h3>Before implementation</h3>
           <ul class="compact">
             <li><span class="status open">Open</span> Decide whether the travel profile tunnels IPv6 or deliberately disables it.</li>
-            <li><span class="status open">Open</span> Confirm the public VPN hostname and UDP port.</li>
-            <li><span class="status accepted">Complete</span> The F620 DHCP end address is <code>192.168.1.99</code>, reserving <code>192.168.1.100–102</code> for the three-VM topology.</li>
+            <li><span class="status accepted">Partial</span> The public hostname is <code>vpn.&lt;domain&gt;</code>; the external WireGuard UDP port remains to be confirmed.</li>
+            <li><span class="status accepted">Complete</span> The F620 DHCP end address is <code>192.168.1.99</code>, reserving <code>192.168.1.100–103</code> for the four-VM topology.</li>
             <li><span class="status open">Open</span> Decide whether the Xiaomi cameras require vendor-cloud internet access.</li>
             <li><span class="status open">Open</span> Choose whether DNS fails closed with one AdGuard instance or gains a second resolver.</li>
+            <li><span class="status accepted">Accepted</span> Use <code>home.&lt;domain&gt;</code> as the private application namespace.</li>
+            <li><span class="status deferred">Constraint</span> The Namecheap account is not eligible for production DNS API access; direct Namecheap DNS-01 automation is unavailable.</li>
+            <li><span class="status deferred">Rejected</span> Do not host authoritative <code>acme-dns</code> at home: public TCP and UDP 53 would violate the WireGuard-only ingress boundary.</li>
+            <li><span class="status accepted">Selected</span> Cloudflare will host authoritative DNS and automate DNS-01; Namecheap remains the registrar.</li>
+            <li><span class="status accepted">Confirmed</span> The domain currently serves no email, website, or service other than homelab DNS; migration blast radius is limited.</li>
+            <li><span class="status accepted">Confirmed</span> DNSSEC is not enabled at Namecheap, so there is no existing DS record to remove before cutover.</li>
+            <li><span class="status accepted">Complete</span> Cloudflare reports the delegated zone active. The DDNS record was verified through both the Cloudflare API and a public resolver; DNSSEC status still requires an explicit check.</li>
+            <li><span class="status accepted">Complete</span> Separate Cloudflare API tokens exist for ACME DNS-01 and WireGuard DDNS; their values remain outside the repository and documentation. The DDNS token is installed on <code>lab-access-01</code>; the ACME token is reserved for the reverse-proxy phase.</li>
+            <li><span class="status open">Open</span> Select the reverse proxy and its maintained Cloudflare DNS module before implementing D-064.</li>
           </ul>
         </section>
       </template>
@@ -606,57 +761,59 @@
       <h2>Virtual machines</h2>
       <figure>
         <div class="diagram-scroll">
-        <svg viewBox="0 0 1100 650" role="img" aria-labelledby="vm-title vm-desc">
-          <title id="vm-title">Three virtual machines organized by capability</title>
-          <desc id="vm-desc">Three role-named virtual machines provide access, shared applications, and isolated agent execution. Agents have scoped access only to Gitea ports on the services VM. Every VM uses a rebuildable operating system disk on NVMe LVM-thin while each stateful application has an independent SATA ZFS dataset.</desc>
+        <svg viewBox="0 0 1100 760" role="img" aria-labelledby="vm-title vm-desc">
+          <title id="vm-title">Four virtual machines organized by capability</title>
+          <desc id="vm-desc">Four role-named virtual machines separate access, shared applications, agent execution, and untrusted continuous integration jobs. Agents reach Gitea through Git SSH first. The runner later reaches Gitea Actions, Git, and the registry over internal TLS. Every VM has a rebuildable NVMe operating system disk; only stateful applications receive SATA ZFS datasets.</desc>
           <defs>
             <marker id="vm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
             </marker>
           </defs>
-          <rect class="boundary" x="25" y="25" width="1050" height="585" rx="16"></rect>
-          <text class="title" x="55" y="65">Proxmox node blue · three capability domains</text>
+          <rect class="boundary" x="25" y="25" width="1050" height="690" rx="16"></rect>
+          <text class="title" x="55" y="65">Proxmox node blue · four capability domains</text>
 
-          <rect class="node network" x="70" y="105" width="270" height="155" rx="10"></rect>
+          <rect class="node network" x="70" y="105" width="430" height="130" rx="10"></rect>
           <text class="eyebrow" x="95" y="133">ACCESS BOUNDARY</text>
           <text class="label" x="95" y="166">lab-access-01</text>
-          <text class="small" x="95" y="197">Native WireGuard · Compose AdGuard</text>
-          <text class="small" x="95" y="228">1 vCPU · 1.5 GB RAM</text>
+          <text class="small" x="95" y="197">WireGuard · AdGuard · 1 vCPU · 1.5 GB</text>
 
-          <rect class="node storage" x="415" y="105" width="270" height="155" rx="10"></rect>
-          <text class="eyebrow" x="440" y="133">SHARED APPLICATIONS</text>
-          <text class="label" x="440" y="166">lab-services-01</text>
-          <text class="small" x="440" y="197">Nextcloud · Gitea · Vaultwarden</text>
-          <text class="small" x="440" y="228">2 vCPU · 4 GB RAM</text>
+          <rect class="node storage" x="600" y="105" width="430" height="130" rx="10"></rect>
+          <text class="eyebrow" x="625" y="133">SHARED APPLICATIONS</text>
+          <text class="label" x="625" y="166">lab-services-01</text>
+          <text class="small" x="625" y="197">Gitea · planned n8n · 2 vCPU · 4 GB</text>
 
-          <rect class="node" x="760" y="105" width="270" height="155" rx="10"></rect>
-          <text class="eyebrow" x="785" y="133">AGENT RUNTIME</text>
-          <text class="label" x="785" y="166">lab-agents-01</text>
-          <text class="small" x="785" y="197">Hermes · future agents</text>
-          <text class="small" x="785" y="228">2 vCPU · 3 GB RAM</text>
+          <rect class="node" x="70" y="300" width="430" height="130" rx="10"></rect>
+          <text class="eyebrow" x="95" y="328">AGENT RUNTIME</text>
+          <text class="label" x="95" y="361">lab-agents-01</text>
+          <text class="small" x="95" y="392">Hermes · future agents · 2 vCPU · 3 GB</text>
 
-          <path d="M760 185 H685" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
-          <text class="eyebrow" x="688" y="168">GITEA PORTS</text>
+          <rect class="node control" x="600" y="300" width="430" height="130" rx="10"></rect>
+          <text class="eyebrow" x="625" y="328">UNTRUSTED CI EXECUTION</text>
+          <text class="label" x="625" y="361">lab-runner-01</text>
+          <text class="small" x="625" y="392">Gitea Runner · 2 vCPU · 2 GB · no data mounts</text>
 
-          <path class="rail" d="M205 260 V335 M550 260 V335 M895 260 V335 M205 335 H895"></path>
-          <text class="eyebrow" x="420" y="365">TERRAFORM-MANAGED STORAGE ATTACHMENTS</text>
-          <path class="line" d="M550 335 V405 H290 V445"></path>
-          <path class="data-line" d="M550 405 H810 V445"></path>
+          <path d="M500 350 C550 350 550 205 600 205" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
+          <text class="eyebrow" x="495" y="285">GIT · APPROVED MCP</text>
+          <path d="M815 300 V235" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
+          <text class="eyebrow" x="835" y="272">ACTIONS · TLS</text>
 
-          <rect class="node os-storage" x="70" y="445" width="440" height="130" rx="10"></rect>
-          <text class="eyebrow" x="95" y="475">OS TIER · NVME / LVM-THIN</text>
-          <text class="label" x="95" y="510">Three independent root disks</text>
-          <text class="small" x="95" y="540">Rebuildable from Packer → Terraform → Ansible</text>
+          <path class="rail" d="M285 430 V480 M815 430 V480 M285 480 H815"></path>
+          <text class="eyebrow" x="390" y="510">TERRAFORM-MANAGED ROOT DISKS AND APPLICATION MAPPINGS</text>
+          <path class="line" d="M550 480 V550 H290 V575"></path>
+          <path class="data-line" d="M550 550 H810 V575"></path>
 
-          <rect class="node storage" x="590" y="445" width="440" height="130" rx="10"></rect>
-          <text class="eyebrow" x="615" y="475">DATA TIER · SATA / ZFS</text>
-          <text class="label" x="615" y="510">One dataset per stateful application</text>
-          <text class="small" x="615" y="540">Durable state · snapshots · off-host backup deferred</text>
+          <rect class="node os-storage" x="70" y="575" width="440" height="105" rx="10"></rect>
+          <text class="eyebrow" x="95" y="605">OS TIER · NVME / LVM-THIN</text>
+          <text class="label" x="95" y="640">Four disposable root disks</text>
+          <text class="small" x="95" y="665">Packer → Terraform → Ansible</text>
 
-          <text class="small" x="70" y="600">The services share a VM boundary but retain separate Compose projects, secrets, networks, and durable datasets.</text>
+          <rect class="node storage" x="590" y="575" width="440" height="105" rx="10"></rect>
+          <text class="eyebrow" x="615" y="605">DATA TIER · SATA / ZFS</text>
+          <text class="label" x="615" y="640">Application datasets only</text>
+          <text class="small" x="615" y="665">The CI runner receives no durable mapping</text>
         </svg>
         </div>
-        <figcaption>Names encode capability rather than products. The smaller VM count intentionally trades isolation for lower memory and maintenance cost.</figcaption>
+        <figcaption>The runner is the fourth VM because workflow-controlled code must not share a host with Gitea or Hermes credentials. It receives no application dataset or deployment authority.</figcaption>
       </figure>
 
       <div class="table-wrap">
@@ -664,12 +821,13 @@
           <thead><tr><th>VM</th><th>VM ID</th><th>Temporary IP</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
           <tbody>
             <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1</td><td>1.5 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
-            <tr><td><code>lab-services-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>4 GB</td><td>32 GB</td><td>Nextcloud, Gitea, and Vaultwarden share one boundary</td></tr>
+            <tr><td><code>lab-services-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>4 GB</td><td>32 GB</td><td>Gitea, planned n8n, future Nextcloud, and deferred Vaultwarden allocation</td></tr>
             <tr><td><code>lab-agents-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
+            <tr><td><code>lab-runner-01</code> <span class="status proposed">Planned</span></td><td>1003</td><td><code>192.168.1.103</code></td><td>2</td><td>2 GB</td><td>32 GB</td><td>CI jobs; no application datasets or deployment credentials</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="muted">Initial sizing, not guaranteed reservations. Normal target: 8.5 GB guest RAM, leaving roughly 7.5 GB for Proxmox, filesystem cache, and transient load.</p>
+      <p class="muted">Sizing is not a guaranteed reservation. Once the runner exists, the normal target is 10.5 GB guest RAM, leaving roughly 5.5 GB for Proxmox, filesystem cache, and transient load.</p>
 
       <h3>Naming</h3>
       <div class="table-wrap">
@@ -677,7 +835,7 @@
           <thead><tr><th>Field</th><th>Meaning</th><th>Examples</th></tr></thead>
           <tbody>
             <tr><td><code>lab</code></td><td>Environment scope</td><td>Distinguishes homelab assets from clients and external systems.</td></tr>
-            <tr><td><code>&lt;role&gt;</code></td><td>Workload class, not a product</td><td><code>access</code>, <code>services</code>, <code>agents</code></td></tr>
+            <tr><td><code>&lt;role&gt;</code></td><td>Workload class, not a product</td><td><code>access</code>, <code>services</code>, <code>agents</code>, <code>runner</code></td></tr>
             <tr><td><code>01</code></td><td>Instance ordinal</td><td>Allows a later peer without renaming the first VM.</td></tr>
           </tbody>
         </table>
@@ -693,19 +851,20 @@
             <li><span class="status accepted">D-011 Accepted</span> Keep Gitea separate from agent execution.</li>
             <li><span class="status accepted">D-013 Accepted</span> Name VMs using <code>&lt;scope&gt;-&lt;role&gt;-&lt;ordinal&gt;</code>; keep product names in application configuration.</li>
             <li><span class="status accepted">D-014 Accepted</span> Reserve <code>lab-agents-01</code> for agents; do not run Gitea Actions jobs there.</li>
-            <li><span class="status deferred">D-015 Deferred</span> Add a separate, preferably ephemeral <code>lab-runner-01</code> only when CI is required.</li>
+            <li><span class="status accepted">D-015 Accepted</span> CI is now required. Add dedicated <code>lab-runner-01</code>; keep its root disk and registration state rebuildable, execute each job in an isolated container, and attach no application dataset.</li>
             <li><span class="status accepted">D-038 Accepted</span> Initially authorize only the administrator key from this Mac, fingerprint <code>SHA256:gAlPyAsihuQua3grrkeUr7Gp1mmc1hlD49WyHV3gdyU</code>, on all three VMs. Exclude the retired GitHub-imported key, the unidentified key, and <code>root@blue</code>; adding access requires an explicit source-controlled key change.</li>
             <li><span class="status accepted">D-039 Accepted</span> Use <code>user</code> as the Cloud-Init administrator account on the initial three VMs.</li>
             <li><span class="status deferred">D-040 Superseded</span> Telmate-specific disk ordering and normalization rules ended with the provider migration.</li>
-            <li><span class="status accepted">D-041 Accepted</span> Consolidate to three VMs: access, shared services, and agents. Assign IDs <code>1000</code>–<code>1002</code>, addresses <code>192.168.1.100</code>–<code>192.168.1.102</code>, and 1.5 GB, 4 GB, and 3 GB RAM respectively.</li>
-            <li><span class="status accepted">D-042 Accepted</span> Nextcloud, Gitea, and Vaultwarden share <code>lab-services-01</code>. Accept the shared VM failure and compromise boundary; isolate operations with separate Compose projects, container networks, secrets, and ZFS datasets.</li>
-            <li><span class="status accepted">D-043 Accepted</span> Keep WireGuard native for simple host networking. Deploy AdGuard, Nextcloud, Gitea, Vaultwarden, and Hermes with Ansible-managed Docker Compose and pinned images.</li>
+            <li><span class="status deferred">D-041 Superseded</span> The three-VM consolidation remains the implemented baseline but no longer covers the CI execution boundary; D-056 adds a fourth VM.</li>
+            <li><span class="status accepted">D-042 Amended</span> Gitea, planned n8n, and future Nextcloud share <code>lab-services-01</code>; Vaultwarden's empty allocation remains but its deployment is deferred. Accept the shared VM failure and compromise boundary and isolate every deployed workload with separate Compose projects, container networks, secrets, and ZFS datasets.</li>
+            <li><span class="status accepted">D-043 Amended</span> Keep WireGuard native for simple host networking. Deploy current application priorities with Ansible-managed Docker Compose and pinned images; Vaultwarden is no longer part of the near-term sequence.</li>
             <li><span class="status accepted">D-044 Accepted</span> Generate ignored Ansible inventory from Terraform outputs, keep SSH host-key verification enabled, and expose separate connectivity, check-mode, and common-baseline Task commands. The common command must not invoke workload roles.</li>
             <li><span class="status accepted">D-045 Accepted</span> Use <code>bpg/proxmox</code> <code>0.112.0</code>. Import the three live VM IDs without recreation, pin their existing MAC addresses, ignore create-time clone provenance and manual power state, and require an empty post-migration plan. This provider is the planned Terraform interface for Proxmox VirtioFS mappings.</li>
             <li><span class="status accepted">D-048 Accepted</span> Grant the Terraform API token only <code>Mapping.Audit</code>, <code>Mapping.Modify</code>, and <code>Mapping.Use</code> at <code>/mapping/dir</code> through a separate <code>TerraformMapping</code> role; do not expand its general VM role at the cluster root.</li>
             <li><span class="status accepted">D-049 Implemented</span> Attach host-mounted ZFS datasets with Terraform-managed Proxmox VirtioFS directory mappings using automatic caching, direct I/O, POSIX ACLs, and extended attributes. The isolated proof passed reboot and VM destroy/recreate persistence on 16 September 2026.</li>
             <li><span class="status accepted">D-050 Implemented</span> Give each application dataset its own mapping tag and attach it only to the VM that runs that workload: AdGuard to access, Nextcloud, Gitea, and Vaultwarden to services, and Hermes to agents. All six production tags passed guest-side read-only mount verification; Ansible receives the tags and owns persistent mount points and filesystem ownership.</li>
             <li><span class="status accepted">D-051 Implemented</span> Mount application datasets at <code>/srv/homelab/&lt;application&gt;</code> through managed <code>/etc/fstab</code> entries with <code>rw,nosuid,nodev</code>. Do not use <code>nofail</code>: a missing durable dataset must fail visibly instead of letting a container write into the disposable root disk. Application roles set final ownership only after their container UID contract is known.</li>
+            <li><span class="status accepted">D-056 Accepted</span> Extend the topology with <code>lab-runner-01</code> at VM ID <code>1003</code> and <code>192.168.1.103</code>, sized at 2 vCPU, 2 GB RAM, and a 32 GB disposable OS disk. Keep <code>lab-agents-01</code> and <code>lab-services-01</code> free of CI jobs.</li>
           </ul>
         </section>
         <section>
@@ -723,13 +882,19 @@
         <button id="network-app-tab" role="tab" aria-selected="true" aria-controls="network-app-panel" type="button">lab-access-01</button>
         <button id="services-app-tab" role="tab" aria-selected="false" aria-controls="services-app-panel" type="button">lab-services-01</button>
         <button id="agents-app-tab" role="tab" aria-selected="false" aria-controls="agents-app-panel" type="button">lab-agents-01</button>
+        <button id="runner-app-tab" role="tab" aria-selected="false" aria-controls="runner-app-panel" type="button">lab-runner-01</button>
       </nav>
 
       <section id="network-app-panel" role="tabpanel" aria-labelledby="network-app-tab">
-        <h3>WireGuard + AdGuard</h3>
-        <p>WireGuard is the sole remote ingress. AdGuard provides DNS to VPN clients and selected local devices.</p>
+        <h3>WireGuard + AdGuard + Cloudflare DDNS</h3>
+        <p>WireGuard is the sole remote ingress. AdGuard provides DNS to VPN clients and selected local devices. A systemd timer reconciles the DNS-only <code>vpn.&lt;domain&gt;</code> A record with the current public IPv4 every five minutes.</p>
         <p>No application is exposed directly to the public internet.</p>
-        <p><strong>Durable:</strong> VPN identities, peer assignments, DNS rules, credentials. <strong>Deployment:</strong> native WireGuard plus an Ansible-managed AdGuard Compose project.</p>
+        <p><strong>Durable:</strong> VPN identities, peer assignments, DNS rules, and credentials. The updater itself has no durable application state. <strong>Deployment:</strong> native WireGuard, an Ansible-managed AdGuard Compose project, and an Ansible-managed unprivileged DDNS service.</p>
+        <dl class="context-list">
+          <dt>Secret boundary</dt><dd><code>/etc/homelab/ddns/cloudflare.env</code>, owned by <code>root:cloudflare-ddns</code> with mode <code>0640</code>; excluded from Git and Terraform</dd>
+          <dt>Failure behavior</dt><dd>No update occurs unless the token sees exactly one active zone and DNS contains no more than one matching A record</dd>
+          <dt>Network effect</dt><dd>Outbound HTTPS only; the updater introduces no new inbound port</dd>
+        </dl>
       </section>
 
       <section id="services-app-panel" role="tabpanel" aria-labelledby="services-app-tab" hidden>
@@ -737,23 +902,25 @@
         <nav class="tabs subtabs" role="tablist" aria-label="Services VM applications">
           <button id="services-overview-tab" role="tab" aria-selected="true" aria-controls="services-overview-panel" type="button">Overview</button>
           <button id="services-gitea-tab" role="tab" aria-selected="false" aria-controls="services-gitea-panel" type="button">Gitea</button>
+          <button id="services-n8n-tab" role="tab" aria-selected="false" aria-controls="services-n8n-panel" type="button">n8n</button>
           <button id="services-nextcloud-tab" role="tab" aria-selected="false" aria-controls="services-nextcloud-panel" type="button">Nextcloud</button>
           <button id="services-vaultwarden-tab" role="tab" aria-selected="false" aria-controls="services-vaultwarden-panel" type="button">Vaultwarden</button>
         </nav>
 
         <section id="services-overview-panel" role="tabpanel" aria-labelledby="services-overview-tab">
-          <p>Nextcloud, Gitea, and Vaultwarden share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Each application has a separate Compose project, container network, secret set, and ZFS-backed dataset.</p>
+          <p>Gitea, planned n8n, and future Nextcloud share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Vaultwarden remains allocated a dataset but its deployment is deferred. Each deployed application has a separate Compose project, container network, secret set, and ZFS-backed dataset.</p>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Application</th><th>Durable state</th><th>Status</th></tr></thead>
               <tbody>
                 <tr><td>Gitea</td><td>SQLite database, repositories, LFS, packages, attachments, configuration, keys, and indexes</td><td><span class="status accepted">Implemented</span></td></tr>
+                <tr><td>n8n</td><td>Workflow definitions, database, execution history, configuration, and credential ciphertext</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Nextcloud</td><td>User files, database, configuration, application state, and encryption material</td><td><span class="status proposed">Planned</span></td></tr>
-                <tr><td>Vaultwarden</td><td>Database, attachments, keys, and configuration</td><td><span class="status proposed">Planned</span></td></tr>
+                <tr><td>Vaultwarden</td><td>Database, attachments, keys, and configuration</td><td><span class="status deferred">Deferred</span></td></tr>
               </tbody>
             </table>
           </div>
-          <p>Private clients reach only published application ports. The intended segmented network permits agents to reach only Gitea's application ports, not Nextcloud, Vaultwarden, Docker networks, or the Proxmox management plane.</p>
+          <p>Private clients reach only published application ports. The intended segmented network permits agents to reach Gitea and explicitly approved n8n execution endpoints, not the n8n administration surface, Nextcloud, Vaultwarden, Docker networks, or the Proxmox management plane.</p>
         </section>
 
         <section id="services-gitea-panel" role="tabpanel" aria-labelledby="services-gitea-tab" hidden>
@@ -761,7 +928,7 @@
           <p class="callout"><strong>Current-stage exposure:</strong> Gitea is not public, but before the VLAN firewall is implemented any device on <code>192.168.1.0/24</code> can reach its two bound ports. The final network policy must limit access to approved WireGuard clients, trusted management devices, and the agents-to-Gitea rule.</p>
 
           <dl class="context-list">
-            <dt>Host boundary</dt><dd><code>lab-services-01</code>, shared with future Nextcloud and Vaultwarden containers</dd>
+            <dt>Host boundary</dt><dd><code>lab-services-01</code>, shared with planned n8n and future Nextcloud and Vaultwarden containers</dd>
             <dt>Container</dt><dd><code>gitea</code> in the standalone Compose project <code>gitea</code></dd>
             <dt>Release</dt><dd><code>1.27.3</code>, immutable image digest <code>sha256:87a67e…c43bef</code></dd>
             <dt>Identity</dt><dd>Application files use UID/GID <code>1000</code>; administrator is <code>homelab-admin</code>, with the generated bootstrap password already replaced</dd>
@@ -791,7 +958,7 @@
                 <tr><td>Registration</td><td>Disabled</td><td>Only administrators create accounts</td></tr>
                 <tr><td>Default visibility</td><td>Users and repositories default to private</td><td>Avoid accidental LAN-wide discovery</td></tr>
                 <tr><td>OpenID</td><td>Sign-in and sign-up disabled</td><td>No unreviewed external identity path</td></tr>
-                <tr><td>Actions</td><td>Disabled</td><td>No CI execution in the services or agents trust boundaries</td></tr>
+                <tr><td>Actions</td><td>Disabled now; enable after runner acceptance</td><td>Gitea schedules jobs but never executes them on the services or agents VM</td></tr>
                 <tr><td>Logging</td><td>Gitea logs to container stdout; Docker uses the bounded <code>local</code> log driver</td><td>Prevent unbounded JSON log growth on the VM OS disk</td></tr>
                 <tr><td>SMTP</td><td>Not configured</td><td><code>admin@gmail.com</code> is metadata only; email recovery is unavailable</td></tr>
               </tbody>
@@ -817,7 +984,44 @@
           <ul class="compact">
             <li>SQLite is suitable for the initial low-concurrency workload but is the scaling limit; migration to PostgreSQL requires a planned conversion and restore test.</li>
             <li>TLS, an internal reverse proxy, SMTP, off-host backups, restore automation, upgrades, and removal workflows are not implemented.</li>
-            <li>CI jobs never execute on this VM or on <code>lab-agents-01</code>. A future disposable <code>lab-runner-01</code> receives no application datasets. <a href="https://docs.gitea.com/runner/">Runner isolation remains an explicit security boundary.</a></li>
+            <li>CI jobs never execute on this VM or on <code>lab-agents-01</code>. Planned <code>lab-runner-01</code> receives no application datasets or deployment credentials. <a href="https://docs.gitea.com/runner/">Runner isolation remains an explicit security boundary.</a></li>
+          </ul>
+        </section>
+
+        <section id="services-n8n-panel" role="tabpanel" aria-labelledby="services-n8n-tab" hidden>
+          <h3>n8n automation layer</h3>
+          <dl class="context-list">
+            <dt>Status</dt><dd><span class="status proposed">Accepted, not implemented</span> Initial workflows remain deliberately undefined</dd>
+            <dt>Host boundary</dt><dd><code>lab-services-01</code> in an independent Ansible-managed Compose project and container network</dd>
+            <dt>Purpose</dt><dd>Execute deterministic, reusable integrations that Hermes can call as narrowly described tools</dd>
+            <dt>Durable state</dt><dd>Dedicated future <code>tank/homelab/services/n8n</code> dataset for the database, workflow state, execution history, and credential ciphertext</dd>
+            <dt>Human access</dt><dd>Administration UI over internal HTTPS from approved VPN and trusted clients only; no public ingress</dd>
+            <dt>Hermes access</dt><dd>Authenticated per-workflow MCP or HTTP execution endpoints only; no instance administration, workflow publication, or credential access</dd>
+          </dl>
+
+          <h3>Workflow change path</h3>
+          <ol class="compact">
+            <li>Exported workflow definitions live in a private Gitea repository without credential values.</li>
+            <li>Hermes may propose JSON or supporting-code changes on a feature branch using its restricted Gitea identity.</li>
+            <li>A human reviews the diff and tests the workflow before importing or promoting it into n8n.</li>
+            <li>n8n publishes the reviewed version; Hermes receives execution-only access to the specific workflow tool.</li>
+          </ol>
+          <p class="callout"><strong>Git provider:</strong> n8n's licensed native source-control feature accepts ordinary SSH or HTTPS Git repositories, so Gitea is the intended provider. If Community Edition is used, Task will instead own explicit workflow JSON export/import around the same Gitea review flow. The native feature is not assumed until the n8n edition is chosen.</p>
+
+          <h3>Security boundary</h3>
+          <ul class="compact">
+            <li>Internal TLS is required before transmitting an MCP, webhook, API, or Git credential.</li>
+            <li>Do not give Hermes the instance-level n8n MCP administration surface; it can create and edit workflows in addition to running them.</li>
+            <li>Each exposed workflow has a strict input schema, timeout, bounded output, dedicated least-privilege credential, and no arbitrary command or URL parameter.</li>
+            <li>Read-only or reversible workflows come first. Destructive or externally visible actions require a separate human-approval design.</li>
+            <li>The n8n encryption key is a separately handled secret and must be recoverable with the durable dataset; neither belongs in Git or Terraform.</li>
+          </ul>
+
+          <h3>Open choices</h3>
+          <ul class="compact">
+            <li><span class="status open">Open</span> Select Community, Business, or Enterprise edition and therefore the Gitea synchronization mechanism.</li>
+            <li><span class="status open">Open</span> Confirm SQLite for the single-process pilot or PostgreSQL if expected concurrency or operational requirements justify it.</li>
+            <li><span class="status open">Open</span> Define the first workflows and classify each as read-only, reversible write, approval-required, or prohibited.</li>
           </ul>
         </section>
 
@@ -828,14 +1032,34 @@
 
         <section id="services-vaultwarden-panel" role="tabpanel" aria-labelledby="services-vaultwarden-tab" hidden>
           <h3>Vaultwarden</h3>
-          <p><span class="status proposed">Planned</span> Detailed image, ports, TLS dependency, secrets, emergency recovery, and restore contract will be recorded here before implementation.</p>
+          <p><span class="status deferred">Deferred</span> Password management and its recovery design are postponed while Hermes and the Gitea development loop deliver earlier value. The existing empty dataset remains reserved and carries no deployment commitment.</p>
         </section>
       </section>
 
       <section id="agents-app-panel" role="tabpanel" aria-labelledby="agents-app-tab" hidden>
         <h3>Hermes Agent</h3>
-        <p>Initial agent runtime. This VM may host future agents, but it never accepts CI runner jobs.</p>
-        <p><strong>Durable:</strong> agent configuration, credentials, sessions, skills. <strong>Deployment:</strong> Ansible-managed Docker Compose. <strong>Boundary:</strong> no direct access to Vaultwarden, Nextcloud, or Proxmox management. Outbound HTTPS is required for model and tool providers.</p>
+        <dl class="context-list">
+          <dt>Status</dt><dd><span class="status proposed">Next application</span> Provider selection remains open</dd>
+          <dt>Runtime</dt><dd>Ansible-managed, digest-pinned Hermes container on <code>lab-agents-01</code></dd>
+          <dt>Durable state</dt><dd><code>/srv/homelab/hermes/state</code>, <code>credentials</code>, and <code>workspaces</code> below the existing Hermes dataset</dd>
+          <dt>Gitea identity</dt><dd>Dedicated non-administrator account with write access only to selected sandbox repositories</dd>
+          <dt>Initial Git path</dt><dd>Git over SSH; no Gitea API token crosses the current plaintext HTTP connection</dd>
+          <dt>Authority</dt><dd>Create branches and commits; protected default branches, infrastructure repositories, Actions secrets, and deployment credentials remain unavailable</dd>
+        </dl>
+        <p>Hermes may host future agents, but it never accepts CI jobs or a host Docker socket. Outbound HTTPS is limited to the eventual model/tool providers. Code accepted into Gitea remains canonical; workspaces are disposable caches even though the agent's memory, skills, sessions, and credentials are durable.</p>
+      </section>
+
+      <section id="runner-app-panel" role="tabpanel" aria-labelledby="runner-app-tab" hidden>
+        <h3>Gitea Runner</h3>
+        <dl class="context-list">
+          <dt>Status</dt><dd><span class="status proposed">Accepted, not implemented</span></dd>
+          <dt>Host</dt><dd><code>lab-runner-01</code> · VM ID <code>1003</code> · <code>192.168.1.103</code></dd>
+          <dt>Execution</dt><dd>Digest-pinned Gitea Runner with isolated, disposable job containers; prefer rootless Docker-in-Docker and never mount another host's Docker socket</dd>
+          <dt>Persistence</dt><dd>Disposable root-disk registration state only; no ZFS application mapping, Hermes state, or Gitea data</dd>
+          <dt>Network</dt><dd>Gitea Actions, Git, and package endpoints plus required dependency registries; no Proxmox, router, or unrelated application access</dd>
+          <dt>Authority</dt><dd>CI only: test, lint, and build. Deployment remains a human-triggered Task/Ansible action from the trusted administrator Mac.</dd>
+        </dl>
+        <p class="callout"><strong>TLS gate:</strong> do not register the runner or transmit reusable tokens until Gitea has internal HTTPS. The later OCI registry workflow also requires that trusted TLS endpoint.</p>
       </section>
 
       <h3>Shared deployment contract</h3>
@@ -844,6 +1068,7 @@
         <li>Terraform creates each VM, OS disk, network attachment, and data attachment.</li>
         <li>Ansible installs and configures applications.</li>
         <li>Application data is restored or mounted from ZFS-backed storage.</li>
+        <li>Hermes proposes code and n8n workflow definitions through branches; CI tests what can be automated; a human approves merges, workflow publication, and deployment.</li>
       </ol>
       <p class="muted">Terraform owns only each VirtioFS mapping and VM attachment. ZFS datasets live outside Terraform state, so ordinary VM destruction cannot delete durable data.</p>
       <template data-flyout data-title="Applications">
@@ -852,9 +1077,16 @@
           <ul class="compact">
             <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
             <li><span class="status accepted">D-052 Implemented</span> Begin application deployment with Gitea. Use SQLite with WAL mode to minimize memory on the 4 GB shared-services VM; accept that it does not scale well and later database conversion is not well tested.</li>
-            <li><span class="status accepted">D-053 Implemented</span> Pin Gitea <code>1.27.3</code> by immutable image digest. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration, OpenID login, and Actions. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
+            <li><span class="status accepted">D-053 Implemented</span> Pin Gitea <code>1.27.3</code> by immutable image digest. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration and OpenID login. Actions remains disabled in the current deployment; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
             <li><span class="status accepted">D-054 Implemented</span> Install Docker CE from Docker's official Ubuntu 26.04 repository with exact package versions, hold those packages until reviewed upgrades, use the local log driver and live restore, and do not add the administrator to the root-equivalent Docker group.</li>
-            <li><span class="status open">D-055 Open</span> Choose the internal TLS and reverse-proxy design before treating Gitea's final access policy as complete. Its current HTTP endpoint is private but reachable across the flat home LAN until VLAN firewall enforcement exists.</li>
+            <li><span class="status open">D-055 Open · prerequisite</span> Choose and implement internal TLS before giving Hermes a Gitea API token, registering a runner, exposing authenticated n8n tools, or using Gitea as an OCI registry. The current HTTP endpoint is private but reachable across the flat home LAN until VLAN firewall enforcement exists.</li>
+            <li><span class="status accepted">D-057 Amended</span> Prioritize Hermes, its agent-to-Git loop, and the planned n8n automation layer before Nextcloud, Vaultwarden, or centralized secret management. Leave the model provider open until its cost, authentication, and data-handling trade-offs are reviewed.</li>
+            <li><span class="status accepted">D-058 Accepted</span> Give Hermes a dedicated non-administrator Gitea identity limited to selected sandbox repositories. It may push feature branches but receives no infrastructure-repository write, protected-branch bypass, Actions-secret, deployment, Proxmox, router, or host Docker-socket authority.</li>
+            <li><span class="status accepted">D-059 Accepted</span> Enable Gitea Actions only after <code>lab-runner-01</code> passes isolation tests. The runner is CI-only; it may test, lint, build, and later publish artifacts, while deployment remains an explicit Task/Ansible operation from the trusted administrator Mac.</li>
+            <li><span class="status accepted">D-060 Accepted</span> Until centralized secret management is revisited, keep the small interim secret set in ignored controller files with mode <code>0600</code>, exclude it from Terraform and logs, and install only narrowly scoped credentials on their target VM.</li>
+            <li><span class="status accepted">D-061 Accepted</span> Place the initial n8n deployment on <code>lab-services-01</code> as an isolated Compose project with a dedicated ZFS dataset. Revisit a separate <code>lab-automation-01</code> if credential sensitivity, workload size, or availability requirements outgrow the shared-services boundary.</li>
+            <li><span class="status accepted">D-062 Accepted</span> Hermes may propose n8n workflow changes through feature branches in a private Gitea repository, but a human must review, test, and publish them. Hermes receives execution-only access to explicitly exposed workflows and no n8n administration or credential access.</li>
+            <li><span class="status accepted">D-063 Accepted</span> Use Gitea as the workflow-definition repository. Native n8n source control may connect to it over SSH or HTTPS when a qualifying n8n edition is selected; otherwise use a Task-owned JSON export/import flow. Credential values and the n8n encryption key never enter the repository.</li>
           </ul>
         </section>
         <section>
@@ -863,9 +1095,9 @@
             <li><span class="status accepted">D-006 Accepted</span> Ordinary compute destruction must preserve ZFS application datasets. Data destruction requires a separate explicit action.</li>
             <li><span class="status deferred">D-007 Deferred</span> Off-host backup target, retention, and restore objectives are postponed. Until resolved, the single SATA disk is a known single point of permanent data loss and ZFS snapshots are not backups.</li>
             <li><span class="status accepted">D-017 Accepted</span> Use Ansible-managed Docker Compose for applications, with native WireGuard as the host-networking exception.</li>
-            <li><span class="status open">D-018 Open</span> Choose encrypted secret storage. Terraform must not receive application secret plaintext; recommendation: SOPS with age keys, decrypted by Ansible at deployment time.</li>
-            <li><span class="status accepted">D-019 Accepted</span> Use Vaultwarden as the password manager.</li>
-            <li><span class="status open">Open</span> Define Vaultwarden emergency recovery for its database and encryption material.</li>
+            <li><span class="status deferred">D-018 Deferred</span> Centralized infrastructure secret management is currently disproportionate to the small secret set. Revisit it before unattended deployment or material secret growth; Terraform must never receive application secret plaintext.</li>
+            <li><span class="status deferred">D-019 Deferred</span> Vaultwarden remains a candidate password manager, not a current implementation commitment.</li>
+            <li><span class="status deferred">Deferred</span> Define Vaultwarden emergency recovery only when the service returns to the roadmap.</li>
           </ul>
         </section>
       </template>

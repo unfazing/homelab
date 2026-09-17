@@ -1,0 +1,32 @@
+[Unit]
+Description=Reconcile the Cloudflare DNS-only WireGuard record
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cloudflare-ddns
+Group=cloudflare-ddns
+EnvironmentFile=/etc/homelab/ddns/cloudflare.env
+ExecStart=/usr/local/sbin/homelab-cloudflare-ddns
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

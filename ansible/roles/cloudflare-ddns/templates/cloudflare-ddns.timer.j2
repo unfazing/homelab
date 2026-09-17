@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Cloudflare DDNS updater periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ cloudflare_ddns_interval }}
+RandomizedDelaySec={{ cloudflare_ddns_randomized_delay }}
+Persistent=true
+Unit=cloudflare-ddns.service
+
+[Install]
+WantedBy=timers.target
