@@ -716,7 +716,7 @@
             <li><span class="status accepted">Selected</span> Cloudflare will host authoritative DNS and automate DNS-01; Namecheap remains the registrar.</li>
             <li><span class="status accepted">Confirmed</span> The domain currently serves no email, website, or service other than homelab DNS; migration blast radius is limited.</li>
             <li><span class="status accepted">Confirmed</span> DNSSEC is not enabled at Namecheap, so there is no existing DS record to remove before cutover.</li>
-            <li><span class="status accepted">Complete</span> Cloudflare reports the delegated zone active. The DDNS record was verified through both the Cloudflare API and a public resolver; DNSSEC status still requires an explicit check.</li>
+            <li><span class="status accepted">Complete</span> Cloudflare reports the delegated zone active. The DDNS record was verified through both the Cloudflare API and a public resolver, and the Cloudflare API reports DNSSEC active.</li>
             <li><span class="status accepted">Complete</span> Separate Cloudflare API tokens exist for ACME DNS-01 and WireGuard DDNS; their values remain outside the repository and documentation. The DDNS token is installed on <code>lab-access-01</code>; the ACME token is reserved for the reverse-proxy phase.</li>
             <li><span class="status open">Open</span> Select the reverse proxy and its maintained Cloudflare DNS module before implementing D-064.</li>
           </ul>
