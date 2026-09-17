@@ -1,8 +1,10 @@
 #!/bin/sh
 
+# Internal helper; invoke through Task.
+
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 secret_dir="$repo_root/.generated/secrets"
 secret_file="$secret_dir/gitea-admin-password"
 

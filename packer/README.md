@@ -18,7 +18,7 @@ task image:build
 `image:build` changes Proxmox. The flow is:
 
 1. Task initializes the pinned Proxmox plugin and checks Packer formatting.
-2. `scripts/packer-image.sh` generates a one-use ED25519 key pair under `.generated/packer`.
+2. `taskfiles/scripts/packer-image.sh` generates a one-use ED25519 key pair under `.generated/packer`.
 3. The script renders a temporary NoCloud seed containing only the public key and unattended-install settings.
 4. Packer checks that the definition is valid and refuses to continue if Proxmox VM ID `9000` is occupied.
 5. Proxmox downloads the checksum-pinned Ubuntu Server 26.04.1 LTS ISO directly from Ubuntu.

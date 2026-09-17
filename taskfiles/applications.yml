@@ -41,7 +41,7 @@ tasks:
   gitea:secret:
     internal: true
     cmds:
-      - scripts/app/gitea-bootstrap-secret.sh
+      - taskfiles/scripts/app/gitea-bootstrap-secret.sh
 
   gitea:check:
     desc: Preview the pinned Docker and Gitea deployment

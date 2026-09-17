@@ -1,8 +1,10 @@
 #!/bin/sh
 
+# Internal helper; invoke through Task.
+
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 terraform_dir="$repo_root/terraform/storage-verification"
 work_dir="$repo_root/.generated/storage-verification"
 terraform_data_dir="$work_dir/terraform-data"
@@ -115,7 +117,7 @@ REMOTE
 }
 trap cleanup EXIT HUP INT TERM
 
-"$repo_root/scripts/host/terraform-mapping-role.sh" status
+"$repo_root/taskfiles/scripts/host/terraform-mapping-role.sh" status
 
 resources=$(pve_get "/cluster/resources?type=vm")
 if ! printf '%s' "$resources" | jq -e ".data[] | select(.vmid == $template_vmid and .template == 1)" >/dev/null; then

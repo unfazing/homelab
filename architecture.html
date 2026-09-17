@@ -739,7 +739,7 @@
           <ul class="compact">
             <li><span class="status accepted">D-002 Accepted</span> Packer owns the generic image, Terraform owns VM infrastructure, and Ansible owns applications.</li>
             <li><span class="status accepted">D-012 Accepted</span> VM operating systems are disposable and recreated from the generic template.</li>
-            <li><span class="status accepted">D-029 Accepted</span> Use Task and a root <code>Taskfile.yml</code> as the operator interface; keep implementation logic in Packer, Terraform, Ansible, and focused scripts.</li>
+            <li><span class="status accepted">D-029 Amended</span> Use Task and a root <code>Taskfile.yml</code> as the sole operator interface. Keep controller-side helper scripts private under <code>taskfiles/scripts/</code>; Ansible must not call them, and guest runtime scripts belong to the owning Ansible role.</li>
             <li><span class="status accepted">D-030 Accepted</span> Keep repository working agreements in root <code>AGENTS.md</code>; every change must synchronize design impact in this document and progress in <code>implementation.html</code>.</li>
             <li><span class="status accepted">D-031 Accepted</span> Root Task commands orchestrate non-mutating checks and namespaced tool tasks; credentials must be preloaded from an ignored environment file and must never be printed.</li>
             <li><span class="status accepted">D-032 Accepted</span> Standardize guests on Ubuntu Server 26.04 LTS; pin the exact point-release ISO and SHA-256 used for each template build.</li>

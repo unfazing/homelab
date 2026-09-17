@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Internal helper; invoke through Task.
+
 set -eu
 
 mode=${1:-status}

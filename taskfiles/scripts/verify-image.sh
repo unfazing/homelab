@@ -1,8 +1,10 @@
 #!/bin/sh
 
+# Internal helper; invoke through Task.
+
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 terraform_dir="$repo_root/terraform/image-verification"
 work_dir="$repo_root/.generated/image-verification"
 terraform_data_dir="$work_dir/terraform-data"

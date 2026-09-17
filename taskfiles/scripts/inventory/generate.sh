@@ -1,7 +1,10 @@
 #!/bin/sh
+
+# Internal helper; invoke through Task.
+
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 terraform_dir="$repo_root/terraform"
 output_dir="$repo_root/.generated/ansible"
 output_file="$output_dir/hosts.json"

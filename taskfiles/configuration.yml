@@ -14,7 +14,7 @@ tasks:
   inventory:
     desc: Generate Ansible inventory from Terraform outputs
     cmds:
-      - scripts/inventory/generate.sh
+      - taskfiles/scripts/inventory/generate.sh
 
   validate:
     desc: Validate generated inventory and Ansible playbooks

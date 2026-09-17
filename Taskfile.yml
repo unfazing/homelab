@@ -42,13 +42,13 @@ tasks:
           packer/images/ubuntu-26.04/config.pkr.hcl \
           packer/images/ubuntu-26.04/ubuntu-26.04.pkrvars.hcl \
           packer/seed/ubuntu/user-data.pkrtpl \
-          scripts/packer-image.sh \
-          scripts/verify-image.sh \
-          scripts/inventory/generate.sh \
-          scripts/app/gitea-bootstrap-secret.sh \
-          scripts/host/terraform-mapping-role.sh \
-          scripts/storage/verify-virtiofs.sh \
-          scripts/storage/zfs.sh \
+          taskfiles/scripts/packer-image.sh \
+          taskfiles/scripts/verify-image.sh \
+          taskfiles/scripts/inventory/generate.sh \
+          taskfiles/scripts/app/gitea-bootstrap-secret.sh \
+          taskfiles/scripts/host/terraform-mapping-role.sh \
+          taskfiles/scripts/storage/verify-virtiofs.sh \
+          taskfiles/scripts/storage/zfs.sh \
           taskfiles/host.yml \
           taskfiles/data.yml \
           taskfiles/applications.yml \

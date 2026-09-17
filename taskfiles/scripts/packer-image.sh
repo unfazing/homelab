@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Internal helper; invoke through Task.
+
 set -eu
 
 mode="${1:-}"
@@ -11,7 +13,7 @@ case "$mode" in
     ;;
 esac
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 image_dir="$repo_root/packer/images/ubuntu-26.04"
 image_vars="$image_dir/ubuntu-26.04.pkrvars.hcl"
 generated_root="$repo_root/.generated/packer"

@@ -9,7 +9,7 @@ tasks:
   status:
     desc: Show the Proxmox ZFS data-pool and dataset status
     cmds:
-      - scripts/storage/zfs.sh status
+      - taskfiles/scripts/storage/zfs.sh status
 
   bootstrap:
     desc: Create or reconcile the authorized single-disk ZFS pool and datasets
@@ -17,10 +17,10 @@ tasks:
       - sh: test "${HOMELAB_CONFIRM_DATA_WIPE:-}" = "{{.WIPE_CONFIRMATION}}"
         msg: Set HOMELAB_CONFIRM_DATA_WIPE={{.WIPE_CONFIRMATION}} only after verifying and authorizing the disk wipe
     cmds:
-      - scripts/storage/zfs.sh bootstrap
+      - taskfiles/scripts/storage/zfs.sh bootstrap
 
   verify-virtiofs:
     desc: Prove ZFS data survives a disposable VirtioFS guest destroy and recreate
     deps: [":host:mapping-access"]
     cmds:
-      - scripts/storage/verify-virtiofs.sh
+      - taskfiles/scripts/storage/verify-virtiofs.sh

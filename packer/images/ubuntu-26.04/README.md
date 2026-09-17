@@ -9,7 +9,7 @@ This directory defines the generic `ubuntu-26.04-template` at fixed Proxmox VM I
 - `variables.pkr.hcl` declares the builder contract.
 - `ubuntu-26.04.pkrvars.hcl` pins the Ubuntu release, checksum, template ID, and build sizing.
 - `../../seed/ubuntu` contains the NoCloud autoinstall template.
-- `../../../scripts/packer-image.sh` renders a temporary seed and runs validation or the build.
+- `../../../taskfiles/scripts/packer-image.sh` renders a temporary seed and runs validation or the build.
 
 ## Validate and build
 

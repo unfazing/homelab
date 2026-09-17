@@ -135,7 +135,14 @@
 │   ├── infrastructure.yml
 │   ├── configuration.yml      # inventory, connectivity, common convergence
 │   ├── data.yml
-│   └── applications.yml       # Gitea check, deploy, and credential tasks
+│   ├── applications.yml       # Gitea check, deploy, and credential tasks
+│   └── scripts/               # private controller helpers invoked by Taskfiles
+│       ├── packer-image.sh    # secure image validation and build wrapper
+│       ├── verify-image.sh    # clone assertions and guaranteed cleanup
+│       ├── host/              # explicit Proxmox-host prerequisites
+│       ├── app/               # application bootstrap helpers
+│       ├── inventory/         # Terraform output → Ansible JSON inventory
+│       └── storage/           # guarded ZFS and VirtioFS workflows
 ├── packer/
 │   ├── README.md              # image pipeline and NoCloud handoff
 │   ├── images/ubuntu-26.04/   # one generic Ubuntu image definition
@@ -148,16 +155,6 @@
 ├── ansible/
 │   ├── playbooks/             # host bootstrap, site convergence, verification
 │   └── roles/                 # reusable host and application roles
-├── scripts/
-│   ├── packer-image.sh        # secure image validation and build wrapper
-│   ├── verify-image.sh        # clone assertions and guaranteed cleanup
-│   ├── host/                   # explicit Proxmox-host prerequisites
-│   ├── app/                    # application bootstrap helpers
-│   ├── inventory/generate.sh  # Terraform output → Ansible JSON inventory
-│   ├── storage/zfs.sh         # guarded ZFS bootstrap and status
-│   ├── storage/verify-virtiofs.sh # destroy/recreate attachment proof
-│   ├── backup/
-│   └── validation/
 └── .generated/                # ignored transient hand-off files</code></pre>
 
       <h3>Ownership rules</h3>
@@ -169,7 +166,7 @@
             <tr><td>Packer</td><td>Generic Ubuntu template</td><td>VM identities, applications, durable data</td></tr>
             <tr><td>Terraform</td><td>VMs, rebuildable disks, NICs, VLAN tags, outputs</td><td>Application secrets or in-guest configuration</td></tr>
             <tr><td>Ansible</td><td>Host convergence and application configuration</td><td>VM lifecycle or Terraform state</td></tr>
-            <tr><td>Scripts</td><td>Small hand-offs, validation, backup operations</td><td>Logic already expressible in the three primary tools</td></tr>
+            <tr><td>Task-internal scripts</td><td>Small controller-side hand-offs, guarded host operations, and verification with cleanup</td><td>A second public interface, Ansible-managed guest scripts, or logic already expressible in the three primary tools</td></tr>
           </tbody>
         </table>
       </div>
@@ -554,7 +551,7 @@
             <thead><tr><th>Repository source</th><th>Result</th><th>Owner</th></tr></thead>
             <tbody>
               <tr><td><code>taskfiles/applications.yml</code></td><td>Public check, deploy, and credential commands</td><td>Task orchestration</td></tr>
-              <tr><td><code>scripts/app/gitea-bootstrap-secret.sh</code></td><td><code>.generated/secrets/gitea-admin-password</code>, mode <code>0600</code></td><td>Local helper; ignored transient secret</td></tr>
+              <tr><td><code>taskfiles/scripts/app/gitea-bootstrap-secret.sh</code></td><td><code>.generated/secrets/gitea-admin-password</code>, mode <code>0600</code></td><td>Task-internal local helper; ignored transient secret</td></tr>
               <tr><td><code>ansible/roles/docker-engine/</code></td><td>Docker apt source, exact packages, package holds, and <code>/etc/docker/daemon.json</code></td><td>Ansible</td></tr>
               <tr><td><code>ansible/roles/gitea/templates/compose.yml.j2</code></td><td><code>/opt/homelab/gitea/compose.yml</code>, root-owned mode <code>0640</code></td><td>Ansible</td></tr>
               <tr><td><code>ansible/roles/gitea/</code></td><td>Container lifecycle, health assertion, and idempotent administrator bootstrap</td><td>Ansible</td></tr>

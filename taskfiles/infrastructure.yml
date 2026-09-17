@@ -30,7 +30,7 @@ tasks:
       - sh: test -f "{{.TERRAFORM_DIR}}/{{.VAR_FILE}}"
         msg: Missing terraform/deployment.tfvars.json
     cmds:
-      - scripts/host/terraform-mapping-role.sh status
+      - taskfiles/scripts/host/terraform-mapping-role.sh status
       - terraform -chdir="{{.TERRAFORM_DIR}}" plan -input=false -var-file="{{.VAR_FILE}}"
 
   apply:
