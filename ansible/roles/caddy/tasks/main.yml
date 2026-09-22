@@ -1,0 +1,257 @@
+---
+- name: Validate the Caddy deployment contract
+  ansible.builtin.assert:
+    that:
+      - caddy_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - caddy_cloudflare_module_version is match('^v[0-9]+\.[0-9]+\.[0-9]+$')
+      - caddy_image is match('^[a-z0-9./_-]+:[a-zA-Z0-9._-]+$')
+      - caddy_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - caddy_acme_email is match('^[^@\s]+@[^@\s]+$')
+      - caddy_cloudflare_api_token | length >= 20
+      - caddy_bind_address == ansible_host
+      - caddy_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
+      - caddy_acme_environment in ['staging', 'production']
+      - caddy_acme_ca is match('^https://')
+      - "'homelab-reverse-proxy' in homelab_virtiofs_mappings"
+    fail_msg: "Caddy requires pinned components, a valid private namespace, ACME credentials, a static bind address, and its persistent dataset."
+    quiet: true
+  no_log: true
+
+- name: Verify that the ACME token can read exactly the configured active zone
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones?name={{ caddy_domain | urlencode }}&status=active&per_page=2"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ caddy_cloudflare_api_token }}"
+    return_content: true
+    status_code: 200
+  register: caddy_cloudflare_zone
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Assert the ACME token's zone boundary
+  ansible.builtin.assert:
+    that:
+      - caddy_cloudflare_zone.json.success | bool
+      - caddy_cloudflare_zone.json.result | length == 1
+      - caddy_cloudflare_zone.json.result[0].name == caddy_domain
+    fail_msg: "The ACME token must be able to read exactly the configured active Cloudflare zone."
+    quiet: true
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Create the Caddy Compose project directory
+  ansible.builtin.file:
+    path: "{{ caddy_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create the Caddy secret directory
+  ansible.builtin.file:
+    path: "{{ caddy_secret_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create separate persistent ACME state directories
+  ansible.builtin.file:
+    path: "{{ caddy_data_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - staging
+    - production
+
+- name: Install the Cloudflare ACME token
+  ansible.builtin.copy:
+    dest: "{{ caddy_secret_dir }}/cloudflare_api_token"
+    content: "{{ caddy_cloudflare_api_token }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the custom Caddy build definition
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ caddy_compose_dir }}/Dockerfile"
+    owner: root
+    group: root
+    mode: "0640"
+  register: caddy_dockerfile
+
+- name: Render the Caddy secret entrypoint
+  ansible.builtin.template:
+    src: homelab-caddy-entrypoint.j2
+    dest: "{{ caddy_compose_dir }}/homelab-caddy-entrypoint"
+    owner: root
+    group: root
+    mode: "0750"
+  register: caddy_entrypoint
+
+- name: Render the private Caddy routing configuration
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_compose_dir }}/Caddyfile"
+    owner: root
+    group: root
+    mode: "0640"
+  register: caddyfile
+
+- name: Render the Caddy Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ caddy_compose_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  register: caddy_compose
+
+- name: Check whether the private proxy network exists
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - inspect
+      - "{{ caddy_proxy_network }}"
+  register: caddy_proxy_network_present
+  changed_when: false
+  failed_when: caddy_proxy_network_present.rc not in [0, 1]
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Create the private proxy network
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - create
+      - "{{ caddy_proxy_network }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - caddy_proxy_network_present.rc == 1
+
+- name: Check whether the pinned custom Caddy image exists
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ caddy_image }}"
+  register: caddy_image_present
+  changed_when: false
+  failed_when: caddy_image_present.rc not in [0, 1]
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Build the pinned custom Caddy image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - --tag
+      - "{{ caddy_image }}"
+      - "{{ caddy_compose_dir }}"
+  register: caddy_image_build
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - caddy_image_present.rc == 1 or caddy_dockerfile.changed or caddy_entrypoint.changed
+
+- name: List modules in the custom Caddy image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --entrypoint
+      - caddy
+      - "{{ caddy_image }}"
+      - list-modules
+      - --packages
+  register: caddy_modules
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify the Cloudflare DNS module is present
+  ansible.builtin.assert:
+    that:
+      - "'github.com/caddy-dns/cloudflare' in caddy_modules.stdout"
+    fail_msg: "The custom Caddy image does not contain the pinned Cloudflare DNS module."
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Validate the Caddy Compose project
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ caddy_compose_dir }}"
+      - config
+      - --quiet
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Converge the Caddy Compose project
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ caddy_compose_dir }}"
+      - up
+      - --detach
+      - --remove-orphans
+      - --wait
+  register: caddy_compose_up
+  changed_when: >-
+    'Created' in (caddy_compose_up.stdout + caddy_compose_up.stderr)
+    or 'Started' in (caddy_compose_up.stdout + caddy_compose_up.stderr)
+    or 'Recreated' in (caddy_compose_up.stdout + caddy_compose_up.stderr)
+  when: not ansible_check_mode
+
+- name: Verify the staging HTTPS route through Caddy
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --insecure
+      - --silent
+      - --show-error
+      - --fail
+      - --resolve
+      - "{{ caddy_gitea_hostname }}:443:{{ caddy_bind_address }}"
+      - "https://{{ caddy_gitea_hostname }}/api/healthz"
+  register: caddy_staging_health
+  retries: 30
+  delay: 10
+  until: caddy_staging_health.rc == 0
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - caddy_acme_environment == 'staging'
+
+- name: Verify the production HTTPS route through Caddy
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --silent
+      - --show-error
+      - --fail
+      - --resolve
+      - "{{ caddy_gitea_hostname }}:443:{{ caddy_bind_address }}"
+      - "https://{{ caddy_gitea_hostname }}/api/healthz"
+  register: caddy_production_health
+  retries: 30
+  delay: 10
+  until: caddy_production_health.rc == 0
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - caddy_acme_environment == 'production'

@@ -5,6 +5,7 @@ gitea_data_dir: /srv/homelab/gitea
 gitea_http_address: "{{ ansible_host }}"
 gitea_http_port: 3000
 gitea_ssh_port: 2222
+gitea_proxy_network: homelab-proxy
 gitea_admin_username: homelab-admin
 gitea_admin_email: admin@gmail.com
 gitea_admin_password_file: ""

@@ -6,6 +6,7 @@
       - gitea_admin_email is match('^[^@\s]+@[^@\s]+$')
       - gitea_admin_password_file | length > 0
       - gitea_http_address == ansible_host
+      - gitea_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
       - "'homelab-gitea' in homelab_virtiofs_mappings"
     fail_msg: "Gitea requires the approved admin identity, local secret file, static bind address, and persistent dataset."
     quiet: true
@@ -46,6 +47,31 @@
     owner: root
     group: root
     mode: "0640"
+
+- name: Check whether the private proxy network exists
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - inspect
+      - "{{ gitea_proxy_network }}"
+  register: gitea_proxy_network_present
+  changed_when: false
+  failed_when: gitea_proxy_network_present.rc not in [0, 1]
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Create the private proxy network
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - create
+      - "{{ gitea_proxy_network }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - gitea_proxy_network_present.rc == 1
 
 - name: Check whether the pinned Gitea image is present
   ansible.builtin.command:

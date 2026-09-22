@@ -61,7 +61,10 @@ tasks:
           ansible/playbooks/site.yml \
           ansible/playbooks/common.yml \
           ansible/playbooks/cloudflare-ddns.yml \
+          ansible/playbooks/caddy.yml \
           ansible/playbooks/gitea.yml \
+          ansible/roles/caddy/tasks/main.yml \
+          ansible/roles/caddy/templates/Dockerfile.j2 \
           ansible/roles/cloudflare-ddns/tasks/main.yml \
           ansible/roles/cloudflare-ddns/templates/cloudflare-ddns.sh.j2 \
           ansible/roles/docker-engine/tasks/main.yml \
@@ -96,6 +99,8 @@ tasks:
         require_value CLOUDFLARE_ACCOUNT_ID "${CLOUDFLARE_ACCOUNT_ID:-}"
         require_value CLOUDFLARE_ACME_API_TOKEN "${CLOUDFLARE_ACME_API_TOKEN:-}"
         require_value CLOUDFLARE_DDNS_API_TOKEN "${CLOUDFLARE_DDNS_API_TOKEN:-}"
+        require_value HOMELAB_DOMAIN "${HOMELAB_DOMAIN:-}"
+        require_value CADDY_ACME_EMAIL "${CADDY_ACME_EMAIL:-}"
         echo "Required credential variables are loaded."
       - |
         set -eu

@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -eu
+
+token_file=/run/secrets/cloudflare_api_token
+if [ ! -r "$token_file" ]; then
+  echo "Cloudflare API token secret is not readable" >&2
+  exit 1
+fi
+
+CF_API_TOKEN=$(cat "$token_file")
+if [ -z "$CF_API_TOKEN" ]; then
+  echo "Cloudflare API token secret is empty" >&2
+  exit 1
+fi
+export CF_API_TOKEN
+
+exec /usr/bin/caddy "$@"

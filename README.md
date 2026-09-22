@@ -24,6 +24,17 @@ task apps:ddns:check
 task apps:ddns:deploy
 ```
 
+Build and test the private Caddy endpoint against Let's Encrypt staging before requesting a production certificate:
+
+```sh
+task data:reconcile
+task infra:plan
+task infra:apply
+task apps:caddy:check
+task apps:caddy:deploy-staging
+HOMELAB_CONFIRM_PRODUCTION_CERTS=yes task apps:caddy:deploy-production
+```
+
 ## Terraform Providers
 ### BGP (Selected)
 

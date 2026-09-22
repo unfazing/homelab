@@ -1,0 +1,16 @@
+---
+- name: Apply the common guest baseline
+  ansible.builtin.import_playbook: common.yml
+
+- name: Deploy the internal Caddy reverse proxy
+  hosts: services
+  become: true
+  gather_facts: true
+  vars:
+    caddy_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+    caddy_acme_email: "{{ lookup('ansible.builtin.env', 'CADDY_ACME_EMAIL') }}"
+    caddy_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_ACME_API_TOKEN') }}"
+  roles:
+    - docker-engine
+    - gitea
+    - caddy

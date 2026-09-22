@@ -27,6 +27,9 @@ services:
     ports:
       - "{{ gitea_http_address }}:{{ gitea_http_port }}:3000"
       - "{{ gitea_http_address }}:{{ gitea_ssh_port }}:22"
+    networks:
+      - default
+      - proxy
     volumes:
       - "{{ gitea_data_dir }}:/data"
       - /etc/localtime:/etc/localtime:ro
@@ -39,3 +42,9 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 1m
+
+networks:
+  default:
+  proxy:
+    name: "{{ gitea_proxy_network }}"
+    external: true

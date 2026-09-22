@@ -19,6 +19,11 @@ tasks:
     cmds:
       - taskfiles/scripts/storage/zfs.sh bootstrap
 
+  reconcile:
+    desc: Reconcile datasets on the existing authorized ZFS pool without creating or replacing a pool
+    cmds:
+      - taskfiles/scripts/storage/zfs.sh reconcile
+
   verify-virtiofs:
     desc: Prove ZFS data survives a disposable VirtioFS guest destroy and recreate
     deps: [":host:mapping-access"]

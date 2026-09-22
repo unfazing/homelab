@@ -28,6 +28,7 @@ tasks:
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/common.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/site.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/cloudflare-ddns.yml
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/caddy.yml
       - >-
         ansible-playbook --syntax-check -i "{{.INVENTORY}}"
         -e "gitea_admin_password_file=/tmp/gitea-syntax-placeholder"

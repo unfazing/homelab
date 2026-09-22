@@ -13,7 +13,7 @@ pool=tank
 confirmation=ata-CT1000MX500SSD1_2424E8B7E144
 
 case "$mode" in
-  status)
+  status|reconcile)
     ;;
   bootstrap)
     if [ "${HOMELAB_CONFIRM_DATA_WIPE:-}" != "$confirmation" ]; then
@@ -23,7 +23,7 @@ case "$mode" in
     fi
     ;;
   *)
-    echo "Usage: $0 [status|bootstrap]" >&2
+    echo "Usage: $0 [status|reconcile|bootstrap]" >&2
     exit 2
     ;;
 esac
@@ -102,6 +102,11 @@ fi
 
 echo "Verified $data_device -> $resolved_device ($device_model, $device_serial, $device_size bytes)."
 
+if [ "$mode" = reconcile ] && ! zpool list -H -o name "$pool" >/dev/null 2>&1; then
+  echo "Pool $pool does not exist; use the separately authorized bootstrap workflow first." >&2
+  exit 1
+fi
+
 if zpool list -H -o name "$pool" >/dev/null 2>&1; then
   if ! zpool status -P "$pool" | grep -Fq "$data_device" && ! zpool status -P "$pool" | grep -Fq "$resolved_device"; then
     echo "Pool $pool exists but is not backed by the authorized device." >&2
@@ -153,6 +158,7 @@ for dataset in \
   services/nextcloud-files \
   services/nextcloud-db \
   services/gitea \
+  services/reverse-proxy \
   services/vaultwarden \
   agents/hermes; do
   ensure_dataset "$pool/homelab/$dataset"

@@ -700,7 +700,7 @@
             <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
             <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
             <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
-            <li><span class="status accepted">D-067 Accepted</span> Use Caddy as the internal reverse proxy. Build the image from pinned official Caddy builder and runtime bases with only the pinned <code>caddy-dns/cloudflare</code> module; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket.</li>
+            <li><span class="status accepted">D-067 Implemented in code</span> Use Caddy <code>2.11.4</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM.</li>
           </ul>
         </section>
         <section>
@@ -863,7 +863,7 @@
             <li><span class="status accepted">D-045 Accepted</span> Use <code>bpg/proxmox</code> <code>0.112.0</code>. Import the three live VM IDs without recreation, pin their existing MAC addresses, ignore create-time clone provenance and manual power state, and require an empty post-migration plan. This provider is the planned Terraform interface for Proxmox VirtioFS mappings.</li>
             <li><span class="status accepted">D-048 Accepted</span> Grant the Terraform API token only <code>Mapping.Audit</code>, <code>Mapping.Modify</code>, and <code>Mapping.Use</code> at <code>/mapping/dir</code> through a separate <code>TerraformMapping</code> role; do not expand its general VM role at the cluster root.</li>
             <li><span class="status accepted">D-049 Implemented</span> Attach host-mounted ZFS datasets with Terraform-managed Proxmox VirtioFS directory mappings using automatic caching, direct I/O, POSIX ACLs, and extended attributes. The isolated proof passed reboot and VM destroy/recreate persistence on 16 September 2026.</li>
-            <li><span class="status accepted">D-050 Implemented</span> Give each application dataset its own mapping tag and attach it only to the VM that runs that workload: AdGuard to access, Nextcloud, Gitea, and Vaultwarden to services, and Hermes to agents. All six production tags passed guest-side read-only mount verification; Ansible receives the tags and owns persistent mount points and filesystem ownership.</li>
+            <li><span class="status accepted">D-050 Amended</span> Give each application dataset its own mapping tag and attach it only to the VM that runs that workload: AdGuard to access; Nextcloud, Gitea, Vaultwarden, and Caddy ACME state to services; and Hermes to agents. The reverse-proxy dataset now exists; its seventh mapping is defined but not yet attached. The original six production tags passed guest-side verification.</li>
             <li><span class="status accepted">D-051 Implemented</span> Mount application datasets at <code>/srv/homelab/&lt;application&gt;</code> through managed <code>/etc/fstab</code> entries with <code>rw,nosuid,nodev</code>. Do not use <code>nofail</code>: a missing durable dataset must fail visibly instead of letting a container write into the disposable root disk. Application roles set final ownership only after their container UID contract is known.</li>
             <li><span class="status accepted">D-056 Accepted</span> Extend the topology with <code>lab-runner-01</code> at VM ID <code>1003</code> and <code>192.168.1.103</code>, sized at 2 vCPU, 2 GB RAM, and a 32 GB disposable OS disk. Keep <code>lab-agents-01</code> and <code>lab-services-01</code> free of CI jobs.</li>
           </ul>
@@ -902,6 +902,7 @@
         <h3>Shared services boundary</h3>
         <nav class="tabs subtabs" role="tablist" aria-label="Services VM applications">
           <button id="services-overview-tab" role="tab" aria-selected="true" aria-controls="services-overview-panel" type="button">Overview</button>
+          <button id="services-caddy-tab" role="tab" aria-selected="false" aria-controls="services-caddy-panel" type="button">Caddy</button>
           <button id="services-gitea-tab" role="tab" aria-selected="false" aria-controls="services-gitea-panel" type="button">Gitea</button>
           <button id="services-n8n-tab" role="tab" aria-selected="false" aria-controls="services-n8n-panel" type="button">n8n</button>
           <button id="services-nextcloud-tab" role="tab" aria-selected="false" aria-controls="services-nextcloud-panel" type="button">Nextcloud</button>
@@ -915,6 +916,7 @@
               <thead><tr><th>Application</th><th>Durable state</th><th>Status</th></tr></thead>
               <tbody>
                 <tr><td>Gitea</td><td>SQLite database, repositories, LFS, packages, attachments, configuration, keys, and indexes</td><td><span class="status accepted">Implemented</span></td></tr>
+                <tr><td>Caddy</td><td>Separate staging and production ACME accounts, certificates, private keys, and renewal metadata</td><td><span class="status proposed">Code ready; deployment pending</span></td></tr>
                 <tr><td>n8n</td><td>Workflow definitions, database, execution history, configuration, and credential ciphertext</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Nextcloud</td><td>User files, database, configuration, application state, and encryption material</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Vaultwarden</td><td>Database, attachments, keys, and configuration</td><td><span class="status deferred">Deferred</span></td></tr>
@@ -922,6 +924,19 @@
             </table>
           </div>
           <p>Private clients reach only published application ports. The intended segmented network permits agents to reach Gitea and explicitly approved n8n execution endpoints, not the n8n administration surface, Nextcloud, Vaultwarden, Docker networks, or the Proxmox management plane.</p>
+        </section>
+
+        <section id="services-caddy-panel" role="tabpanel" aria-labelledby="services-caddy-tab" hidden>
+          <h3>Private HTTPS boundary</h3>
+          <dl class="context-list">
+            <dt>Image</dt><dd>Caddy <code>2.11.4</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
+            <dt>Ingress</dt><dd>TCP 443 bound only to <code>192.168.1.101</code>; the router still forwards no public HTTP or HTTPS port</dd>
+            <dt>Certificate</dt><dd><code>*.home.&lt;domain&gt;</code> through Cloudflare DNS-01; staging must pass before explicitly confirmed production issuance</dd>
+            <dt>State</dt><dd><code>homelab-reverse-proxy</code> VirtioFS mapping with isolated <code>staging/</code> and <code>production/</code> directories</dd>
+            <dt>Secret</dt><dd>Root-only Cloudflare token outside the durable dataset; injected from a read-only Compose secret, required non-empty at startup, and absent from image layers and command arguments</dd>
+            <dt>Container boundary</dt><dd>Read-only root filesystem, dropped capabilities except <code>NET_BIND_SERVICE</code>, no Docker socket, no admin API, and a shared <code>homelab-proxy</code> network containing only Caddy and explicitly attached backends</dd>
+          </dl>
+          <p class="callout"><strong>Transition:</strong> Caddy reaches Gitea directly as <code>gitea:3000</code> through the named proxy network while port 3000 remains available on the flat LAN. Gitea's advertised URL and direct HTTP binding change only after production TLS and private DNS are verified.</p>
         </section>
 
         <section id="services-gitea-panel" role="tabpanel" aria-labelledby="services-gitea-tab" hidden>

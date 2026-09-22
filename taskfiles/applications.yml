@@ -6,12 +6,63 @@ vars:
   INVENTORY: .generated/ansible/hosts.json
   LOCAL_TEMP: .generated/ansible/tmp
   GITEA_SECRET_FILE: .generated/secrets/gitea-admin-password
+  ACME_STAGING_CA: https://acme-staging-v02.api.letsencrypt.org/directory
+  ACME_PRODUCTION_CA: https://acme-v02.api.letsencrypt.org/directory
 
 env:
   ANSIBLE_CONFIG: ansible/ansible.cfg
   ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
 
 tasks:
+  caddy:credentials:
+    internal: true
+    preconditions:
+      - sh: test -n "${HOMELAB_DOMAIN:-}"
+        msg: Set HOMELAB_DOMAIN in the ignored root .envrc
+      - sh: test -n "${CADDY_ACME_EMAIL:-}"
+        msg: Set CADDY_ACME_EMAIL in the ignored root .envrc
+      - sh: test -n "${CLOUDFLARE_ACME_API_TOKEN:-}"
+        msg: Set CLOUDFLARE_ACME_API_TOKEN in the ignored root .envrc
+
+  caddy:check:
+    desc: Preview the pinned Caddy staging deployment
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --check --diff -i "{{.INVENTORY}}"
+        -e "caddy_acme_environment=staging"
+        -e "caddy_acme_ca={{.ACME_STAGING_CA}}"
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/caddy.yml
+
+  caddy:deploy-staging:
+    desc: Build Caddy and prove Cloudflare DNS-01 against Let's Encrypt staging
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --diff -i "{{.INVENTORY}}"
+        -e "caddy_acme_environment=staging"
+        -e "caddy_acme_ca={{.ACME_STAGING_CA}}"
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/caddy.yml
+
+  caddy:deploy-production:
+    desc: Switch Caddy to a publicly trusted production certificate after staging passes
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    preconditions:
+      - sh: test "${HOMELAB_CONFIRM_PRODUCTION_CERTS:-}" = "yes"
+        msg: Set HOMELAB_CONFIRM_PRODUCTION_CERTS=yes only after the staging deployment passes
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --diff -i "{{.INVENTORY}}"
+        -e "caddy_acme_environment=production"
+        -e "caddy_acme_ca={{.ACME_PRODUCTION_CA}}"
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/caddy.yml
+
   ddns:credentials:
     internal: true
     preconditions:
