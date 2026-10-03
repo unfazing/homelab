@@ -285,7 +285,7 @@
           <dl class="context-list">
             <dt>WAN</dt><dd>F620 bridged to the new firewall router</dd>
             <dt>Ingress</dt><dd>One forwarded UDP port to WireGuard</dd>
-            <dt>Public DNS</dt><dd>Namecheap remains registrar; Cloudflare becomes authoritative DNS, provides WireGuard DDNS, and answers ACME DNS-01 challenges</dd>
+            <dt>Public DNS</dt><dd>Namecheap remains registrar; Cloudflare is authoritative DNS, provides WireGuard DDNS, and answers ACME DNS-01 challenges</dd>
             <dt>Domain scope</dt><dd>Dedicated to the homelab; no email, website, or other service currently depends on it</dd>
             <dt>Private DNS</dt><dd>AdGuard for every home device and VPN peer</dd>
             <dt>Application namespace</dt><dd><code>home.&lt;domain&gt;</code> with a public wildcard certificate for <code>*.home.&lt;domain&gt;</code></dd>
@@ -700,7 +700,7 @@
             <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
             <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
             <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
-            <li><span class="status accepted">D-067 Implemented in code</span> Use Caddy <code>2.11.4</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM.</li>
+            <li><span class="status accepted">D-067 Deployed</span> Use Caddy <code>2.11.4</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM. Container validation loads the scoped token through the same entrypoint as normal startup. Both staging and production wildcard issuance passed.</li>
           </ul>
         </section>
         <section>
@@ -714,12 +714,12 @@
             <li><span class="status accepted">Accepted</span> Use <code>home.&lt;domain&gt;</code> as the private application namespace.</li>
             <li><span class="status deferred">Constraint</span> The Namecheap account is not eligible for production DNS API access; direct Namecheap DNS-01 automation is unavailable.</li>
             <li><span class="status deferred">Rejected</span> Do not host authoritative <code>acme-dns</code> at home: public TCP and UDP 53 would violate the WireGuard-only ingress boundary.</li>
-            <li><span class="status accepted">Selected</span> Cloudflare will host authoritative DNS and automate DNS-01; Namecheap remains the registrar.</li>
+            <li><span class="status accepted">Implemented</span> Cloudflare hosts authoritative DNS and automates DNS-01; Namecheap remains the registrar.</li>
             <li><span class="status accepted">Confirmed</span> The domain currently serves no email, website, or service other than homelab DNS; migration blast radius is limited.</li>
             <li><span class="status accepted">Confirmed</span> DNSSEC is not enabled at Namecheap, so there is no existing DS record to remove before cutover.</li>
             <li><span class="status accepted">Complete</span> Cloudflare reports the delegated zone active. The DDNS record was verified through both the Cloudflare API and a public resolver, and the Cloudflare API reports DNSSEC active.</li>
-            <li><span class="status accepted">Complete</span> Separate Cloudflare API tokens exist for ACME DNS-01 and WireGuard DDNS; their values remain outside the repository and documentation. The DDNS token is installed on <code>lab-access-01</code>; the ACME token is reserved for the reverse-proxy phase.</li>
-            <li><span class="status accepted">Selected</span> Caddy will terminate internal TLS. Its custom image will be built reproducibly from official Caddy stages because the stock image does not contain the Cloudflare DNS module.</li>
+            <li><span class="status accepted">Complete</span> Separate Cloudflare API tokens exist for ACME DNS-01 and WireGuard DDNS; their values remain outside the repository and documentation. The DDNS token is installed on <code>lab-access-01</code>; the ACME token is installed on <code>lab-services-01</code>.</li>
+            <li><span class="status accepted">Deployed</span> Caddy terminates internal TLS with a locally built image based on official Caddy stages and the pinned Cloudflare DNS module. Its production wildcard certificate is publicly trusted; automatic renewal has not yet been observed.</li>
           </ul>
         </section>
       </template>
@@ -863,7 +863,7 @@
             <li><span class="status accepted">D-045 Accepted</span> Use <code>bpg/proxmox</code> <code>0.112.0</code>. Import the three live VM IDs without recreation, pin their existing MAC addresses, ignore create-time clone provenance and manual power state, and require an empty post-migration plan. This provider is the planned Terraform interface for Proxmox VirtioFS mappings.</li>
             <li><span class="status accepted">D-048 Accepted</span> Grant the Terraform API token only <code>Mapping.Audit</code>, <code>Mapping.Modify</code>, and <code>Mapping.Use</code> at <code>/mapping/dir</code> through a separate <code>TerraformMapping</code> role; do not expand its general VM role at the cluster root.</li>
             <li><span class="status accepted">D-049 Implemented</span> Attach host-mounted ZFS datasets with Terraform-managed Proxmox VirtioFS directory mappings using automatic caching, direct I/O, POSIX ACLs, and extended attributes. The isolated proof passed reboot and VM destroy/recreate persistence on 16 September 2026.</li>
-            <li><span class="status accepted">D-050 Amended</span> Give each application dataset its own mapping tag and attach it only to the VM that runs that workload: AdGuard to access; Nextcloud, Gitea, Vaultwarden, and Caddy ACME state to services; and Hermes to agents. The reverse-proxy dataset now exists; its seventh mapping is defined but not yet attached. The original six production tags passed guest-side verification.</li>
+            <li><span class="status accepted">D-050 Implemented</span> Give each application dataset its own mapping tag and attach it only to the VM that runs that workload: AdGuard to access; Nextcloud, Gitea, Vaultwarden, and Caddy ACME state to services; and Hermes to agents. All seven production mappings are attached; the reverse-proxy mount passed guest-side source and filesystem verification.</li>
             <li><span class="status accepted">D-051 Implemented</span> Mount application datasets at <code>/srv/homelab/&lt;application&gt;</code> through managed <code>/etc/fstab</code> entries with <code>rw,nosuid,nodev</code>. Do not use <code>nofail</code>: a missing durable dataset must fail visibly instead of letting a container write into the disposable root disk. Application roles set final ownership only after their container UID contract is known.</li>
             <li><span class="status accepted">D-056 Accepted</span> Extend the topology with <code>lab-runner-01</code> at VM ID <code>1003</code> and <code>192.168.1.103</code>, sized at 2 vCPU, 2 GB RAM, and a 32 GB disposable OS disk. Keep <code>lab-agents-01</code> and <code>lab-services-01</code> free of CI jobs.</li>
           </ul>
@@ -916,7 +916,7 @@
               <thead><tr><th>Application</th><th>Durable state</th><th>Status</th></tr></thead>
               <tbody>
                 <tr><td>Gitea</td><td>SQLite database, repositories, LFS, packages, attachments, configuration, keys, and indexes</td><td><span class="status accepted">Implemented</span></td></tr>
-                <tr><td>Caddy</td><td>Separate staging and production ACME accounts, certificates, private keys, and renewal metadata</td><td><span class="status proposed">Code ready; deployment pending</span></td></tr>
+                <tr><td>Caddy</td><td>Separate staging and production ACME accounts, certificates, private keys, and renewal metadata</td><td><span class="status accepted">Production HTTPS live</span></td></tr>
                 <tr><td>n8n</td><td>Workflow definitions, database, execution history, configuration, and credential ciphertext</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Nextcloud</td><td>User files, database, configuration, application state, and encryption material</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Vaultwarden</td><td>Database, attachments, keys, and configuration</td><td><span class="status deferred">Deferred</span></td></tr>
@@ -931,12 +931,12 @@
           <dl class="context-list">
             <dt>Image</dt><dd>Caddy <code>2.11.4</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
             <dt>Ingress</dt><dd>TCP 443 bound only to <code>192.168.1.101</code>; the router still forwards no public HTTP or HTTPS port</dd>
-            <dt>Certificate</dt><dd><code>*.home.&lt;domain&gt;</code> through Cloudflare DNS-01; staging must pass before explicitly confirmed production issuance</dd>
+            <dt>Certificate</dt><dd><code>*.home.&lt;domain&gt;</code> issued through Cloudflare DNS-01; staging and production issuance passed on 28 September 2026</dd>
             <dt>State</dt><dd><code>homelab-reverse-proxy</code> VirtioFS mapping with isolated <code>staging/</code> and <code>production/</code> directories</dd>
             <dt>Secret</dt><dd>Root-only Cloudflare token outside the durable dataset; injected from a read-only Compose secret, required non-empty at startup, and absent from image layers and command arguments</dd>
             <dt>Container boundary</dt><dd>Read-only root filesystem, dropped capabilities except <code>NET_BIND_SERVICE</code>, no Docker socket, no admin API, and a shared <code>homelab-proxy</code> network containing only Caddy and explicitly attached backends</dd>
           </dl>
-          <p class="callout"><strong>Transition:</strong> Caddy reaches Gitea directly as <code>gitea:3000</code> through the named proxy network while port 3000 remains available on the flat LAN. Gitea's advertised URL and direct HTTP binding change only after production TLS and private DNS are verified.</p>
+          <p class="callout"><strong>Transition:</strong> Caddy reaches Gitea directly as <code>gitea:3000</code> through the named proxy network while port 3000 remains available on the flat LAN. Gitea's advertised URL and direct HTTP binding change after private DNS is verified. The staging deployment task switches this live proxy to an untrusted staging certificate; use it only before production cutover or during a planned test window.</p>
         </section>
 
         <section id="services-gitea-panel" role="tabpanel" aria-labelledby="services-gitea-tab" hidden>
@@ -956,7 +956,7 @@
             <table>
               <thead><tr><th>Surface</th><th>Effective value</th><th>Boundary</th></tr></thead>
               <tbody>
-                <tr><td>Web and API</td><td><code>http://192.168.1.101:3000/</code></td><td>Bound to the services VM address, not wildcard host interfaces; no TLS or reverse proxy yet</td></tr>
+                <tr><td>Web and API</td><td><code>http://192.168.1.101:3000/</code> and HTTPS through Caddy</td><td>Direct HTTP remains bound to the services VM during the transition; Gitea still advertises the HTTP URL until private DNS and URL migration are verified</td></tr>
                 <tr><td>Git over SSH</td><td><code>192.168.1.101:2222</code> → container port <code>22</code></td><td>Separate from guest administration SSH on port <code>22</code></td></tr>
                 <tr><td>Container health</td><td><code>GET /api/healthz</code> every 15 seconds</td><td>Five-second timeout, 12 retries, 30-second start period</td></tr>
                 <tr><td>Public ingress</td><td>None</td><td>No router forwarding; WireGuard remains the only planned public UDP ingress</td></tr>
