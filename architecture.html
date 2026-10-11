@@ -275,6 +275,7 @@
             <dt>ISP handoff</dt><dd>Singtel ZTE ZXHN F620 ONR</dd>
             <dt>LAN</dt><dd><code>192.168.1.0/24</code> · gateway <code>192.168.1.254</code></dd>
             <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
+            <dt>Current access services</dt><dd>AdGuard and WireGuard run at <code>192.168.1.9</code>; they remain active while replacements are tested on <code>lab-access-01</code> at <code>192.168.1.100</code></dd>
             <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
             <dt>DHCP limitation</dt><dd>The F620 misaddresses concurrent VM offers at Layer 2; do not use it for multi-clone acceptance</dd>
             <dt>Temporary VMs</dt><dd>Three Terraform-managed guests run at static <code>192.168.1.100–102</code>; planned runner address <code>192.168.1.103</code> is also outside the F620 pool ending at <code>.99</code></dd>
@@ -691,6 +692,7 @@
             <li><span class="status accepted">D-022 Accepted</span> Bridge the F620 and make a new VLAN-capable firewall router the public-IP endpoint and policy authority.</li>
             <li><span class="status accepted">D-023 Accepted</span> Segment management, edge, services, agents, runners, trusted clients, and IoT with default-deny inter-zone rules.</li>
             <li><span class="status accepted">D-024 Accepted</span> Make AdGuard the DNS resolver advertised to every home VLAN and WireGuard peer.</li>
+            <li><span class="status accepted">D-068 Accepted</span> Migrate access services in parallel. Copy the current AdGuard policy from <code>192.168.1.9</code> to a separately managed instance at <code>192.168.1.100</code>, adjust only host-specific bindings and private Gitea DNS, and compare behavior before changing client DNS. Keep the old AdGuard and WireGuard available until their respective cutovers have passed; retire them separately.</li>
             <li><span class="status proposed">D-025 Proposed</span> Route <code>10.73.100.0/24</code> through <code>lab-access-01</code> without internal NAT; NAT only full-tunnel internet egress at the firewall router.</li>
             <li><span class="status accepted">D-026 Accepted</span> Limit management access to three named devices: the owner's phone, laptop, and desktop; give each its own WireGuard key and stable peer address.</li>
             <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
@@ -888,7 +890,7 @@
 
       <section id="network-app-panel" role="tabpanel" aria-labelledby="network-app-tab">
         <h3>WireGuard + AdGuard + Cloudflare DDNS</h3>
-        <p>WireGuard is the sole remote ingress. AdGuard provides DNS to VPN clients and selected local devices. A systemd timer reconciles the DNS-only <code>vpn.&lt;domain&gt;</code> A record with the current public IPv4 every five minutes.</p>
+        <p>WireGuard is the sole remote ingress. The active AdGuard and WireGuard services remain at <code>192.168.1.9</code> during migration. A new AdGuard at <code>192.168.1.100</code> will first match the old resolver's policy and resolve private application names. A systemd timer on the new access VM already reconciles the DNS-only <code>vpn.&lt;domain&gt;</code> A record with the current public IPv4 every five minutes.</p>
         <p>No application is exposed directly to the public internet.</p>
         <p><strong>Durable:</strong> VPN identities, peer assignments, DNS rules, and credentials. The updater itself has no durable application state. <strong>Deployment:</strong> native WireGuard, an Ansible-managed AdGuard Compose project, and an Ansible-managed unprivileged DDNS service.</p>
         <dl class="context-list">

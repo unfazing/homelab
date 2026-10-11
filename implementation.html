@@ -106,6 +106,7 @@
       <button id="data-tab" role="tab" aria-selected="false" aria-controls="data-panel" type="button">Data plan</button>
       <button id="ansible-tab" role="tab" aria-selected="false" aria-controls="ansible-panel" type="button">Ansible plan</button>
       <button id="gitea-tab" role="tab" aria-selected="false" aria-controls="gitea-panel" type="button">Gitea</button>
+      <button id="adguard-tab" role="tab" aria-selected="false" aria-controls="adguard-panel" type="button">AdGuard</button>
       <button id="tls-tab" role="tab" aria-selected="false" aria-controls="tls-panel" type="button">Internal TLS</button>
       <button id="n8n-tab" role="tab" aria-selected="false" aria-controls="n8n-panel" type="button">n8n</button>
       <button id="hermes-tab" role="tab" aria-selected="false" aria-controls="hermes-panel" type="button">Hermes</button>
@@ -183,6 +184,7 @@
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
             <tr><td>Terraform deployment</td><td><span class="status complete">Three VMs and seven mappings applied</span></td><td>Add the isolated runner later</td></tr>
             <tr><td>Ansible hand-off</td><td><span class="status complete">Generated, mounted, and Gitea converged</span></td><td>Deploy Hermes next; plan n8n on services; add the runner only after internal TLS</td></tr>
+            <tr><td>AdGuard migration</td><td><span class="status open">Existing resolver active at .9</span></td><td>Export its policy, deploy a parallel instance at .100, compare answers, then change client DNS</td></tr>
             <tr><td>Internal TLS</td><td><span class="status complete">Caddy production certificate live</span></td><td>Configure private DNS, migrate Gitea's advertised URL, and observe or rehearse renewal</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
@@ -603,6 +605,23 @@
         </ol>
         <p class="callout"><strong>Not implemented:</strong> there is no Task command for Gitea removal, upgrade, restore, or data destruction. Those workflows require explicit design and acceptance criteria before automation is added.</p>
       </section>
+    </section>
+
+    <section id="adguard-panel" role="tabpanel" aria-labelledby="adguard-tab" hidden>
+      <h2>AdGuard migration</h2>
+      <dl class="context-list">
+        <dt>Current service</dt><dd>AdGuard and WireGuard are active at <code>192.168.1.9</code>; no router, DHCP, or VPN cutover has been made</dd>
+        <dt>New service</dt><dd>Independent AdGuard Compose project on <code>lab-access-01</code> at <code>192.168.1.100</code>, with durable configuration and query data on the existing <code>homelab-adguard</code> VirtioFS mount</dd>
+        <dt>Policy source</dt><dd>Export the existing resolver's upstreams, blocklists, allowlists, custom rules, and DNS rewrites; preserve behavior except for the new private Gitea name and host-specific bindings</dd>
+        <dt>Cutover rule</dt><dd>Test DNS on a single client first, compare representative answers from <code>.9</code> and <code>.100</code>, then change router DHCP DNS and later WireGuard peers. Retire old AdGuard and WireGuard independently</dd>
+      </dl>
+      <h3>Sequence</h3>
+      <ol class="compact">
+        <li><span class="status open">Export</span> Obtain the old AdGuard configuration through an authenticated export or host file, inventory secrets, and retain a recoverable copy outside Git.</li>
+        <li><span class="status planned">Deploy</span> Pin the official image, install Docker on the access VM, mount the existing dataset, configure DNS on TCP/UDP 53, and keep administration private.</li>
+        <li><span class="status planned">Verify</span> Compare public and blocked answers against <code>.9</code>, prove the private Gitea answer is <code>192.168.1.101</code>, and browse Gitea over trusted HTTPS from one test client.</li>
+        <li><span class="status planned">Cut over</span> Change DHCP DNS only after parity; update VPN DNS separately after the replacement WireGuard service is ready. Do not leave a public resolver as a secondary if every client must use AdGuard.</li>
+      </ol>
     </section>
 
     <section id="tls-panel" role="tabpanel" aria-labelledby="tls-tab" hidden>
