@@ -1,0 +1,13 @@
+---
+- name: Apply the common guest baseline
+  ansible.builtin.import_playbook: common.yml
+
+- name: Deploy the parallel AdGuard resolver
+  hosts: access
+  become: true
+  gather_facts: true
+  vars:
+    adguard_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+  roles:
+    - docker-engine
+    - adguard

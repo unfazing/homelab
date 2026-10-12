@@ -2,4 +2,10 @@
 
 Builds Caddy 2.11.4 from digest-pinned official builder and runtime images with only `caddy-dns/cloudflare` v0.2.4 added. The role stores the Cloudflare token outside persistent application data, publishes TCP 443 only on the services VM address, reaches Gitea through the dedicated `homelab-proxy` Docker network, and never mounts the Docker socket.
 
-Staging and production ACME state use separate directories below `/srv/homelab/reverse-proxy`. Use `task apps:caddy:deploy-staging` first; production issuance requires a separate explicit confirmation.
+The explicit `adguard.home.<domain>` route proxies to the access VM's HTTP
+backend on port 3000. The access VM firewall admits that port only from Caddy
+and guest-local traffic; the HTTPS route itself has no client certificate or
+client-IP allowlist, and AdGuard still requires its own login. The hostname is
+published only by the replacement `.100` resolver until client DNS cutover.
+
+Staging and production ACME state use separate directories below `/srv/homelab/reverse-proxy`. Use `task apps:caddy:check-production` to preview changes to the live route without swapping to an untrusted staging certificate. Production deployment requires a separate explicit confirmation.

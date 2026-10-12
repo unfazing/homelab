@@ -8,6 +8,8 @@ services:
     image: "{{ caddy_image }}"
     container_name: caddy
     restart: unless-stopped
+    labels:
+      io.homelab.caddyfile-checksum: "{{ lookup('ansible.builtin.template', 'Caddyfile.j2') | hash('sha256') }}"
     ports:
       - "{{ caddy_bind_address }}:443:443/tcp"
     networks:

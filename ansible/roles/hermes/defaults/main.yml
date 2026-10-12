@@ -1,0 +1,9 @@
+---
+hermes_image: "nousresearch/hermes-agent:v0.21.6@sha256:55e192fba0cd4fde61142abbff5adeacff40efdb482ccd0ff877924bd274f909"
+hermes_compose_dir: /opt/homelab/hermes
+hermes_data_dir: /srv/homelab/hermes
+hermes_dashboard_secret_file: ""
+hermes_domain: ""
+hermes_dashboard_address: "{{ ansible_host }}"
+hermes_dashboard_port: 9119
+hermes_proxy_address: "{{ hostvars[groups['services'][0]].ansible_host }}"

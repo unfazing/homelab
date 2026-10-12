@@ -1,0 +1,7 @@
+destroy table inet homelab_hermes_dashboard
+table inet homelab_hermes_dashboard {
+    chain prerouting {
+        type filter hook prerouting priority -150; policy accept;
+        ip daddr {{ hermes_dashboard_address }} tcp dport {{ hermes_dashboard_port }} ip saddr != {{ hermes_proxy_address }} drop
+    }
+}

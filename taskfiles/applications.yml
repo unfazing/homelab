@@ -36,6 +36,18 @@ tasks:
         -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
         ansible/playbooks/caddy.yml
 
+  caddy:check-production:
+    desc: Preview Caddy changes against the live production certificate state
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --check --diff -i "{{.INVENTORY}}"
+        -e "caddy_acme_environment=production"
+        -e "caddy_acme_ca={{.ACME_PRODUCTION_CA}}"
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/caddy.yml
+
   caddy:deploy-staging:
     desc: Build Caddy and prove Cloudflare DNS-01 against Let's Encrypt staging
     deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
@@ -124,3 +136,104 @@ tasks:
         printf 'Username: homelab-admin\nEmail: admin@gmail.com\nPassword: '
         cat "{{.GITEA_SECRET_FILE}}"
         printf '\nChange this password at first login.\n'
+
+  adguard:secret:
+    internal: true
+    cmds:
+      - bash taskfiles/scripts/app/adguard-bootstrap-secret.sh
+
+  adguard:domain:
+    internal: true
+    preconditions:
+      - sh: test -n "${HOMELAB_DOMAIN:-}"
+        msg: Set HOMELAB_DOMAIN in the ignored root .envrc
+
+  adguard:check:
+    desc: Preview the parallel AdGuard deployment on lab-access-01
+    deps: [":config:inventory", "adguard:domain", "adguard:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --check --diff -i "{{.INVENTORY}}"
+        -e "adguard_admin_password_file=$PWD/.generated/secrets/adguard-admin-password"
+        ansible/playbooks/adguard.yml
+
+  adguard:deploy:
+    desc: Deploy and reconcile the parallel AdGuard resolver at 192.168.1.100
+    deps: [":config:inventory", "adguard:domain", "adguard:secret"]
+    preconditions:
+      - sh: test ! -e .generated/secrets/.adguard-rotate.lock
+        msg: AdGuard password rotation is in progress; do not deploy concurrently
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --diff -i "{{.INVENTORY}}"
+        -e "adguard_admin_password_file=$PWD/.generated/secrets/adguard-admin-password"
+        ansible/playbooks/adguard.yml
+
+  adguard:verify:
+    desc: Compare old and new DNS answers without changing any client settings
+    deps: ["adguard:domain"]
+    cmds:
+      - bash taskfiles/scripts/app/adguard-verify.sh
+
+  adguard:credentials:
+    desc: Show the replacement AdGuard administrator credentials and HTTPS URL
+    deps: ["adguard:domain"]
+    preconditions:
+      - sh: test -s .generated/secrets/adguard-admin-password
+        msg: Run task apps:adguard:deploy first
+    cmds:
+      - |
+        printf 'Username: server\nPassword: '
+        cat .generated/secrets/adguard-admin-password
+        printf '\nHTTPS: https://adguard.home.%s/ (client DNS must use 192.168.1.100)\n' "$HOMELAB_DOMAIN"
+        printf 'Fallback tunnel: ssh -L 3000:192.168.1.100:3000 user@192.168.1.101\n'
+
+  adguard:rotate-password:
+    desc: Rotate the AdGuard administrator password with guest rollback and DNS verification
+    deps: [":config:inventory", "adguard:domain"]
+    preconditions:
+      - sh: test "${HOMELAB_CONFIRM_ADGUARD_ROTATION:-}" = "yes"
+        msg: Set HOMELAB_CONFIRM_ADGUARD_ROTATION=yes for a brief DNS interruption
+      - sh: test -s .generated/secrets/adguard-admin-password
+        msg: Deploy AdGuard before rotating its administrator password
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - bash taskfiles/scripts/app/adguard-rotate-password.sh
+
+  hermes:secret:
+    internal: true
+    cmds:
+      - python3 taskfiles/scripts/app/hermes-bootstrap-secret.py
+
+  hermes:check:
+    desc: Preview the provider-neutral Hermes dashboard deployment
+    deps: [":config:inventory", "adguard:domain", "hermes:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --check --diff -i "{{.INVENTORY}}"
+        -e "hermes_dashboard_secret_file=$PWD/.generated/secrets/hermes-dashboard.json"
+        ansible/playbooks/hermes.yml
+
+  hermes:deploy:
+    desc: Deploy the authenticated Hermes dashboard on lab-agents-01
+    deps: [":config:inventory", "adguard:domain", "hermes:secret"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --diff -i "{{.INVENTORY}}"
+        -e "hermes_dashboard_secret_file=$PWD/.generated/secrets/hermes-dashboard.json"
+        ansible/playbooks/hermes.yml
+
+  hermes:credentials:
+    desc: Show the local Hermes dashboard login and HTTPS URL
+    deps: ["adguard:domain"]
+    preconditions:
+      - sh: test -s .generated/secrets/hermes-dashboard.json
+        msg: Run task apps:hermes:deploy first
+    cmds:
+      - |
+        jq -r '"Username: \(.username)\nPassword: \(.password)"' .generated/secrets/hermes-dashboard.json
+        printf 'HTTPS: https://hermes.home.%s/ (client DNS must use 192.168.1.100)\n' "$HOMELAB_DOMAIN"

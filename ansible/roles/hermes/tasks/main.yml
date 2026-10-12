@@ -1,0 +1,171 @@
+---
+- name: Validate the provider-neutral Hermes deployment contract
+  ansible.builtin.assert:
+    that:
+      - hermes_image is match('^nousresearch/hermes-agent:v[0-9.]+@sha256:[a-f0-9]{64}$')
+      - hermes_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - hermes_dashboard_secret_file | length > 0
+      - hermes_dashboard_address == ansible_host
+      - hermes_proxy_address != hermes_dashboard_address
+      - "'homelab-hermes' in homelab_virtiofs_mappings"
+    fail_msg: Hermes needs its reviewed image, private domain, ignored dashboard credential, and VirtioFS dataset.
+    quiet: true
+
+- name: Load the ignored dashboard authentication material
+  ansible.builtin.set_fact:
+    hermes_dashboard_auth: "{{ lookup('ansible.builtin.file', hermes_dashboard_secret_file) | from_json }}"
+  no_log: true
+
+- name: Verify the Hermes dataset is mounted before writing state
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, "SOURCE,FSTYPE", --mountpoint, "{{ hermes_data_dir }}"]
+  register: hermes_mount
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Assert the expected durable mount
+  ansible.builtin.assert:
+    that:
+      - hermes_mount.stdout.split() == ['homelab-hermes', 'virtiofs']
+    fail_msg: Refusing to write Hermes state to the disposable root disk.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Create the Hermes Compose project directory
+  ansible.builtin.file:
+    path: "{{ hermes_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Set the official image's runtime UID on the persistent dataset
+  ansible.builtin.file:
+    path: "{{ hermes_data_dir }}"
+    state: directory
+    owner: '10000'
+    group: '10000'
+    mode: '0700'
+
+- name: Seed provider-neutral config and password-hash authentication once
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ hermes_data_dir }}/config.yaml"
+    owner: '10000'
+    group: '10000'
+    mode: '0600'
+    force: false
+  no_log: true
+
+- name: Install nftables for the dashboard backend boundary
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Create Docker's systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Render the dashboard backend firewall
+  ansible.builtin.template:
+    src: dashboard-backend.nft.j2
+    dest: "{{ hermes_compose_dir }}/dashboard-backend.nft"
+    owner: root
+    group: root
+    mode: '0640'
+  register: hermes_firewall_rules
+
+- name: Validate the dashboard backend firewall
+  ansible.builtin.command:
+    argv: [nft, --check, --file, "{{ hermes_compose_dir }}/dashboard-backend.nft"]
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Install the dashboard firewall unit
+  ansible.builtin.template:
+    src: homelab-hermes-dashboard-firewall.service.j2
+    dest: /etc/systemd/system/homelab-hermes-dashboard-firewall.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: hermes_firewall_unit
+
+- name: Activate the firewall before publishing the dashboard port
+  ansible.builtin.systemd_service:
+    name: homelab-hermes-dashboard-firewall.service
+    daemon_reload: true
+    enabled: true
+    state: "{{ 'restarted' if hermes_firewall_rules.changed or hermes_firewall_unit.changed else 'started' }}"
+  when: not ansible_check_mode
+
+- name: Require the dashboard firewall before Docker starts on boot
+  ansible.builtin.template:
+    src: docker-firewall-dependency.conf.j2
+    dest: /etc/systemd/system/docker.service.d/10-homelab-hermes-dashboard-firewall.conf
+    owner: root
+    group: root
+    mode: '0644'
+  register: hermes_docker_dependency
+
+- name: Load the Docker service dependency without interrupting it
+  ansible.builtin.systemd_service:
+    name: docker.service
+    daemon_reload: true
+  when:
+    - not ansible_check_mode
+    - hermes_docker_dependency.changed
+
+- name: Verify the dashboard firewall table is loaded
+  ansible.builtin.command:
+    argv: [nft, list, table, inet, homelab_hermes_dashboard]
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Render the pinned Hermes Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ hermes_compose_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+
+- name: Validate the Hermes Compose project
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ hermes_compose_dir }}", config, --quiet]
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Pull the exact reviewed Hermes image
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ hermes_compose_dir }}", pull]
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Converge the Hermes Compose project
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ hermes_compose_dir }}", up, --detach, --wait]
+  register: hermes_compose_up
+  changed_when: >-
+    'Created' in (hermes_compose_up.stdout + hermes_compose_up.stderr)
+    or 'Started' in (hermes_compose_up.stdout + hermes_compose_up.stderr)
+    or 'Recreated' in (hermes_compose_up.stdout + hermes_compose_up.stderr)
+  when: not ansible_check_mode
+
+- name: Verify the dashboard requires its basic authentication provider
+  ansible.builtin.uri:
+    url: "http://{{ hermes_dashboard_address }}:{{ hermes_dashboard_port }}/api/status"
+    return_content: true
+    status_code: 200
+  register: hermes_dashboard_status
+  retries: 20
+  delay: 3
+  until: >-
+    hermes_dashboard_status.status == 200
+    and hermes_dashboard_status.json.auth_required | default(false)
+    and 'basic' in (hermes_dashboard_status.json.auth_providers | default([]))
+  changed_when: false
+  when: not ansible_check_mode

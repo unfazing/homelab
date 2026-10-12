@@ -9,6 +9,10 @@
       - caddy_acme_email is match('^[^@\s]+@[^@\s]+$')
       - caddy_cloudflare_api_token | length >= 20
       - caddy_bind_address == ansible_host
+      - caddy_adguard_hostname == 'adguard.home.' ~ caddy_domain
+      - caddy_adguard_upstream == 'http://' ~ hostvars[groups['access'][0]].ansible_host ~ ':3000'
+      - caddy_hermes_hostname == 'hermes.home.' ~ caddy_domain
+      - caddy_hermes_upstream == 'http://' ~ hostvars[groups['agents'][0]].ansible_host ~ ':9119'
       - caddy_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
       - caddy_acme_environment in ['staging', 'production']
       - caddy_acme_ca is match('^https://')
@@ -251,6 +255,28 @@
   retries: 30
   delay: 10
   until: caddy_production_health.rc == 0
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - caddy_acme_environment == 'production'
+
+- name: Verify the production AdGuard HTTPS route through Caddy
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --silent
+      - --show-error
+      - --fail
+      - --location
+      - --output
+      - /dev/null
+      - --resolve
+      - "{{ caddy_adguard_hostname }}:443:{{ caddy_bind_address }}"
+      - "https://{{ caddy_adguard_hostname }}/"
+  register: caddy_adguard_production_health
+  retries: 12
+  delay: 5
+  until: caddy_adguard_production_health.rc == 0
   changed_when: false
   when:
     - not ansible_check_mode

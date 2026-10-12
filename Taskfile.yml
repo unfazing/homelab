@@ -46,6 +46,10 @@ tasks:
           taskfiles/scripts/verify-image.sh \
           taskfiles/scripts/inventory/generate.sh \
           taskfiles/scripts/app/gitea-bootstrap-secret.sh \
+          taskfiles/scripts/app/adguard-bootstrap-secret.sh \
+          taskfiles/scripts/app/adguard-rotate-password.sh \
+          taskfiles/scripts/app/adguard-verify.sh \
+          taskfiles/scripts/app/hermes-bootstrap-secret.py \
           taskfiles/scripts/host/terraform-mapping-role.sh \
           taskfiles/scripts/storage/verify-virtiofs.sh \
           taskfiles/scripts/storage/zfs.sh \
@@ -63,8 +67,32 @@ tasks:
           ansible/playbooks/cloudflare-ddns.yml \
           ansible/playbooks/caddy.yml \
           ansible/playbooks/gitea.yml \
+          ansible/playbooks/adguard.yml \
+          ansible/playbooks/adguard-rotate-password.yml \
+          ansible/playbooks/hermes.yml \
+          ansible/roles/adguard/defaults/main.yml \
+          ansible/roles/adguard/tasks/main.yml \
+          ansible/roles/adguard/files/reconcile.py \
+          ansible/roles/adguard/files/rotate_password.py \
+          ansible/roles/adguard/tasks/rotate-password.yml \
+          ansible/roles/adguard/templates/compose.yml.j2 \
+          ansible/roles/adguard/templates/policy.json.j2 \
+          ansible/roles/adguard/templates/admin-backend.nft.j2 \
+          ansible/roles/adguard/templates/homelab-adguard-admin-firewall.service.j2 \
+          ansible/roles/adguard/templates/docker-firewall-dependency.conf.j2 \
+          ansible/roles/adguard/tests/test_reconcile.py \
+          ansible/roles/adguard/tests/test_rotate_password.py \
+          ansible/roles/hermes/defaults/main.yml \
+          ansible/roles/hermes/tasks/main.yml \
+          ansible/roles/hermes/templates/compose.yml.j2 \
+          ansible/roles/hermes/templates/config.yaml.j2 \
+          ansible/roles/hermes/templates/dashboard-backend.nft.j2 \
+          ansible/roles/hermes/templates/homelab-hermes-dashboard-firewall.service.j2 \
+          ansible/roles/hermes/templates/docker-firewall-dependency.conf.j2 \
           ansible/roles/caddy/tasks/main.yml \
           ansible/roles/caddy/templates/Dockerfile.j2 \
+          ansible/roles/caddy/templates/Caddyfile.j2 \
+          ansible/roles/caddy/templates/compose.yml.j2 \
           ansible/roles/cloudflare-ddns/tasks/main.yml \
           ansible/roles/cloudflare-ddns/templates/cloudflare-ddns.sh.j2 \
           ansible/roles/docker-engine/tasks/main.yml \

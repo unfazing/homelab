@@ -1,0 +1,13 @@
+[Unit]
+Description=Restrict Hermes dashboard HTTP backend to Caddy
+After=nftables.service
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f {{ hermes_compose_dir }}/dashboard-backend.nft
+ExecReload=/usr/sbin/nft -f {{ hermes_compose_dir }}/dashboard-backend.nft
+
+[Install]
+WantedBy=multi-user.target

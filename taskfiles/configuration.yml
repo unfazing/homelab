@@ -33,6 +33,19 @@ tasks:
         ansible-playbook --syntax-check -i "{{.INVENTORY}}"
         -e "gitea_admin_password_file=/tmp/gitea-syntax-placeholder"
         ansible/playbooks/gitea.yml
+      - >-
+        ansible-playbook --syntax-check -i "{{.INVENTORY}}"
+        -e "adguard_admin_password_file=/tmp/adguard-syntax-placeholder"
+        ansible/playbooks/adguard.yml
+      - >-
+        ansible-playbook --syntax-check -i "{{.INVENTORY}}"
+        -e "adguard_expected_current_password_file=/tmp/adguard-current-syntax-placeholder"
+        -e "adguard_new_password_file=/tmp/adguard-new-syntax-placeholder"
+        ansible/playbooks/adguard-rotate-password.yml
+      - >-
+        ansible-playbook --syntax-check -i "{{.INVENTORY}}"
+        -e "hermes_dashboard_secret_file=/tmp/hermes-syntax-placeholder"
+        ansible/playbooks/hermes.yml
 
   ping:
     desc: Verify Ansible connectivity to every Terraform VM

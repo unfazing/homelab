@@ -16,3 +16,7 @@ caddy_acme_environment: staging
 caddy_acme_ca: https://acme-staging-v02.api.letsencrypt.org/directory
 caddy_gitea_hostname: "gitea.home.{{ caddy_domain }}"
 caddy_gitea_upstream: http://gitea:3000
+caddy_adguard_hostname: "adguard.home.{{ caddy_domain }}"
+caddy_adguard_upstream: "http://{{ hostvars[groups['access'][0]].ansible_host }}:3000"
+caddy_hermes_hostname: "hermes.home.{{ caddy_domain }}"
+caddy_hermes_upstream: "http://{{ hostvars[groups['agents'][0]].ansible_host }}:9119"

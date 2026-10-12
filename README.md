@@ -6,6 +6,8 @@ Architecture and design decisions: [architecture.html](architecture.html)
 
 Implementation plan and progress: [implementation.html](implementation.html)
 
+Step-by-step deployment commands and code trace: [deployment-guide.html](deployment-guide.html)
+
 ## Operator workflow
 
 Copy `.envrc.example` to the ignored `.envrc`, replace its placeholders, and load it with direnv. Task never sources or prints the credential file.

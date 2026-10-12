@@ -1,6 +1,8 @@
 # Local .terraform directories
 .terraform/
 .generated/
+__pycache__/
+*.pyc
 .DS_Store
 packer/images/downloaded_iso_path/
 

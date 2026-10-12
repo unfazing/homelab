@@ -16,6 +16,16 @@
 		reverse_proxy {{ caddy_gitea_upstream }}
 	}
 
+	@adguard host {{ caddy_adguard_hostname }}
+	handle @adguard {
+		reverse_proxy {{ caddy_adguard_upstream }}
+	}
+
+	@hermes host {{ caddy_hermes_hostname }}
+	handle @hermes {
+		reverse_proxy {{ caddy_hermes_upstream }}
+	}
+
 	handle {
 		respond "Unknown private service" 404
 	}

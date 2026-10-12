@@ -1,0 +1,26 @@
+name: adguard
+
+services:
+  adguard:
+    image: "{{ adguard_image }}"
+    container_name: adguard
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - --no-check-update
+      - --config
+      - /opt/adguardhome/conf/AdGuardHome.yaml
+      - --work-dir
+      - /opt/adguardhome/work
+      - --web-addr
+      - "{{ adguard_admin_address }}:{{ adguard_admin_port }}"
+    volumes:
+      - "{{ adguard_data_dir }}/conf:/opt/adguardhome/conf"
+      - "{{ adguard_data_dir }}/work:/opt/adguardhome/work"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s

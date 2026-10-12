@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homelab Deployment Guide</title>
+  <style>
+    :root { color-scheme: light; --ink: #172536; --muted: #536477; --line: #d8e1e8; --blue: #0d547c; --pale: #f4f8fa; --warm: #fff4e6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f8fafb; color: var(--ink); font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(100% - 36px, 1180px); margin: 0 auto; padding: 38px 0 64px; }
+    h1, h2, h3 { line-height: 1.2; letter-spacing: -.02em; }
+    h1 { margin: 12px 0 8px; font-size: clamp(2rem, 4vw, 3rem); }
+    h2 { margin: 0 0 10px; font-size: 1.55rem; }
+    p { margin: 0 0 12px; }
+    a { color: var(--blue); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    nav.docs, nav.chapters { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+    nav.docs { font-size: .91rem; }
+    nav.chapters { margin: 22px 0 30px; }
+    nav.chapters a { padding: 7px 11px; background: #e9f1f5; border-radius: 999px; text-decoration: none; }
+    header { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+    .intro { max-width: 75ch; color: var(--muted); }
+    .note { margin: 16px 0 0; padding: 14px 16px; border-left: 4px solid var(--blue); background: #eaf3f8; border-radius: 0 7px 7px 0; }
+    .warning { border-left-color: #b35a17; background: var(--warm); }
+    section { margin-top: 36px; }
+    .section-intro { color: var(--muted); max-width: 84ch; }
+    .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: white; }
+    table { width: 100%; min-width: 890px; border-collapse: collapse; table-layout: fixed; }
+    col.command { width: 21%; } col.outcome { width: 25%; } col.how { width: 30%; } col.trace { width: 24%; }
+    caption { text-align: left; padding: 0; height: 0; overflow: hidden; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+    thead th { background: #e8f1f5; font-size: .79rem; letter-spacing: .06em; text-transform: uppercase; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:nth-child(even) { background: #fbfcfd; }
+    td:first-child { font-weight: 600; }
+    code { font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+    td code, p code { background: #eaf0f3; padding: 2px 4px; border-radius: 4px; }
+    .trace { font-size: .88rem; }
+    .trace a { display: inline-block; margin: 0 4px 3px 0; }
+    .step { display: inline-block; min-width: 2.1em; margin-right: 6px; color: var(--blue); font-variant-numeric: tabular-nums; }
+    .kind { display: block; margin-top: 5px; color: var(--muted); font-size: .76rem; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+    footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+    @media print { body { background: white; } main { width: 100%; padding: 0; } nav.chapters { display: none; } section { break-inside: avoid; } .table-scroll { overflow: visible; } table { min-width: 0; } a { color: inherit; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav class="docs" aria-label="Project documents">
+        <a href="architecture.html">Architecture</a>
+        <a href="implementation.html">Implementation</a>
+        <a href="deployment-guide.html" aria-current="page">Deployment guide</a>
+      </nav>
+      <h1>Deploy the homelab</h1>
+      <p class="intro">A human-readable trace of the current repository: run the public Task command, understand its result, then follow the links to the code that performs it. Work from the repository root on the trusted administrator Mac. Rows are in execution order; conditional rows are labelled.</p>
+      <p class="note"><strong>Before starting:</strong> prepare the ignored <code>.envrc</code> using <a href=".envrc.example">.envrc.example</a>, load it with direnv, and keep secrets out of Git and terminal transcripts. Review <a href="architecture.html">design constraints</a> and <a href="implementation.html">current progress</a> before a fresh rebuild. This guide describes commands; it does not run them.</p>
+      <p class="note warning"><strong>Safety boundary:</strong> the first ZFS pool creation erases one specified physical disk; VM ID 9000 is the Packer template; test VM ID 9900 is disposable. Never run the guarded first-time or apply steps without checking their targets and reviewing the plan. No routine Task command destroys persistent application data.</p>
+    </header>
+
+    <nav class="chapters" aria-label="Guide chapters">
+      <a href="#prepare">1. Prepare</a><a href="#image">2. Image</a><a href="#storage">3. Data</a><a href="#infrastructure">4. VMs</a><a href="#guests">5. Guests</a><a href="#services">6. Services</a><a href="#verify">7. Verify</a>
+    </nav>
+
+    <section id="prepare">
+      <h2>1. Prepare the operator machine</h2>
+      <p class="section-intro">Task is the public interface. Commands expect credentials already exported by the ignored environment file; Task itself does not source that file.</p>
+      <div class="table-scroll"><table>
+        <caption>Prepare the operator environment</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">01</span><code>direnv allow</code><span class="kind">After preparing .envrc</span></td><td>Authorizes direnv to load the local Packer, Terraform, Cloudflare, and domain variables.</td><td>With its shell hook installed, direnv reads the ignored <code>.envrc</code>. Edit placeholders first; never commit or print real token values.</td><td class="trace"><a href=".envrc.example">.envrc.example</a><a href="README.md">README.md</a></td></tr>
+          <tr><td><span class="step">02</span><code>task doctor</code><span class="kind">Read-only remote check</span></td><td>Confirms required tools, files, variables, and Proxmox API authentication.</td><td>The root Taskfile tests command availability and source paths, checks required variable names, then calls the Proxmox nodes API without printing the token.</td><td class="trace"><a href="Taskfile.yml">Taskfile.yml</a></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="image">
+      <h2>2. Build the reusable VM image</h2>
+      <p class="section-intro">Do this for a new or deliberately replaced template. Existing VM 9000 makes the build refuse to proceed; do not remove it as a routine update.</p>
+      <div class="table-scroll"><table>
+        <caption>Build and verify the Ubuntu template</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">03</span><code>task image:validate</code><span class="kind">No Proxmox change</span></td><td>Checks the Packer definition and rendered Ubuntu NoCloud seed.</td><td>Task initializes the pinned plugin; the helper generates a temporary SSH key and seed, invokes <code>packer validate</code>, then removes temporary material.</td><td class="trace"><a href="taskfiles/image.yml">image.yml</a><a href="taskfiles/scripts/packer-image.sh">packer-image.sh</a><a href="packer/images/ubuntu-26.04/config.pkr.hcl">config.pkr.hcl</a></td></tr>
+          <tr><td><span class="step">04</span><code>task image:build</code><span class="kind">Guarded Proxmox change</span></td><td>Creates generic Ubuntu template VM <code>9000</code> and a non-secret build manifest.</td><td>Task formats and invokes the helper; Packer boots the pinned Ubuntu ISO with a temporary <code>cidata</code> CD, installs the OS, cleans identity and installer state, and converts the VM into a template.</td><td class="trace"><a href="taskfiles/image.yml">image.yml</a><a href="taskfiles/scripts/packer-image.sh">packer-image.sh</a><a href="packer/images/ubuntu-26.04/config.pkr.hcl">config.pkr.hcl</a><a href="packer/seed/ubuntu/user-data.pkrtpl">user-data.pkrtpl</a></td></tr>
+          <tr><td><span class="step">05</span><code>task image:verify</code><span class="kind">Disposable acceptance test</span></td><td>Tests a clone of template 9000 and removes test VM <code>9900</code> after the run.</td><td>The helper uses isolated Terraform state, an ephemeral key, SSH and guest-agent assertions, and a cleanup trap. It retains a non-secret pass report.</td><td class="trace"><a href="taskfiles/image.yml">image.yml</a><a href="taskfiles/scripts/verify-image.sh">verify-image.sh</a><a href="terraform/image-verification/main.tf">image-verification/main.tf</a></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="storage">
+      <h2>3. Prepare persistent data</h2>
+      <p class="section-intro">The VM OS disks are rebuildable; application datasets live separately on the SATA-backed ZFS pool. The destructive bootstrap is a first-install branch, not a normal deployment step.</p>
+      <div class="table-scroll"><table>
+        <caption>Prepare the data pool and mapping permission</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">06</span><code>task data:status</code><span class="kind">Read-only</span></td><td>Shows whether pool <code>tank</code> exists and lists its health and datasets.</td><td>Task calls the host-side ZFS helper over SSH; status mode makes no storage changes.</td><td class="trace"><a href="taskfiles/data.yml">data.yml</a><a href="taskfiles/scripts/storage/zfs.sh">zfs.sh</a></td></tr>
+          <tr><td><span class="step">07a</span><code>task data:bootstrap</code><span class="kind">First install only · erases disk</span></td><td>Creates the authorized single-disk pool and application datasets if the pool is absent.</td><td>Requires the exact <code>HOMELAB_CONFIRM_DATA_WIPE</code> device identifier. The helper verifies serial, model, size, root-disk exclusion, and mounts before pool creation. Skip this row on an existing pool.</td><td class="trace"><a href="taskfiles/data.yml">data.yml</a><a href="taskfiles/scripts/storage/zfs.sh">zfs.sh</a></td></tr>
+          <tr><td><span class="step">07b</span><code>task data:reconcile</code><span class="kind">Existing pool</span></td><td>Ensures required datasets and ZFS properties exist without creating or replacing a pool.</td><td>The same guarded helper checks the authorized backing disk, then reconciles pool properties and application datasets. Use this branch for the current installation.</td><td class="trace"><a href="taskfiles/data.yml">data.yml</a><a href="taskfiles/scripts/storage/zfs.sh">zfs.sh</a></td></tr>
+          <tr><td><span class="step">08</span><code>task host:mapping-access-status</code><span class="kind">Read-only</span></td><td>Checks whether the Terraform API token can manage Proxmox directory mappings.</td><td>The host helper queries privileges at <code>/mapping/dir</code> over SSH.</td><td class="trace"><a href="taskfiles/host.yml">host.yml</a><a href="taskfiles/scripts/host/terraform-mapping-role.sh">terraform-mapping-role.sh</a></td></tr>
+          <tr><td><span class="step">09</span><code>task host:mapping-access</code><span class="kind">Only if step 08 fails</span></td><td>Grants the token the narrowly scoped mapping role needed by Terraform.</td><td>The helper creates or updates <code>TerraformMapping</code> and its ACL at <code>/mapping/dir</code>; it does not grant general Proxmox administration.</td><td class="trace"><a href="taskfiles/host.yml">host.yml</a><a href="taskfiles/scripts/host/terraform-mapping-role.sh">terraform-mapping-role.sh</a></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="infrastructure">
+      <h2>4. Plan and apply the VM topology</h2>
+      <p class="section-intro">Confirm the F620 DHCP range ends at or below <code>192.168.1.99</code> before applying static VM addresses in <code>.100–.102</code>. Inspect the plan for replacements and dataset mapping changes.</p>
+      <div class="table-scroll"><table>
+        <caption>Deploy the Proxmox VMs</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">10</span><code>task infra:validate</code><span class="kind">No VM change</span></td><td>Initializes and validates the three-VM Terraform deployment.</td><td>Task runs Terraform init and validate against the root module and provider configuration.</td><td class="trace"><a href="taskfiles/infrastructure.yml">infrastructure.yml</a><a href="terraform/providers.tf">providers.tf</a><a href="terraform/main.tf">main.tf</a></td></tr>
+          <tr><td><span class="step">11</span><code>task infra:plan</code><span class="kind">Review before apply</span></td><td>Shows proposed VM and directory-mapping changes without applying them.</td><td>Task checks mapping privileges, then plans with versioned non-secret <code>deployment.tfvars.json</code>. Review creates, destroys, replacements, IPs, and VirtioFS attachments.</td><td class="trace"><a href="taskfiles/infrastructure.yml">infrastructure.yml</a><a href="terraform/main.tf">main.tf</a><a href="terraform/locals.tf">locals.tf</a><a href="terraform/modules/proxmox-vm/main.tf">proxmox-vm/main.tf</a></td></tr>
+          <tr><td><span class="step">12</span><code>HOMELAB_STATIC_RANGE_RESERVED=yes task infra:apply</code><span class="kind">Interactive Proxmox change</span></td><td>Creates or converges the three VMs and attaches their persistent-data mappings.</td><td>The confirmation variable is a guard, not a substitute for checking DHCP and reviewing step 11. Task rechecks mapping access and invokes Terraform apply.</td><td class="trace"><a href="taskfiles/infrastructure.yml">infrastructure.yml</a><a href="terraform/main.tf">main.tf</a><a href="terraform/modules/proxmox-vm/main.tf">proxmox-vm/main.tf</a></td></tr>
+          <tr><td><span class="step">13</span><code>task infra:output</code><span class="kind">Read-only</span></td><td>Displays current machine-readable VM outputs.</td><td>Terraform emits IDs, names, mapping tags, and the non-secret Ansible inventory contract.</td><td class="trace"><a href="taskfiles/infrastructure.yml">infrastructure.yml</a><a href="terraform/outputs.tf">outputs.tf</a></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="guests">
+      <h2>5. Hand the VMs to Ansible</h2>
+      <p class="section-intro">Check each rebuilt VM's SSH host-key fingerprint through a trusted path before accepting a changed key. The generated inventory is ignored and contains no application secrets.</p>
+      <div class="table-scroll"><table>
+        <caption>Generate inventory and apply the common baseline</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">14</span><code>task config:inventory</code><span class="kind">Local generated file</span></td><td>Writes <code>.generated/ansible/hosts.json</code> from Terraform outputs.</td><td>The helper validates required host fields, groups VMs, carries VirtioFS tags and mount paths, and atomically writes a mode-<code>0600</code> file.</td><td class="trace"><a href="taskfiles/configuration.yml">configuration.yml</a><a href="taskfiles/scripts/inventory/generate.sh">generate.sh</a><a href="terraform/outputs.tf">outputs.tf</a></td></tr>
+          <tr><td><span class="step">15</span><code>task config:validate</code><span class="kind">No guest change</span></td><td>Checks inventory matches Terraform and syntax-checks the Ansible playbooks.</td><td>Task regenerates inventory, compares parsed host keys to Terraform output, then runs <code>ansible-playbook --syntax-check</code>.</td><td class="trace"><a href="taskfiles/configuration.yml">configuration.yml</a><a href="ansible/playbooks/common.yml">common.yml</a></td></tr>
+          <tr><td><span class="step">16</span><code>task config:ping</code><span class="kind">Connectivity check</span></td><td>Confirms Ansible can authenticate to every VM.</td><td>Task regenerates inventory and runs the Ansible ping module with SSH host-key checking enabled.</td><td class="trace"><a href="taskfiles/configuration.yml">configuration.yml</a><a href="ansible/ansible.cfg">ansible.cfg</a></td></tr>
+          <tr><td><span class="step">17</span><code>task config:common-check</code><span class="kind">Preview only</span></td><td>Shows intended guest baseline and mount changes.</td><td>Ansible runs <code>common.yml</code> in check mode with diffs. It does not invoke application roles.</td><td class="trace"><a href="taskfiles/configuration.yml">configuration.yml</a><a href="ansible/playbooks/common.yml">common.yml</a><a href="ansible/roles/persistent-data/tasks/main.yml">persistent-data/tasks</a></td></tr>
+          <tr><td><span class="step">18</span><code>task config:common</code><span class="kind">Guest convergence</span></td><td>Installs the common baseline and mounts each VM's assigned persistent datasets.</td><td>The playbook applies <code>common</code> and <code>persistent-data</code>; it verifies VirtioFS sources and does not deploy apps.</td><td class="trace"><a href="taskfiles/configuration.yml">configuration.yml</a><a href="ansible/playbooks/common.yml">common.yml</a><a href="ansible/roles/common/tasks/main.yml">common/tasks</a><a href="ansible/roles/persistent-data/tasks/main.yml">persistent-data/tasks</a></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="services">
+      <h2>6. Deploy the implemented services</h2>
+      <p class="section-intro">Each application command regenerates inventory, applies its dedicated playbook, and leaves Terraform state alone. Check-mode previews are useful but cannot prove external connectivity or first-run behavior.</p>
+      <div class="table-scroll"><table>
+        <caption>Deploy Gitea, AdGuard, DDNS, and private HTTPS</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">19</span><code>task apps:gitea:check</code><span class="kind">Preview only</span></td><td>Previews Docker and Gitea changes on <code>lab-services-01</code>.</td><td>Task prepares an ignored bootstrap secret, then runs the Gitea playbook in Ansible check mode.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="taskfiles/scripts/app/gitea-bootstrap-secret.sh">gitea-bootstrap-secret.sh</a><a href="ansible/playbooks/gitea.yml">gitea.yml</a></td></tr>
+          <tr><td><span class="step">20</span><code>task apps:gitea:deploy</code><span class="kind">Guest change</span></td><td>Starts the pinned Gitea Compose project with durable data and creates the initial administrator if absent.</td><td>Ansible applies common mounts, pinned Docker, and the Gitea role; the role renders Compose and checks <code>/api/healthz</code>.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/gitea.yml">gitea.yml</a><a href="ansible/roles/gitea/tasks/main.yml">gitea/tasks</a></td></tr>
+          <tr><td><span class="step">21</span><code>task apps:adguard:check</code><span class="kind">Preview only</span></td><td>Previews the parallel AdGuard resolver on <code>lab-access-01</code>.</td><td>Task prepares an ignored admin secret and runs the access-VM playbook in check mode.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="taskfiles/scripts/app/adguard-bootstrap-secret.sh">adguard-bootstrap-secret.sh</a><a href="ansible/playbooks/adguard.yml">adguard.yml</a></td></tr>
+          <tr><td><span class="step">22</span><code>task apps:adguard:deploy</code><span class="kind">Guest change</span></td><td>Starts the new DNS resolver at <code>192.168.1.100</code>, with durable policy and a separate admin secret.</td><td>Ansible converges Docker, the AdGuard Compose project, its private admin-backend guard, and API-managed DNS policy. It does not change router or WireGuard client DNS.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/adguard.yml">adguard.yml</a><a href="ansible/roles/adguard/tasks/main.yml">adguard/tasks</a><a href="ansible/roles/adguard/files/reconcile.py">reconcile.py</a></td></tr>
+          <tr><td><span class="step">23</span><code>task apps:ddns:check</code><span class="kind">Preview only</span></td><td>Previews the Cloudflare updater for the DNS-only WireGuard hostname.</td><td>Task checks required Cloudflare variables and runs the access-VM DDNS playbook in check mode.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/cloudflare-ddns.yml">cloudflare-ddns.yml</a></td></tr>
+          <tr><td><span class="step">24</span><code>task apps:ddns:deploy</code><span class="kind">DNS and guest change</span></td><td>Installs an unprivileged timer and reconciles the Cloudflare DNS-only WireGuard A record.</td><td>Ansible installs the updater script, scoped token, service, and timer; it verifies a successful run.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/roles/cloudflare-ddns/tasks/main.yml">cloudflare-ddns/tasks</a><a href="ansible/roles/cloudflare-ddns/templates/cloudflare-ddns.sh.j2">cloudflare-ddns.sh.j2</a></td></tr>
+          <tr><td><span class="step">25</span><code>task apps:caddy:check</code><span class="kind">Preview only</span></td><td>Previews the private reverse proxy using Let's Encrypt staging.</td><td>Task requires the domain, ACME contact, and Cloudflare token, then checks the Caddy playbook. The playbook also converges Gitea.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/caddy.yml">caddy.yml</a><a href="ansible/roles/caddy/templates/Caddyfile.j2">Caddyfile.j2</a></td></tr>
+          <tr><td><span class="step">26</span><code>task apps:caddy:deploy-staging</code><span class="kind">ACME staging</span></td><td>Proves private HTTPS and Cloudflare DNS-01 without requesting a trusted production certificate.</td><td>Ansible builds the pinned Cloudflare-enabled Caddy image, writes a protected token, starts Compose, and checks the Gitea HTTPS health route.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/caddy.yml">caddy.yml</a><a href="ansible/roles/caddy/tasks/main.yml">caddy/tasks</a></td></tr>
+          <tr><td><span class="step">27</span><code>task apps:caddy:check-production</code><span class="kind">Preview production</span></td><td>Shows changes against the production Caddy and certificate-state path before applying them.</td><td>Task invokes the Caddy playbook in Ansible check mode with the production ACME directory and the current generated inventory.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/caddy.yml">caddy.yml</a><a href="ansible/roles/caddy/tasks/main.yml">caddy/tasks</a></td></tr>
+          <tr><td><span class="step">28</span><code>HOMELAB_CONFIRM_PRODUCTION_CERTS=yes task apps:caddy:deploy-production</code><span class="kind">After staging and review</span></td><td>Obtains or renews publicly trusted private-service HTTPS and verifies the configured application routes.</td><td>The explicit guard selects the production ACME directory; the Caddy role uses Cloudflare DNS-01 and checks Gitea and AdGuard through the proxy.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/roles/caddy/tasks/main.yml">caddy/tasks</a><a href="ansible/roles/caddy/templates/Caddyfile.j2">Caddyfile.j2</a></td></tr>
+          <tr><td><span class="step">After 28</span><code>task apps:hermes:check</code><span class="kind">Preview only</span></td><td>Previews the provider-neutral Hermes dashboard on <code>lab-agents-01</code>.</td><td>Task creates an ignored bootstrap login if needed, then checks the Hermes role and persistent mount without changing the guest.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/playbooks/hermes.yml">hermes.yml</a></td></tr>
+          <tr><td><span class="step">After 28</span><code>task apps:hermes:deploy</code><span class="kind">Guest change</span></td><td>Starts the authenticated dashboard with durable state and no model credential or externally published agent API.</td><td>Ansible verifies VirtioFS, installs Docker, configures a Caddy-only backend firewall, and starts the pinned Compose project. Reapply production Caddy and AdGuard for its HTTPS route and private DNS rewrite; use <code>task apps:hermes:credentials</code> locally for the initial login.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="ansible/roles/hermes/tasks/main.yml">hermes/tasks</a><a href="ansible/roles/caddy/templates/Caddyfile.j2">Caddyfile.j2</a></td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The old <code>192.168.1.9</code> AdGuard/WireGuard service remains in use until a separately approved client-DNS and VPN cutover. The provider-neutral Hermes dashboard, Caddy route, and private AdGuard name are now live. Model access, Git authority, Nextcloud, Vaultwarden, n8n, and a CI runner remain planned or deferred.</p>
+    </section>
+
+    <section id="verify">
+      <h2>7. Verify, then operate</h2>
+      <div class="table-scroll"><table>
+        <caption>Post-deployment checks and optional proof</caption>
+        <colgroup><col class="command"><col class="outcome"><col class="how"><col class="trace"></colgroup>
+        <thead><tr><th scope="col">Command</th><th scope="col">Outcome</th><th scope="col">How it works</th><th scope="col">Code trace</th></tr></thead>
+        <tbody>
+          <tr><td><span class="step">29</span><code>task apps:adguard:verify</code><span class="kind">Migration-only check</span></td><td>Compares old and new DNS answers for blocking, private names, and a public domain.</td><td>A Task-owned helper queries <code>.9</code> and <code>.100</code> directly. It assumes the old resolver is still running; skip after its retirement.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="taskfiles/scripts/app/adguard-verify.sh">adguard-verify.sh</a></td></tr>
+          <tr><td><span class="step">Optional</span><code>HOMELAB_CONFIRM_ADGUARD_ROTATION=yes task apps:adguard:rotate-password</code><span class="kind">Brief DNS interruption</span></td><td>Enter and confirm your chosen password (at least 9 characters), or press Enter at the first prompt for a random 16-character password. View the generated value after success with <code>task apps:adguard:credentials</code>.</td><td>The Task helper stages an ignored candidate; the AdGuard-owned Ansible playbook changes the stopped service's bcrypt hash, verifies login and private DNS, and restores the old guest state on failure. The controller secret changes only after success. This workflow has been exercised live.</td><td class="trace"><a href="taskfiles/applications.yml">applications.yml</a><a href="taskfiles/scripts/app/adguard-rotate-password.sh">adguard-rotate-password.sh</a><a href="ansible/playbooks/adguard-rotate-password.yml">adguard-rotate-password.yml</a></td></tr>
+          <tr><td><span class="step">30</span><code>task validate</code><span class="kind">No infrastructure apply</span></td><td>Runs the repository-wide tool, formatting, Packer, Terraform, inventory, and Ansible checks.</td><td>The root Taskfile composes smaller validations. It may write local plugin/cache and generated inventory files, but does not deploy VMs or services. Run after Terraform outputs exist.</td><td class="trace"><a href="Taskfile.yml">Taskfile.yml</a><a href="taskfiles/configuration.yml">configuration.yml</a></td></tr>
+          <tr><td><span class="step">31</span><code>task infra:plan</code><span class="kind">Drift review</span></td><td>Shows whether the applied VM topology is stable after deployment.</td><td>Terraform refreshes and compares live Proxmox resources with its desired state; investigate any proposed replacement or mapping change.</td><td class="trace"><a href="taskfiles/infrastructure.yml">infrastructure.yml</a><a href="terraform/main.tf">main.tf</a></td></tr>
+          <tr><td><span class="step">32</span><code>task data:status</code><span class="kind">Storage health</span></td><td>Shows pool health and dataset usage after workloads start.</td><td>Read-only ZFS status mode runs over SSH to the Proxmox host.</td><td class="trace"><a href="taskfiles/data.yml">data.yml</a><a href="taskfiles/scripts/storage/zfs.sh">zfs.sh</a></td></tr>
+          <tr><td><span class="step">Optional</span><code>task data:verify-virtiofs</code><span class="kind">Disposable proof</span></td><td>Proves data survives a verification VM destroy/recreate cycle.</td><td>The guarded helper creates an isolated test dataset and mapping, uses VM <code>9900</code>, then cleans only its own test resources after success. Do not run concurrently with image verification.</td><td class="trace"><a href="taskfiles/data.yml">data.yml</a><a href="taskfiles/scripts/storage/verify-virtiofs.sh">verify-virtiofs.sh</a><a href="terraform/storage-verification/main.tf">storage-verification/main.tf</a></td></tr>
+        </tbody>
+      </table></div>
+      <p class="note warning"><strong>Not automated here:</strong> backup/restore, persistent-data destruction, the replacement WireGuard cutover, and the future services. Treat those as separate designs and approvals, not extra commands to improvise at the end of this sequence.</p>
+    </section>
+
+    <footer>Trace reflects the repository's current Task entry points. <a href="architecture.html">Architecture</a> remains the design authority; <a href="implementation.html">Implementation</a> records completion and open gates.</footer>
+  </main>
+</body>
+</html>

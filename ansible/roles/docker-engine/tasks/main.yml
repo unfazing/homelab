@@ -44,6 +44,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: docker_signing_key
 
 - name: Configure Docker's stable apt repository
   ansible.builtin.deb822_repository:
@@ -55,11 +56,19 @@
     architectures: amd64
     signed_by: /etc/apt/keyrings/docker.asc
     state: present
+  register: docker_repository
 
-- name: Refresh apt metadata for Docker's repository
+- name: Refresh apt metadata after Docker's repository changes
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  when: docker_signing_key.changed or docker_repository.changed
+
+- name: Refresh Docker apt metadata when the existing cache is stale
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 86400
+  when: not (docker_signing_key.changed or docker_repository.changed)
 
 - name: Install pinned Docker Engine and Compose packages
   ansible.builtin.apt:
