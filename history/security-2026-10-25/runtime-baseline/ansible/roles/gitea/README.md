@@ -1,0 +1,5 @@
+# Gitea role
+
+Deploys Gitea 28.2.0 on `lab-services-01`. The security image rebuilds checksum-pinned upstream source with Go 1.27.3, reuses the digest-pinned official release's embedded web assets, and updates Alpine certificate trust. It uses SQLite in WAL mode and stores the entire `/data` tree on `/srv/homelab/gitea` as UID/GID 1000. Back up this dataset consistently before schema upgrades; reverting an image alone does not reverse a database migration.
+
+HTTP binds only to `127.0.0.1:3000`; Git SSH binds to `192.168.1.101:2222`. Gitea also joins the external `homelab-proxy` Docker network so Caddy can reach port 3000 by container DNS without host-network mode or Docker-socket access. Registration, OpenID sign-in/sign-up, and Actions are disabled. The ignored bootstrap administrator is `homelab-admin` with email `admin@gmail.com`; its generated password must be changed on first login. SMTP is not configured, so the email is metadata only and cannot receive password-recovery mail. No Actions runner executes on this VM.

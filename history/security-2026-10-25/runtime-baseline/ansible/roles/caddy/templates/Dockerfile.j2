@@ -1,0 +1,20 @@
+FROM {{ caddy_builder_image }} AS builder
+
+ENV GOTOOLCHAIN={{ caddy_go_toolchain }}
+RUN xcaddy build v{{ caddy_version }} \
+    --with github.com/caddy-dns/cloudflare@{{ caddy_cloudflare_module_version }}
+
+FROM {{ caddy_runtime_image }}
+
+COPY homelab-caddy-entrypoint /usr/bin/homelab-caddy-entrypoint
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+
+RUN apk upgrade --no-cache ca-certificates ca-certificates-bundle \
+    && chmod 0755 /usr/bin/homelab-caddy-entrypoint \
+    && caddy version \
+    && caddy build-info | grep -F {{ caddy_go_toolchain }} \
+    && test ! -e /etc/ssl/certs/ca-cert-emSign_ECC_Root_CA_-_G3.pem \
+    && caddy list-modules --packages | grep -F github.com/caddy-dns/cloudflare
+
+ENTRYPOINT ["/usr/bin/homelab-caddy-entrypoint"]
+CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

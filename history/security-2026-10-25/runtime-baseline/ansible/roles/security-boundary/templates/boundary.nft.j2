@@ -1,0 +1,33 @@
+{% if security_boundary_profile == 'agents' %}
+destroy table inet homelab_agent_egress
+table inet homelab_agent_egress {
+    chain protect_management {
+        # Permit replies to management connections initiated toward this VM.
+        ct state established,related accept
+        # Preserve existing router DNS while denying its management interfaces.
+        ip daddr 192.168.1.254 udp dport 53 accept
+        ip daddr 192.168.1.254 tcp dport 53 accept
+        ip daddr { 192.168.1.10, 192.168.1.254 } counter drop
+        # Inkling is the only approved legacy-host workload path.
+        ip daddr 192.168.1.9 tcp dport 3000 accept
+        ip daddr 192.168.1.9 counter drop
+    }
+    chain forwarded {
+        type filter hook prerouting priority -150; policy accept;
+        jump protect_management
+    }
+    chain local {
+        type filter hook output priority -150; policy accept;
+        jump protect_management
+    }
+}
+{% else %}
+destroy table inet homelab_agent_management
+table inet homelab_agent_management {
+    chain input {
+        type filter hook input priority -20; policy accept;
+        ct state established,related accept
+        ip saddr 192.168.1.102 counter drop
+    }
+}
+{% endif %}

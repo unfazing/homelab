@@ -1,0 +1,54 @@
+name: gitea
+
+services:
+  gitea:
+    image: "{{ gitea_image }}"
+    container_name: gitea
+    restart: unless-stopped
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__actions__ENABLED: "false"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__database__SQLITE_JOURNAL_MODE: WAL
+      GITEA__log__MODE: console
+      GITEA__openid__ENABLE_OPENID_SIGNIN: "false"
+      GITEA__openid__ENABLE_OPENID_SIGNUP: "false"
+      GITEA__repository__DEFAULT_PRIVATE: private
+      GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE: "true"
+      GITEA__repository__ENABLE_PUSH_CREATE_ORG: "false"
+      GITEA__repository__ENABLE_PUSH_CREATE_USER: "true"
+      GITEA__repository__FORCE_PRIVATE: "true"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__DOMAIN: "{{ gitea_domain }}"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__ROOT_URL: "https://{{ gitea_domain }}/"
+      GITEA__server__SSH_DOMAIN: "{{ gitea_http_address }}"
+      GITEA__server__SSH_PORT: "{{ gitea_ssh_port }}"
+      GITEA__service__DEFAULT_USER_VISIBILITY: private
+      GITEA__service__DISABLE_REGISTRATION: "true"
+    ports:
+      - "127.0.0.1:{{ gitea_http_port }}:3000"
+      - "{{ gitea_http_address }}:{{ gitea_ssh_port }}:22"
+    networks:
+      - default
+      - proxy
+    volumes:
+      - "{{ gitea_data_dir }}:/data"
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3000/api/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 1m
+
+networks:
+  default:
+  proxy:
+    name: "{{ gitea_proxy_network }}"
+    external: true

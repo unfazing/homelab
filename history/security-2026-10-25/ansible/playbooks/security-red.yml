@@ -1,0 +1,33 @@
+---
+- name: Update legacy red-server system packages using interactive sudo
+  hosts: red_maintenance
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Keep the retired AIO controller from automatically restarting
+      ansible.builtin.command: docker update --restart=no nextcloud-aio-mastercontainer
+      changed_when: false
+    - name: Confirm AIO remains stopped
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.State.Running}}" }}', nextcloud-aio-mastercontainer]
+      register: security_red_aio
+      changed_when: false
+      failed_when: security_red_aio.stdout != 'false'
+    - name: Apply Ubuntu security updates
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        dpkg_options: force-confdef,force-confold
+    - name: Apply reviewed fixed container-runtime packages
+      ansible.builtin.apt:
+        name:
+          - docker-ce=5:29.9.2-1~ubuntu.24.04~noble
+          - docker-ce-cli=5:29.9.2-1~ubuntu.24.04~noble
+          - containerd.io=2.4.2-3~ubuntu.24.04~noble
+          - docker-buildx-plugin=0.38.1-1~ubuntu.24.04~noble
+          - docker-compose-plugin=5.6.1-1~ubuntu.24.04~noble
+        allow_change_held_packages: true
+    - name: Verify the live Docker runtime
+      ansible.builtin.command:
+        argv: [docker, version, --format, '{{ "{{.Server.Version}} {{.Server.GoVersion}}" }}']
+      changed_when: false

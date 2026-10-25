@@ -1,0 +1,20 @@
+# Reuse the reviewed release's UI instead of resolving a second JS dependency tree.
+FROM {{ gitea_base_image }} AS assets
+USER git
+RUN mkdir /tmp/embedded && gitea embedded extract --include-vendored --destination /tmp/embedded '**'
+
+FROM {{ gitea_go_image }} AS builder
+ENV GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+RUN apk add --no-cache build-base git
+ADD --checksum=sha256:08f602f6c17c4e74747302aba860a8093f98f1e5310261ec362a5f1221a5da0f https://codeload.github.com/go-gitea/gitea/tar.gz/refs/tags/v28.2.0 /tmp/source.tar.gz
+WORKDIR /src
+RUN tar -xzf /tmp/source.tar.gz --strip-components=1
+COPY --from=assets /tmp/embedded/ /src/
+RUN make backend TAGS='bindata timetzdata' GITHUB_REF_TYPE=tag GITHUB_REF_NAME=v28.2.0 VERSION=28.2.0 GITEA_VERSION=28.2.0 \
+    && go version -m /src/gitea | grep -F go1.27.3
+
+FROM {{ gitea_base_image }}
+COPY --from=builder /src/gitea /app/gitea/gitea
+RUN apk upgrade --no-cache \
+    && test ! -e /etc/ssl/certs/ca-cert-emSign_ECC_Root_CA_-_G3.pem \
+    && gitea --version | grep -F '28.2.0' | grep -F go1.27.3

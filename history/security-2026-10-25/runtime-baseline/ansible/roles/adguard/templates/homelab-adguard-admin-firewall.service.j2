@@ -1,0 +1,13 @@
+[Unit]
+Description=Restrict AdGuard HTTP administration backend to Caddy
+After=nftables.service
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f {{ adguard_secret_dir }}/admin-backend.nft
+ExecReload=/usr/sbin/nft -f {{ adguard_secret_dir }}/admin-backend.nft
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,37 @@
+{
+	admin off
+	acme_ca {{ caddy_acme_ca }}
+	auto_https disable_redirects
+	email {{ caddy_acme_email }}
+}
+
+*.home.{{ caddy_domain }} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1 1.0.0.1
+	}
+
+	@gitea host {{ caddy_gitea_hostname }}
+	handle @gitea {
+		reverse_proxy {{ caddy_gitea_upstream }}
+	}
+
+	@adguard host {{ caddy_adguard_hostname }}
+	handle @adguard {
+		reverse_proxy {{ caddy_adguard_upstream }}
+	}
+
+	@hermes host {{ caddy_hermes_hostname }}
+	handle @hermes {
+		reverse_proxy {{ caddy_hermes_upstream }}
+	}
+
+	@inkling host {{ caddy_inkling_hostname }}
+	handle @inkling {
+		reverse_proxy {{ caddy_inkling_upstream }}
+	}
+
+	handle {
+		respond "Unknown private service" 404
+	}
+}

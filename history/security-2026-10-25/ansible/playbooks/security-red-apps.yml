@@ -1,0 +1,100 @@
+---
+- name: Remediate legacy Inkling runtimes without privileged access
+  hosts: red_maintenance
+  gather_facts: false
+  vars:
+    red_node_version: '24.22.1'
+    red_project: /home/server/dev/colouring-book-v1
+    red_security_cache: /home/server/.cache/homelab-security
+  tasks:
+    - name: Create private update and application log directories
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: directory
+        mode: '0700'
+      loop:
+        - '{{ red_security_cache }}'
+        - /home/server/.local/state/homelab
+    - name: Install the fixed Node LTS patch through the existing nvm installation
+      ansible.builtin.shell: |
+        export NVM_DIR=/home/server/.nvm
+        . "$NVM_DIR/nvm.sh"
+        nvm install {{ red_node_version }}
+      args:
+        executable: /bin/bash
+        creates: '/home/server/.nvm/versions/node/v{{ red_node_version }}/bin/node'
+      register: red_node_install
+    - name: Keep future normal nvm sessions on the fixed release
+      ansible.builtin.copy:
+        dest: /home/server/.nvm/alias/default
+        content: "v{{ red_node_version }}\n"
+        mode: '0644'
+    - name: Fetch reviewed Python wheels using the updated system trust store
+      ansible.builtin.get_url:
+        url: '{{ item.url }}'
+        checksum: 'sha256:{{ item.sha256 }}'
+        dest: '{{ red_security_cache }}/{{ item.name }}'
+        mode: '0600'
+      loop:
+        - name: certifi-2026.10.23-py3-none-any.whl
+          url: https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl
+          sha256: e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
+        - name: pip-26.2.2-py3-none-any.whl
+          url: https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl
+          sha256: fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70
+    - name: Update application and pip trust bundles from verified local wheels
+      ansible.builtin.pip:
+        executable: '{{ red_project }}/.venv/bin/pip'
+        name:
+          - '{{ red_security_cache }}/certifi-2026.10.23-py3-none-any.whl'
+          - '{{ red_security_cache }}/pip-26.2.2-py3-none-any.whl'
+        extra_args: --no-index --no-deps
+      register: red_python_update
+    - name: Locate the active frontend executable
+      ansible.builtin.shell: |
+        for pid in $(pgrep -u "$(id -u)" -f '^next-server'); do
+          if [ "$(readlink /proc/$pid/cwd)" = '{{ red_project }}/frontend' ]; then
+            readlink /proc/$pid/exe
+          fi
+        done
+      register: red_frontend_executable
+      changed_when: false
+    - name: Restart only the existing Inkling launcher on the fixed runtime
+      ansible.builtin.shell: |
+        set -eu
+        for pid in $(pgrep -u "$(id -u)" -f '^bash /home/server/dev/colouring-book-v1/run-local.sh$' || true); do
+          test "$(readlink /proc/$pid/cwd)" = '{{ red_project }}'
+          kill -TERM "$pid"
+        done
+        for attempt in $(seq 1 30); do
+          if ! ss -ltnH '( sport = :3000 or sport = :8000 )' | grep -q .; then break; fi
+          sleep 1
+        done
+        if ss -ltnH '( sport = :3000 or sport = :8000 )' | grep -q .; then
+          echo 'Inkling ports did not close; refusing to start a duplicate launcher' >&2
+          exit 1
+        fi
+        umask 077
+        nohup env PATH=/home/server/.nvm/versions/node/v{{ red_node_version }}/bin:/usr/local/bin:/usr/bin:/bin \
+          bash '{{ red_project }}/run-local.sh' \
+          > /home/server/.local/state/homelab/inkling-security-update.log 2>&1 < /dev/null &
+      args:
+        executable: /bin/bash
+      when: red_node_install.changed or red_python_update.changed or red_frontend_executable.stdout != '/home/server/.nvm/versions/node/v' ~ red_node_version ~ '/bin/node'
+      changed_when: true
+    - name: Verify the backend after restart
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8000/api/v1/health
+        status_code: 200
+      register: red_backend_health
+      retries: 60
+      delay: 3
+      until: red_backend_health.status == 200
+    - name: Verify the frontend after restart
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/sources
+        status_code: 200
+      register: red_frontend_health
+      retries: 20
+      delay: 3
+      until: red_frontend_health.status == 200

@@ -1,0 +1,88 @@
+---
+- name: Preserve a consistent one-time recovery checkpoint
+  hosts: proxmox_maintenance
+  gather_facts: false
+  vars:
+    security_checkpoint_dir: /srv/homelab/.maintenance/security-2026-10-25
+    security_checkpoint_guests: "{{ groups['access'] + groups['services'] + groups['agents'] }}"
+  tasks:
+    - name: Check for the completed recovery checkpoint
+      ansible.builtin.stat:
+        path: "{{ security_checkpoint_dir }}/vm-backup-complete"
+      register: security_checkpoint_complete
+
+    - name: Prepare the checkpoint only when not already complete
+      when: not security_checkpoint_complete.stat.exists
+      block:
+        - name: Create a root-only recovery directory
+          ansible.builtin.file:
+            path: "{{ security_checkpoint_dir }}/vms"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Protect the parent recovery directory
+          ansible.builtin.file:
+            path: "{{ security_checkpoint_dir }}"
+            state: directory
+            mode: '0700'
+        - name: Back up host configuration
+          ansible.builtin.command:
+            argv: [tar, --acls, --xattrs, -czf, "{{ security_checkpoint_dir }}/host-config.tar.gz", /etc/pve, /etc/network, /etc/apt, /etc/default/grub, /etc/ssh]
+            creates: "{{ security_checkpoint_dir }}/host-config.tar.gz"
+          register: security_host_backup
+          failed_when: security_host_backup.rc not in [0, 1]
+        - name: Protect the host configuration backup
+          ansible.builtin.file:
+            path: "{{ security_checkpoint_dir }}/host-config.tar.gz"
+            mode: '0600'
+        - name: Check for the application data snapshot
+          ansible.builtin.command: zfs list -H -t snapshot tank/homelab@security-2026-10-25
+          register: security_snapshot
+          changed_when: false
+          failed_when: security_snapshot.rc not in [0, 1]
+        - name: Quiesce only for the consistent data snapshot
+          when: security_snapshot.rc == 1
+          block:
+            - name: Remember running containers on each production guest
+              ansible.builtin.command: docker ps --quiet
+              delegate_to: "{{ item }}"
+              become: true
+              loop: "{{ security_checkpoint_guests }}"
+              register: security_running_containers
+              changed_when: false
+            - name: Stop the recorded application containers
+              ansible.builtin.command:
+                argv: "{{ ['docker', 'stop'] + item.stdout_lines }}"
+              delegate_to: "{{ item.item }}"
+              become: true
+              loop: "{{ security_running_containers.results }}"
+              loop_control:
+                label: "{{ item.item }}"
+              when: item.stdout_lines | length > 0
+              changed_when: true
+            - name: Snapshot all persistent application datasets
+              ansible.builtin.command: zfs snapshot -r tank/homelab@security-2026-10-25
+              changed_when: true
+          always:
+            - name: Resume previously running containers even if checkpointing fails
+              ansible.builtin.command:
+                argv: "{{ ['docker', 'start'] + item.stdout_lines }}"
+              delegate_to: "{{ item.item }}"
+              become: true
+              loop: "{{ security_running_containers.results | default([]) }}"
+              loop_control:
+                label: "{{ item.item }}"
+              when: item.stdout_lines | default([]) | length > 0
+              changed_when: true
+        - name: Preserve OS disks with only per-VM backup downtime
+          ansible.builtin.shell: >-
+            umask 077;
+            vzdump 1000 1001 1002 --mode stop --compress zstd
+            --dumpdir {{ security_checkpoint_dir | quote }}/vms
+            > {{ security_checkpoint_dir | quote }}/vzdump.log 2>&1
+            && touch {{ security_checkpoint_dir | quote }}/vm-backup-complete
+          args:
+            creates: "{{ security_checkpoint_dir }}/vm-backup-complete"
+          async: 3600
+          poll: 10

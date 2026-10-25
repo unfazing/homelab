@@ -1,0 +1,25 @@
+---
+caddy_version: "2.11.7"
+caddy_cloudflare_module_version: "v0.2.4"
+caddy_builder_image: "caddy:2.11.7-builder-alpine@sha256:ef9b65adf9a224770c6d5f6d1ae1bf99bc3caaa78d8c4bae3ea949ee6984f301"
+caddy_runtime_image: "caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f"
+caddy_go_toolchain: go1.27.3
+caddy_image: "homelab/caddy-cloudflare:2.11.7-v0.2.4-go1.27.3"
+caddy_compose_dir: /opt/homelab/caddy
+caddy_secret_dir: /etc/homelab/reverse-proxy
+caddy_data_dir: /srv/homelab/reverse-proxy
+caddy_bind_address: "{{ ansible_host }}"
+caddy_domain: ""
+caddy_acme_email: ""
+caddy_cloudflare_api_token: ""
+caddy_proxy_network: homelab-proxy
+caddy_acme_environment: staging
+caddy_acme_ca: https://acme-staging-v02.api.letsencrypt.org/directory
+caddy_gitea_hostname: "gitea.home.{{ caddy_domain }}"
+caddy_gitea_upstream: http://gitea:3000
+caddy_adguard_hostname: "adguard.home.{{ caddy_domain }}"
+caddy_adguard_upstream: "http://{{ hostvars[groups['access'][0]].ansible_host }}:3000"
+caddy_hermes_hostname: "hermes.home.{{ caddy_domain }}"
+caddy_hermes_upstream: "http://{{ hostvars[groups['agents'][0]].ansible_host }}:9119"
+caddy_inkling_hostname: "inkling.home.{{ caddy_domain }}"
+caddy_inkling_upstream: http://192.168.1.9:3000

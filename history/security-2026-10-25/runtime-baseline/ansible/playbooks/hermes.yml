@@ -1,0 +1,15 @@
+---
+- name: Apply the common guest baseline
+  ansible.builtin.import_playbook: common.yml
+
+- name: Deploy provider-neutral Hermes dashboard
+  hosts: agents
+  become: true
+  gather_facts: true
+  vars:
+    hermes_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+    security_boundary_profile: agents
+  roles:
+    - security-boundary
+    - docker-engine
+    - hermes

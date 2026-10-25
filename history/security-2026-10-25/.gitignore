@@ -1,0 +1,10 @@
+.envrc
+.env
+.generated/
+.terraform/
+*.tfstate*
+*.tfvars
+__pycache__/
+*.pyc
+*.key
+*.pem

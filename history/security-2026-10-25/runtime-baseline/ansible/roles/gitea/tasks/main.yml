@@ -1,0 +1,211 @@
+---
+- name: Validate the Gitea deployment contract
+  ansible.builtin.assert:
+    that:
+      - gitea_admin_username is match('^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}$')
+      - gitea_admin_email is match('^[^@\s]+@[^@\s]+$')
+      - gitea_admin_password_file | length > 0
+      - gitea_base_image is match('^docker\.gitea\.com/gitea:28\.2\.0@sha256:[a-f0-9]{64}$')
+      - gitea_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
+      - gitea_image is match('^homelab/gitea:')
+      - gitea_http_address == ansible_host
+      - gitea_domain is match('^gitea\.home\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - gitea_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
+      - "'homelab-gitea' in homelab_virtiofs_mappings"
+    fail_msg: "Gitea requires the approved admin identity, local secret file, static bind address, and persistent dataset."
+    quiet: true
+
+- name: Read the ignored bootstrap administrator password
+  ansible.builtin.set_fact:
+    gitea_admin_password: "{{ lookup('ansible.builtin.file', gitea_admin_password_file) | trim }}"
+  no_log: true
+
+- name: Validate bootstrap administrator password length
+  ansible.builtin.assert:
+    that:
+      - gitea_admin_password | length >= 32
+    fail_msg: "The generated Gitea bootstrap password is unexpectedly short."
+    quiet: true
+  no_log: true
+
+- name: Create the Gitea Compose project directory
+  ansible.builtin.file:
+    path: "{{ gitea_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Assign the persistent dataset to Gitea's container user
+  ansible.builtin.file:
+    path: "{{ gitea_data_dir }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0750"
+
+- name: Render the pinned Gitea Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ gitea_compose_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Check whether the private proxy network exists
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - inspect
+      - "{{ gitea_proxy_network }}"
+  register: gitea_proxy_network_present
+  changed_when: false
+  failed_when: gitea_proxy_network_present.rc not in [0, 1]
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Create the private proxy network
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - create
+      - "{{ gitea_proxy_network }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - gitea_proxy_network_present.rc == 1
+
+- name: Render the patched Gitea image build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ gitea_compose_dir }}/Dockerfile"
+    owner: root
+    group: root
+    mode: '0644'
+  register: gitea_dockerfile
+
+- name: Check whether the patched Gitea image is present
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ gitea_image }}"
+  register: gitea_image_present
+  changed_when: false
+  failed_when: gitea_image_present.rc not in [0, 1]
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Build Gitea with the patched Go runtime and trust store
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - --tag
+      - "{{ gitea_image }}"
+      - "{{ gitea_compose_dir }}"
+  when:
+    - not ansible_check_mode
+    - gitea_image_present.rc == 1 or gitea_dockerfile.changed
+  changed_when: true
+
+- name: Verify the patched Gitea image without mounting application data
+  ansible.builtin.command:
+    argv: [docker, run, --rm, --network, none, --entrypoint, gitea, "{{ gitea_image }}", --version]
+  register: gitea_security_version
+  changed_when: false
+  failed_when: >-
+    gitea_security_version.rc != 0
+    or '28.2.0' not in gitea_security_version.stdout
+    or 'go1.27.3' not in gitea_security_version.stdout
+  when: not ansible_check_mode
+
+- name: Validate the Gitea Compose project
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ gitea_compose_dir }}"
+      - config
+      - --quiet
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Converge the Gitea Compose project
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ gitea_compose_dir }}"
+      - up
+      - --detach
+      - --remove-orphans
+      - --wait
+  register: gitea_compose_up
+  changed_when: >-
+    'Created' in (gitea_compose_up.stdout + gitea_compose_up.stderr)
+    or 'Started' in (gitea_compose_up.stdout + gitea_compose_up.stderr)
+    or 'Recreated' in (gitea_compose_up.stdout + gitea_compose_up.stderr)
+  when: not ansible_check_mode
+
+- name: Verify Gitea's health endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ gitea_http_port }}/api/healthz"
+    return_content: true
+    status_code: 200
+  register: gitea_health
+  retries: 12
+  delay: 5
+  until:
+    - gitea_health.status == 200
+    - gitea_health.json.status == 'pass'
+  when: not ansible_check_mode
+
+- name: Check for the bootstrap administrator
+  ansible.builtin.shell: |
+    set -eu
+    docker compose --project-directory {{ gitea_compose_dir | quote }} exec -T --user git gitea \
+      gitea admin user list --admin | awk -v username={{ gitea_admin_username | quote }} '$2 == username { found=1 } END { exit !found }'
+  args:
+    executable: /bin/bash
+  register: gitea_admin_exists
+  changed_when: false
+  failed_when: gitea_admin_exists.rc not in [0, 1]
+  when: not ansible_check_mode
+
+- name: Create the bootstrap administrator without writing its password to disk
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ gitea_compose_dir }}"
+      - exec
+      - -T
+      - --user
+      - git
+      - gitea
+      - sh
+      - -ceu
+      - >-
+        password=$(cat);
+        test -n "$password";
+        exec gitea admin user create
+        --username "$1" --password "$password" --email "$2"
+        --admin --must-change-password=true
+      - bootstrap-admin
+      - "{{ gitea_admin_username }}"
+      - "{{ gitea_admin_email }}"
+  args:
+    stdin: "{{ gitea_admin_password }}"
+    stdin_add_newline: false
+  when:
+    - not ansible_check_mode
+    - gitea_admin_exists.rc == 1
+  changed_when: true
+  no_log: true

@@ -1,0 +1,140 @@
+---
+- name: Validate the Docker host platform
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] == '26.04'
+      - ansible_facts['architecture'] == 'x86_64'
+    fail_msg: "The pinned Docker packages require Ubuntu 26.04 on amd64."
+    quiet: true
+
+- name: Remove packages that conflict with Docker CE
+  ansible.builtin.apt:
+    name:
+      - containerd
+      - docker-compose
+      - docker-compose-v2
+      - docker-doc
+      - docker.io
+      - podman-docker
+      - runc
+    state: absent
+
+- name: Install Docker repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - python3-debian
+    update_cache: true
+    state: present
+
+- name: Create the apt keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Docker's repository signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: docker_signing_key
+
+- name: Configure Docker's stable apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/ubuntu
+    suites: resolute
+    components: stable
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+  register: docker_repository
+
+- name: Refresh apt metadata after Docker's repository changes
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  when: docker_signing_key.changed or docker_repository.changed
+
+- name: Refresh Docker apt metadata when the existing cache is stale
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 86400
+  when: not (docker_signing_key.changed or docker_repository.changed)
+
+- name: Install pinned Docker Engine and Compose packages
+  ansible.builtin.apt:
+    name:
+      - "docker-ce={{ docker_ce_version }}"
+      - "docker-ce-cli={{ docker_ce_cli_version }}"
+      - "containerd.io={{ docker_containerd_version }}"
+      - "docker-buildx-plugin={{ docker_buildx_version }}"
+      - "docker-compose-plugin={{ docker_compose_version }}"
+    allow_change_held_packages: true
+    state: present
+  when: not ansible_check_mode
+
+- name: Report pinned Docker packages during check mode
+  ansible.builtin.debug:
+    msg: >-
+      Would install and hold Docker CE {{ docker_ce_version }}, containerd.io
+      {{ docker_containerd_version }}, Buildx {{ docker_buildx_version }}, and
+      Compose {{ docker_compose_version }} from Docker's stable repository.
+  when: ansible_check_mode
+
+- name: Hold Docker packages at their reviewed versions
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+    - docker-buildx-plugin
+    - docker-compose-plugin
+  when: not ansible_check_mode
+
+- name: Configure conservative Docker daemon defaults
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {
+        "live-restore": true,
+        "log-driver": "local"
+      }
+  notify: Restart Docker
+
+- name: Enable and start Docker
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Apply pending Docker configuration before workloads
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify Docker Engine
+  ansible.builtin.command: docker info
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify Docker Compose
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - version
+  changed_when: false
+  when: not ansible_check_mode

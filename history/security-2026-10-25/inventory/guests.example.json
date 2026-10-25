@@ -1,0 +1,80 @@
+{
+  "all": {
+    "children": {
+      "access": {
+        "hosts": {
+          "lab-access-01": {
+            "ansible_host": "192.168.1.100",
+            "ansible_port": 22,
+            "ansible_user": "user",
+            "homelab_virtiofs_mappings": [
+              "homelab-adguard"
+            ],
+            "homelab_virtiofs_mounts": [
+              {
+                "path": "/srv/homelab/adguard",
+                "tag": "homelab-adguard"
+              }
+            ]
+          }
+        }
+      },
+      "services": {
+        "hosts": {
+          "lab-services-01": {
+            "ansible_host": "192.168.1.101",
+            "ansible_port": 22,
+            "ansible_user": "user",
+            "homelab_virtiofs_mappings": [
+              "homelab-gitea",
+              "homelab-nextcloud-db",
+              "homelab-nextcloud-files",
+              "homelab-reverse-proxy",
+              "homelab-vaultwarden"
+            ],
+            "homelab_virtiofs_mounts": [
+              {
+                "path": "/srv/homelab/gitea",
+                "tag": "homelab-gitea"
+              },
+              {
+                "path": "/srv/homelab/nextcloud-db",
+                "tag": "homelab-nextcloud-db"
+              },
+              {
+                "path": "/srv/homelab/nextcloud-files",
+                "tag": "homelab-nextcloud-files"
+              },
+              {
+                "path": "/srv/homelab/reverse-proxy",
+                "tag": "homelab-reverse-proxy"
+              },
+              {
+                "path": "/srv/homelab/vaultwarden",
+                "tag": "homelab-vaultwarden"
+              }
+            ]
+          }
+        }
+      },
+      "agents": {
+        "hosts": {
+          "lab-agents-01": {
+            "ansible_host": "192.168.1.102",
+            "ansible_port": 22,
+            "ansible_user": "user",
+            "homelab_virtiofs_mappings": [
+              "homelab-hermes"
+            ],
+            "homelab_virtiofs_mounts": [
+              {
+                "path": "/srv/homelab/hermes",
+                "tag": "homelab-hermes"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

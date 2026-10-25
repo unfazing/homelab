@@ -1,0 +1,41 @@
+version: '3'
+silent: true
+vars:
+  INVENTORY: .generated/ansible/hosts.json
+  MAINTENANCE_INVENTORY: ansible/inventories/maintenance/hosts.yml
+env:
+  ANSIBLE_CONFIG: ansible/ansible.cfg
+  ANSIBLE_LOCAL_TEMP: .generated/ansible/tmp
+tasks:
+  checkpoint:
+    desc: Quiesce applications and preserve VM OS disks, ZFS data and host configuration
+    cmds:
+      - ansible-playbook -i '{{.INVENTORY}}' -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-checkpoint.yml
+  guests:
+    desc: Apply guest OS updates and reviewed held Docker package upgrades
+    cmds:
+      - ansible-playbook -i '{{.INVENTORY}}' ansible/playbooks/security-packages.yml
+  proxmox:
+    desc: Update Debian 13 Proxmox packages, default kernel and Intel microcode
+    cmds:
+      - ansible-playbook -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-proxmox.yml
+  boundaries:
+    desc: Apply persistent guest/container and Proxmox agent management restrictions
+    cmds:
+      - ansible-playbook -i '{{.INVENTORY}}' -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-boundaries.yml
+  reboot:
+    desc: Activate the October security kernel and microcode, then verify guest recovery
+    cmds:
+      - ansible-playbook -i '{{.INVENTORY}}' -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-reboot.yml
+  red-system:
+    desc: Update legacy red-server packages (prompts for its sudo password)
+    cmds:
+      - ansible-playbook --ask-become-pass -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-red.yml
+  verify:
+    desc: Verify patched live runtimes, private routes, agent Git and denied management paths
+    cmds:
+      - ansible-playbook -i '{{.INVENTORY}}' -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-verify.yml
+  red-apps:
+    desc: Update legacy Inkling Node and Python trust bundles, then verify its launcher
+    cmds:
+      - ansible-playbook -i '{{.MAINTENANCE_INVENTORY}}' ansible/playbooks/security-red-apps.yml

@@ -1,0 +1,125 @@
+---
+- name: Verify Proxmox packages, active kernel and containment
+  hosts: proxmox_maintenance
+  gather_facts: false
+  tasks:
+    - name: Require the patched host kernel and retained management boundary
+      ansible.builtin.shell: |
+        set -eu
+        test "$(uname -r)" = 7.0.14-25-pve
+        pveversion | grep -F 'pve-manager/9.2.21/'
+        test "$(cat /sys/devices/system/cpu/vulnerabilities/old_microcode)" = 'Not affected'
+        test ! -e /etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem
+        nft list table inet homelab_agent_management >/dev/null
+        zpool status -x | grep -Fx 'all pools are healthy'
+        timeout 6 bash -c 'exec 3<>/dev/tcp/192.168.1.102/22; IFS= read -r greeting <&3; case "$greeting" in SSH-2.0-*) exit 0;; *) exit 1;; esac'
+      changed_when: false
+    - name: Report residual CPU findings without claiming they are patched
+      ansible.builtin.command: >-
+        cat /sys/devices/system/cpu/vulnerabilities/gather_data_sampling
+        /sys/devices/system/cpu/vulnerabilities/mmio_stale_data
+      register: security_remaining_cpu
+      changed_when: false
+    - name: Surface CPU hardening still requiring review
+      ansible.builtin.debug:
+        var: security_remaining_cpu.stdout_lines
+
+- name: Verify legacy server changes without requiring its sudo password
+  hosts: red_maintenance
+  gather_facts: false
+  tasks:
+    - name: Require patched Docker, stopped AIO and retained WireGuard service
+      ansible.builtin.shell: |
+        set -eu
+        test "$(docker version --format '{{ '{{' }}.Server.Version{{ '}}' }}')" = 29.9.2
+        test "$(docker inspect --format '{{ '{{' }}.State.Status{{ '}}' }} {{ '{{' }}.HostConfig.RestartPolicy.Name{{ '}}' }}' nextcloud-aio-mastercontainer)" = 'exited no'
+        systemctl is-active wg-quick@wg0
+        test ! -f /var/run/reboot-required
+        /home/server/.nvm/versions/node/v24.22.1/bin/node --version
+        /home/server/dev/colouring-book-v1/.venv/bin/python -c 'import certifi, pip; assert certifi.__version__ == "2026.10.23"; assert pip.__version__ == "26.2.2"'
+        curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8000/api/v1/health
+        timeout 6 bash -c 'exec 3<>/dev/tcp/192.168.1.102/22; IFS= read -r greeting <&3; case "$greeting" in SSH-2.0-*) exit 0;; *) exit 1;; esac'
+      changed_when: false
+
+- name: Verify current live guest kernels and Docker runtimes
+  hosts: access:services:agents
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require the patched kernel and Docker Go runtime
+      ansible.builtin.shell: |
+        set -eu
+        test "$(uname -r)" = 7.0.0-38-generic
+        test "$(docker version --format '{{ '{{' }}.Server.Version{{ '}}' }}')" = 29.9.2
+        test "$(docker version --format '{{ '{{' }}.Server.GoVersion{{ '}}' }}')" = go1.26.10
+        test ! -e /etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem
+      changed_when: false
+
+- name: Verify private DNS and the updated AdGuard binary
+  hosts: access
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require the fixed Go build, private DNS and DDNS timer
+      ansible.builtin.shell: |
+        set -eu
+        docker exec adguard sh -c 'strings /opt/adguardhome/AdGuardHome | grep -o -m1 "go1\.[0-9]*\.[0-9]*"' | grep -Fx go1.27.3
+        test "$(dig +short @192.168.1.100 gitea.home.donk.live)" = 192.168.1.101
+        systemctl is-active cloudflare-ddns.timer
+        systemctl is-active homelab-adguard-admin-firewall.service
+      changed_when: false
+
+- name: Verify Gitea, Caddy and all private HTTPS routes
+  hosts: services
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require patched Go binaries and healthy HTTPS
+      ansible.builtin.shell: |
+        set -eu
+        docker exec gitea gitea --version | grep -F '28.2.0' | grep -F go1.27.3
+        docker exec caddy caddy build-info | grep -F go1.27.3
+        for service in gitea adguard hermes inkling; do
+          curl --fail --silent --show-error --max-time 15 \
+            --resolve "$service.home.donk.live:443:192.168.1.101" \
+            --output /dev/null "https://$service.home.donk.live/"
+        done
+      changed_when: false
+
+- name: Verify the Hermes worker's dependencies, permissions and management isolation
+  hosts: agents
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require persistent firewall and the single-user Telegram gate
+      ansible.builtin.shell: |
+        set -eu
+        systemctl is-active homelab-management-boundary.service
+        nft list table inet homelab_agent_egress >/dev/null
+        python3 /opt/homelab/hermes/verify-telegram-gate.py
+      changed_when: false
+    - name: Test prohibited and required paths from inside the Hermes worker
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - --user
+          - '10000'
+          - hermes
+          - /opt/hermes/.venv/bin/python
+          - -c
+          - |
+            import importlib.metadata as m, subprocess, ssl
+            assert m.version('brotlicffi') == '1.2.1.0'
+            assert m.version('certifi') == '2026.10.23'
+            assert m.version('pip') == '26.2.2'
+            assert subprocess.check_output(['node', '--version'], text=True).strip() == 'v26.12.1'
+            for url in ['https://192.168.1.10:8006', 'http://192.168.1.254', 'http://192.168.1.9:8080']:
+                r = subprocess.run(['curl', '-k', '-s', '--max-time', '3', url], capture_output=True)
+                assert r.returncode == 28, 'Management path was not denied: ' + url
+            for url in ['https://gitea.home.donk.live', 'http://192.168.1.9:3000', 'https://api.telegram.org']:
+                subprocess.run(['curl', '--fail', '-sS', '--max-time', '15', '-o', '/dev/null', url], check=True)
+            subprocess.run(['/opt/hermes/.venv/bin/python', '/opt/data/tools/homelab-gitea.py', 'repo', 'lab-agents-org/colouring-book-v1'], check=True)
+            subprocess.run(['git', '-C', '/opt/data/workspaces/colouring-book-v1', 'ls-remote', '--exit-code', 'origin', 'HEAD'], check=True, stdout=subprocess.DEVNULL)
+            print('Patched dependencies, denied management, allowed service paths, API identity and Git read: passed')
+      changed_when: false

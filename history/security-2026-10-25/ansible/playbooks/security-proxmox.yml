@@ -1,0 +1,41 @@
+---
+- name: Update the Proxmox host and CPU microcode
+  hosts: proxmox_maintenance
+  gather_facts: true
+  tasks:
+    - name: Require the reviewed Debian 13 host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+    - name: Enable Debian's firmware component for Intel microcode
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list
+        regexp: '(?m)^(deb\s+\S+\s+trixie(?:-updates|-security)?\s+main\s+contrib)\s*$'
+        replace: '\1 non-free-firmware'
+        backup: true
+    - name: Refresh signed distribution package metadata
+      ansible.builtin.apt:
+        update_cache: true
+    - name: Review the host upgrade plan before applying it
+      ansible.builtin.command: apt-get --simulate dist-upgrade
+      register: security_pve_plan
+      changed_when: false
+      check_mode: false
+    - name: Refuse an upgrade that removes the Proxmox metapackage
+      ansible.builtin.assert:
+        that:
+          - "'Remv proxmox-ve ' not in security_pve_plan.stdout"
+    - name: Apply supported host security and distribution updates
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: force-confdef,force-confold
+    - name: Install the supported default kernel and Intel microcode
+      ansible.builtin.apt:
+        name:
+          - proxmox-default-kernel
+          - intel-microcode
+        state: latest
+    - name: Report installed Proxmox versions
+      ansible.builtin.command: pveversion -v
+      changed_when: false

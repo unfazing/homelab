@@ -1,0 +1,47 @@
+name: caddy
+
+services:
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "{{ caddy_image }}"
+    container_name: caddy
+    restart: unless-stopped
+    labels:
+      io.homelab.caddyfile-checksum: "{{ lookup('ansible.builtin.template', 'Caddyfile.j2') | hash('sha256') }}"
+    ports:
+      - "{{ caddy_bind_address }}:443:443/tcp"
+    networks:
+      - proxy
+    secrets:
+      - cloudflare_api_token
+    volumes:
+      - "{{ caddy_compose_dir }}/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "{{ caddy_data_dir }}/{{ caddy_acme_environment }}:/data"
+    read_only: true
+    tmpfs:
+      - /config:mode=0700
+      - /tmp:mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/usr/bin/homelab-caddy-entrypoint", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 30s
+
+secrets:
+  cloudflare_api_token:
+    file: "{{ caddy_secret_dir }}/cloudflare_api_token"
+
+networks:
+  proxy:
+    name: "{{ caddy_proxy_network }}"
+    external: true

@@ -1,0 +1,10 @@
+database:
+  journal_mode: delete
+dashboard:
+  public_url: "https://hermes.home.{{ hermes_domain }}"
+  trusted_proxies:
+    - "{{ hermes_proxy_address }}"
+  basic_auth:
+    username: {{ hermes_dashboard_auth.username | to_json }}
+    password_hash: {{ hermes_dashboard_auth.password_hash | to_json }}
+    secret: {{ hermes_dashboard_auth.session_secret | to_json }}

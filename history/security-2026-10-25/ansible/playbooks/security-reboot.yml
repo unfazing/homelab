@@ -1,0 +1,54 @@
+---
+- name: Activate the patched Proxmox kernel and CPU microcode
+  hosts: proxmox_maintenance
+  gather_facts: false
+  tasks:
+    - name: Require the completed recovery checkpoint
+      ansible.builtin.stat:
+        path: /srv/homelab/.maintenance/security-2026-10-25/vm-backup-complete
+      register: security_recovery_marker
+    - name: Refuse maintenance without the recovery checkpoint
+      ansible.builtin.assert:
+        that: security_recovery_marker.stat.exists
+    - name: Reboot blue and wait for SSH recovery
+      ansible.builtin.reboot:
+        msg: Activating reviewed homelab security updates
+        reboot_timeout: 900
+        post_reboot_delay: 15
+    - name: Verify the active host kernel
+      ansible.builtin.command: uname -r
+      register: security_host_kernel
+      changed_when: false
+      failed_when: not security_host_kernel.stdout.startswith('7.0.14-25-pve')
+    - name: Verify ZFS pool health
+      ansible.builtin.command: zpool status -x
+      register: security_pool_health
+      changed_when: false
+      failed_when: "'all pools are healthy' not in security_pool_health.stdout"
+    - name: Verify the persistent agent management boundary
+      ansible.builtin.command: nft list table inet homelab_agent_management
+      changed_when: false
+
+- name: Verify all three guests recovered after host maintenance
+  hosts: access:services:agents
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for guest SSH and automatic startup
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+    - name: Verify the active guest kernel
+      ansible.builtin.command: uname -r
+      register: security_guest_kernel
+      changed_when: false
+      failed_when: security_guest_kernel.stdout != '7.0.0-38-generic'
+    - name: Verify durable application mounts
+      ansible.builtin.command:
+        argv: [findmnt, --noheadings, --types, virtiofs, --target, "{{ item.path }}"]
+      loop: "{{ homelab_virtiofs_mounts }}"
+      loop_control:
+        label: "{{ item.tag }}"
+      changed_when: false
+    - name: Report running application containers
+      ansible.builtin.command: docker ps --format '{{ '{{' }}.Names{{ '}}' }} {{ '{{' }}.Status{{ '}}' }}'
+      changed_when: false

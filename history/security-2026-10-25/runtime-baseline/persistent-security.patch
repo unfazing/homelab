@@ -1,0 +1,840 @@
+From 95552e2e1999680b9c0d707aa6f69bda7f011a2f Mon Sep 17 00:00:00 2001
+From: Lian <unfazing@gmail.com>
+Date: Sun, 25 Oct 2026 23:34:58 +0800
+Subject: [PATCH 1/2] fix(security): rebuild patched application and container
+ runtimes
+
+Keep reviewed runtime pins and image-content checks in application roles. Wait for authenticated AdGuard DNS readiness before reconciling policy.
+---
+ ansible/roles/adguard/README.md               |  6 ++-
+ ansible/roles/adguard/defaults/main.yml       |  4 +-
+ ansible/roles/adguard/files/reconcile.py      | 11 +++--
+ ansible/roles/adguard/tasks/main.yml          | 22 ++++++++--
+ ansible/roles/adguard/templates/Dockerfile.j2 | 15 +++++++
+ ansible/roles/adguard/tests/test_reconcile.py | 18 ++++++++
+ ansible/roles/caddy/README.md                 |  2 +-
+ ansible/roles/caddy/defaults/main.yml         |  9 ++--
+ ansible/roles/caddy/templates/Dockerfile.j2   |  6 ++-
+ ansible/roles/docker-engine/defaults/main.yml | 10 ++---
+ ansible/roles/gitea/README.md                 |  2 +-
+ ansible/roles/gitea/defaults/main.yml         |  4 +-
+ ansible/roles/gitea/tasks/main.yml            | 33 +++++++++++++--
+ ansible/roles/gitea/templates/Dockerfile.j2   | 20 +++++++++
+ ansible/roles/hermes/README.md                |  9 ++--
+ ansible/roles/hermes/defaults/main.yml        |  3 +-
+ ansible/roles/hermes/tasks/main.yml           | 42 +++++++++++++++++--
+ ansible/roles/hermes/templates/Dockerfile.j2  | 18 ++++++++
+ architecture.html                             | 17 ++++----
+ implementation.html                           | 12 +++---
+ 20 files changed, 215 insertions(+), 48 deletions(-)
+ create mode 100644 ansible/roles/adguard/templates/Dockerfile.j2
+ create mode 100644 ansible/roles/gitea/templates/Dockerfile.j2
+ create mode 100644 ansible/roles/hermes/templates/Dockerfile.j2
+
+diff --git a/ansible/roles/adguard/README.md b/ansible/roles/adguard/README.md
+index ec4f48d..1308386 100644
+--- a/ansible/roles/adguard/README.md
++++ b/ansible/roles/adguard/README.md
+@@ -1,7 +1,9 @@
+ # AdGuard role
+ 
+-Ansible deploys the digest-pinned official AdGuard Home image as a standalone
+-Compose project on `lab-access-01`. Host networking preserves original DNS
++Ansible builds AdGuard Home 0.107.79 with Go 1.27.3 from checksum-pinned
++upstream source and its official prebuilt frontend, on a digest-pinned official
++runtime with updated Alpine trust. It deploys as a standalone Compose project
++on `lab-access-01`. Host networking preserves original DNS
+ client IPs; DNS binds only to the VM's static address. The admin UI/API binds
+ to `192.168.1.100:3000`, while a dedicated nftables input rule admits only
+ Caddy at `.101` and guest-local traffic. Docker requires that firewall unit on
+diff --git a/ansible/roles/adguard/defaults/main.yml b/ansible/roles/adguard/defaults/main.yml
+index 6abe003..7b831f6 100644
+--- a/ansible/roles/adguard/defaults/main.yml
++++ b/ansible/roles/adguard/defaults/main.yml
+@@ -1,5 +1,7 @@
+ ---
+-adguard_image: "adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0"
++adguard_base_image: "adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0"
++adguard_go_image: "golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c"
++adguard_image: "homelab/adguard:0.107.79-go1.27.3-security-20261025"
+ adguard_compose_dir: /opt/homelab/adguard
+ adguard_data_dir: /srv/homelab/adguard
+ adguard_secret_dir: /etc/homelab/adguard
+diff --git a/ansible/roles/adguard/files/reconcile.py b/ansible/roles/adguard/files/reconcile.py
+index b1b578a..be8fc07 100644
+--- a/ansible/roles/adguard/files/reconcile.py
++++ b/ansible/roles/adguard/files/reconcile.py
+@@ -59,9 +59,14 @@ def bootstrap(
+     status, _ = api.request("install/get_addresses", auth=False)
+     if status in (403, 404):
+         # Installed versions may hide the setup endpoint with either response.
+-        current_status, state = api.request("status")
+-        if current_status == 200 and state and state.get("running"):
+-            return 0
++        # The HTTP listener can open before the DNS engine finishes loading.
++        for _ in range(30):
++            current_status, state = api.request("status")
++            if current_status == 200 and state and state.get("running"):
++                return 0
++            if current_status in (401, 403):
++                raise RuntimeError("AdGuard administrator authentication failed")
++            time.sleep(2)
+         raise RuntimeError("AdGuard setup is unavailable but the authenticated API is unhealthy")
+     if status != 200:
+         raise RuntimeError(f"AdGuard install detection returned HTTP {status}")
+diff --git a/ansible/roles/adguard/tasks/main.yml b/ansible/roles/adguard/tasks/main.yml
+index 264acf2..d5e4357 100644
+--- a/ansible/roles/adguard/tasks/main.yml
++++ b/ansible/roles/adguard/tasks/main.yml
+@@ -9,6 +9,9 @@
+       - adguard_proxy_address != adguard_admin_address
+       - adguard_admin_username is match('^[a-zA-Z0-9_.-]+$')
+       - adguard_admin_password_file | length > 0
++      - adguard_base_image is match('^adguard/adguardhome:v0\.107\.79@sha256:[a-f0-9]{64}$')
++      - adguard_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
++      - adguard_image is match('^homelab/adguard:')
+       - "'homelab-adguard' in homelab_virtiofs_mappings"
+     fail_msg: "AdGuard requires the private domain, access VM address, ignored administrator secret, and persistent dataset."
+     quiet: true
+@@ -146,7 +149,16 @@
+     group: root
+     mode: "0750"
+ 
+-- name: Check whether the pinned AdGuard image is present
++- name: Render the patched AdGuard image build
++  ansible.builtin.template:
++    src: Dockerfile.j2
++    dest: "{{ adguard_compose_dir }}/Dockerfile"
++    owner: root
++    group: root
++    mode: '0644'
++  register: adguard_dockerfile
++
++- name: Check whether the patched AdGuard image is present
+   ansible.builtin.command:
+     argv:
+       - docker
+@@ -159,16 +171,18 @@
+   check_mode: false
+   when: not ansible_check_mode
+ 
+-- name: Pull the pinned AdGuard image
++- name: Build AdGuard with the patched Go runtime and trust store
+   ansible.builtin.command:
+     argv:
+       - docker
+-      - pull
++      - build
++      - --tag
+       - "{{ adguard_image }}"
++      - "{{ adguard_compose_dir }}"
+   changed_when: true
+   when:
+     - not ansible_check_mode
+-    - adguard_image_present.rc == 1
++    - adguard_image_present.rc == 1 or adguard_dockerfile.changed
+ 
+ - name: Validate the AdGuard Compose project
+   ansible.builtin.command:
+diff --git a/ansible/roles/adguard/templates/Dockerfile.j2 b/ansible/roles/adguard/templates/Dockerfile.j2
+new file mode 100644
+index 0000000..bdc7ab0
+--- /dev/null
++++ b/ansible/roles/adguard/templates/Dockerfile.j2
+@@ -0,0 +1,15 @@
++FROM {{ adguard_go_image }} AS builder
++ENV GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
++ADD --checksum=sha256:5f4fa119f24ea741bb8cecfa74203165fe6b86b904cef05ff429fb227b07d425 https://codeload.github.com/AdguardTeam/AdGuardHome/tar.gz/refs/tags/v0.107.79 /tmp/source.tar.gz
++ADD --checksum=sha256:30184c157d4aefe5371b575a43c0ab5a7314aef039a820cc421ea67bab994ce8 https://github.com/AdguardTeam/AdGuardHome/releases/download/v0.107.79/AdGuardHome_frontend.tar.gz /tmp/frontend.tar.gz
++WORKDIR /src
++RUN tar -xzf /tmp/source.tar.gz --strip-components=1 \
++    && tar -xzf /tmp/frontend.tar.gz \
++    && CHANNEL=release VERSION=v0.107.79 SOURCE_DATE_EPOCH=0 PARALLELISM=2 sh scripts/make/go-build.sh \
++    && go version -m AdGuardHome | grep -F go1.27.3
++
++FROM {{ adguard_base_image }}
++COPY --from=builder /src/AdGuardHome /opt/adguardhome/AdGuardHome
++RUN apk upgrade --no-cache \
++    && test ! -e /etc/ssl/certs/ca-cert-emSign_ECC_Root_CA_-_G3.pem \
++    && /opt/adguardhome/AdGuardHome --version
+diff --git a/ansible/roles/adguard/tests/test_reconcile.py b/ansible/roles/adguard/tests/test_reconcile.py
+index f5ccd98..4a006d8 100644
+--- a/ansible/roles/adguard/tests/test_reconcile.py
++++ b/ansible/roles/adguard/tests/test_reconcile.py
+@@ -2,6 +2,7 @@
+ 
+ import importlib.util
+ import unittest
++from unittest.mock import patch
+ from pathlib import Path
+ 
+ 
+@@ -61,6 +62,23 @@ class RewriteConvergenceTests(unittest.TestCase):
+ 
+ 
+ class BootstrapDetectionTests(unittest.TestCase):
++    def test_installed_service_waits_for_dns_readiness_without_reconfiguration(self):
++        class StartingAPI:
++            calls = 0
++
++            def request(self, path, auth=True):
++                if path == "install/get_addresses":
++                    return 404, None
++                self.calls += 1
++                return 200, {"running": self.calls > 1}
++
++        api = StartingAPI()
++        with patch.object(MODULE.time, "sleep") as sleep:
++            self.assertEqual(MODULE.bootstrap(api, {}, "server", "unused",
++                                             "192.168.1.100", "192.168.1.100", 3000), 0)
++        sleep.assert_called_once_with(2)
++        self.assertEqual(api.calls, 2)
++
+     def test_installed_service_hiding_setup_endpoint_is_not_reconfigured(self):
+         class InstalledAPI:
+             def request(self, path, auth=True):
+diff --git a/ansible/roles/caddy/README.md b/ansible/roles/caddy/README.md
+index 04441fe..cb5765c 100644
+--- a/ansible/roles/caddy/README.md
++++ b/ansible/roles/caddy/README.md
+@@ -1,6 +1,6 @@
+ # Caddy role
+ 
+-Builds Caddy 2.11.4 from digest-pinned official builder and runtime images with only `caddy-dns/cloudflare` v0.2.4 added. The role stores the Cloudflare token outside persistent application data, publishes TCP 443 only on the services VM address, reaches Gitea through the dedicated `homelab-proxy` Docker network, and never mounts the Docker socket.
++Builds Caddy 2.11.7 with Go 1.27.3 from digest-pinned official builder and runtime images, updated Alpine certificate trust and only `caddy-dns/cloudflare` v0.2.4 added. The role stores the Cloudflare token outside persistent application data, publishes TCP 443 only on the services VM address, reaches Gitea through the dedicated `homelab-proxy` Docker network, and never mounts the Docker socket.
+ 
+ The explicit `adguard.home.<domain>` route proxies to the access VM's HTTP
+ backend on port 3000. The access VM firewall admits that port only from Caddy
+diff --git a/ansible/roles/caddy/defaults/main.yml b/ansible/roles/caddy/defaults/main.yml
+index 35c5729..399f42c 100644
+--- a/ansible/roles/caddy/defaults/main.yml
++++ b/ansible/roles/caddy/defaults/main.yml
+@@ -1,9 +1,10 @@
+ ---
+-caddy_version: "2.11.4"
++caddy_version: "2.11.7"
+ caddy_cloudflare_module_version: "v0.2.4"
+-caddy_builder_image: "caddy:2.11.4-builder-alpine@sha256:1a1689db91cfb390b2d856a1b3774e796852822cd723fa54c475b272f82bb4b7"
+-caddy_runtime_image: "caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+-caddy_image: "homelab/caddy-cloudflare:2.11.4-v0.2.4"
++caddy_builder_image: "caddy:2.11.7-builder-alpine@sha256:ef9b65adf9a224770c6d5f6d1ae1bf99bc3caaa78d8c4bae3ea949ee6984f301"
++caddy_runtime_image: "caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f"
++caddy_go_toolchain: go1.27.3
++caddy_image: "homelab/caddy-cloudflare:2.11.7-v0.2.4-go1.27.3"
+ caddy_compose_dir: /opt/homelab/caddy
+ caddy_secret_dir: /etc/homelab/reverse-proxy
+ caddy_data_dir: /srv/homelab/reverse-proxy
+diff --git a/ansible/roles/caddy/templates/Dockerfile.j2 b/ansible/roles/caddy/templates/Dockerfile.j2
+index 0421fe3..b51eb1b 100644
+--- a/ansible/roles/caddy/templates/Dockerfile.j2
++++ b/ansible/roles/caddy/templates/Dockerfile.j2
+@@ -1,5 +1,6 @@
+ FROM {{ caddy_builder_image }} AS builder
+ 
++ENV GOTOOLCHAIN={{ caddy_go_toolchain }}
+ RUN xcaddy build v{{ caddy_version }} \
+     --with github.com/caddy-dns/cloudflare@{{ caddy_cloudflare_module_version }}
+ 
+@@ -8,8 +9,11 @@ FROM {{ caddy_runtime_image }}
+ COPY homelab-caddy-entrypoint /usr/bin/homelab-caddy-entrypoint
+ COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+ 
+-RUN chmod 0755 /usr/bin/homelab-caddy-entrypoint \
++RUN apk upgrade --no-cache ca-certificates ca-certificates-bundle \
++    && chmod 0755 /usr/bin/homelab-caddy-entrypoint \
+     && caddy version \
++    && caddy build-info | grep -F {{ caddy_go_toolchain }} \
++    && test ! -e /etc/ssl/certs/ca-cert-emSign_ECC_Root_CA_-_G3.pem \
+     && caddy list-modules --packages | grep -F github.com/caddy-dns/cloudflare
+ 
+ ENTRYPOINT ["/usr/bin/homelab-caddy-entrypoint"]
+diff --git a/ansible/roles/docker-engine/defaults/main.yml b/ansible/roles/docker-engine/defaults/main.yml
+index de0e1f6..bfc2d7b 100644
+--- a/ansible/roles/docker-engine/defaults/main.yml
++++ b/ansible/roles/docker-engine/defaults/main.yml
+@@ -1,6 +1,6 @@
+ ---
+-docker_ce_version: "5:29.8.1-1~ubuntu.26.04~resolute"
+-docker_ce_cli_version: "5:29.8.1-1~ubuntu.26.04~resolute"
+-docker_containerd_version: "2.3.5-1~ubuntu.26.04~resolute"
+-docker_buildx_version: "0.37.1-1~ubuntu.26.04~resolute"
+-docker_compose_version: "5.5.1-1~ubuntu.26.04~resolute"
++docker_ce_version: "5:29.9.2-1~ubuntu.26.04~resolute"
++docker_ce_cli_version: "5:29.9.2-1~ubuntu.26.04~resolute"
++docker_containerd_version: "2.4.2-3~ubuntu.26.04~resolute"
++docker_buildx_version: "0.38.1-1~ubuntu.26.04~resolute"
++docker_compose_version: "5.6.1-1~ubuntu.26.04~resolute"
+diff --git a/ansible/roles/gitea/README.md b/ansible/roles/gitea/README.md
+index f5320d1..301166c 100644
+--- a/ansible/roles/gitea/README.md
++++ b/ansible/roles/gitea/README.md
+@@ -1,5 +1,5 @@
+ # Gitea role
+ 
+-Deploys Gitea 1.27.3 by immutable image digest on `lab-services-01`. It uses SQLite in WAL mode for this small installation and stores the entire `/data` tree on `/srv/homelab/gitea` as UID/GID 1000.
++Deploys Gitea 28.2.0 on `lab-services-01`. The security image rebuilds checksum-pinned upstream source with Go 1.27.3, reuses the digest-pinned official release's embedded web assets, and updates Alpine certificate trust. It uses SQLite in WAL mode and stores the entire `/data` tree on `/srv/homelab/gitea` as UID/GID 1000. Back up this dataset consistently before schema upgrades; reverting an image alone does not reverse a database migration.
+ 
+ HTTP binds only to `192.168.1.101:3000`; Git SSH binds to `192.168.1.101:2222`. Gitea also joins the external `homelab-proxy` Docker network so Caddy can reach port 3000 by container DNS without host-network mode or Docker-socket access. Registration, OpenID sign-in/sign-up, and Actions are disabled. The ignored bootstrap administrator is `homelab-admin` with email `admin@gmail.com`; its generated password must be changed on first login. SMTP is not configured, so the email is metadata only and cannot receive password-recovery mail. No Actions runner executes on this VM.
+diff --git a/ansible/roles/gitea/defaults/main.yml b/ansible/roles/gitea/defaults/main.yml
+index f4a127d..5de7f36 100644
+--- a/ansible/roles/gitea/defaults/main.yml
++++ b/ansible/roles/gitea/defaults/main.yml
+@@ -1,5 +1,7 @@
+ ---
+-gitea_image: "docker.gitea.com/gitea:1.27.3@sha256:87a67ee09d3ae0d1df5fda5dcda3e2a1f9236a45b0a59025d6e00e46adc43bef"
++gitea_base_image: "docker.gitea.com/gitea:28.2.0@sha256:30777c91280d973fa02be48b1ade735bd6859e8f6f7af3b4444d519437852504"
++gitea_go_image: "golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c"
++gitea_image: "homelab/gitea:28.2.0-go1.27.3-security-20261025"
+ gitea_compose_dir: /opt/homelab/gitea
+ gitea_data_dir: /srv/homelab/gitea
+ gitea_http_address: "{{ ansible_host }}"
+diff --git a/ansible/roles/gitea/tasks/main.yml b/ansible/roles/gitea/tasks/main.yml
+index 13a60f3..504d94f 100644
+--- a/ansible/roles/gitea/tasks/main.yml
++++ b/ansible/roles/gitea/tasks/main.yml
+@@ -5,6 +5,9 @@
+       - gitea_admin_username is match('^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}$')
+       - gitea_admin_email is match('^[^@\s]+@[^@\s]+$')
+       - gitea_admin_password_file | length > 0
++      - gitea_base_image is match('^docker\.gitea\.com/gitea:28\.2\.0@sha256:[a-f0-9]{64}$')
++      - gitea_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
++      - gitea_image is match('^homelab/gitea:')
+       - gitea_http_address == ansible_host
+       - gitea_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
+       - "'homelab-gitea' in homelab_virtiofs_mappings"
+@@ -73,7 +76,16 @@
+     - not ansible_check_mode
+     - gitea_proxy_network_present.rc == 1
+ 
+-- name: Check whether the pinned Gitea image is present
++- name: Render the patched Gitea image build
++  ansible.builtin.template:
++    src: Dockerfile.j2
++    dest: "{{ gitea_compose_dir }}/Dockerfile"
++    owner: root
++    group: root
++    mode: '0644'
++  register: gitea_dockerfile
++
++- name: Check whether the patched Gitea image is present
+   ansible.builtin.command:
+     argv:
+       - docker
+@@ -86,17 +98,30 @@
+   check_mode: false
+   when: not ansible_check_mode
+ 
+-- name: Pull the pinned Gitea image
++- name: Build Gitea with the patched Go runtime and trust store
+   ansible.builtin.command:
+     argv:
+       - docker
+-      - pull
++      - build
++      - --tag
+       - "{{ gitea_image }}"
++      - "{{ gitea_compose_dir }}"
+   when:
+     - not ansible_check_mode
+-    - gitea_image_present.rc == 1
++    - gitea_image_present.rc == 1 or gitea_dockerfile.changed
+   changed_when: true
+ 
++- name: Verify the patched Gitea image without mounting application data
++  ansible.builtin.command:
++    argv: [docker, run, --rm, --network, none, --entrypoint, gitea, "{{ gitea_image }}", --version]
++  register: gitea_security_version
++  changed_when: false
++  failed_when: >-
++    gitea_security_version.rc != 0
++    or '28.2.0' not in gitea_security_version.stdout
++    or 'go1.27.3' not in gitea_security_version.stdout
++  when: not ansible_check_mode
++
+ - name: Validate the Gitea Compose project
+   ansible.builtin.command:
+     argv:
+diff --git a/ansible/roles/gitea/templates/Dockerfile.j2 b/ansible/roles/gitea/templates/Dockerfile.j2
+new file mode 100644
+index 0000000..1973843
+--- /dev/null
++++ b/ansible/roles/gitea/templates/Dockerfile.j2
+@@ -0,0 +1,20 @@
++# Reuse the reviewed release's UI instead of resolving a second JS dependency tree.
++FROM {{ gitea_base_image }} AS assets
++USER git
++RUN mkdir /tmp/embedded && gitea embedded extract --include-vendored --destination /tmp/embedded '**'
++
++FROM {{ gitea_go_image }} AS builder
++ENV GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
++RUN apk add --no-cache build-base git
++ADD --checksum=sha256:08f602f6c17c4e74747302aba860a8093f98f1e5310261ec362a5f1221a5da0f https://codeload.github.com/go-gitea/gitea/tar.gz/refs/tags/v28.2.0 /tmp/source.tar.gz
++WORKDIR /src
++RUN tar -xzf /tmp/source.tar.gz --strip-components=1
++COPY --from=assets /tmp/embedded/ /src/
++RUN make backend TAGS='bindata timetzdata' GITHUB_REF_TYPE=tag GITHUB_REF_NAME=v28.2.0 VERSION=28.2.0 GITEA_VERSION=28.2.0 \
++    && go version -m /src/gitea | grep -F go1.27.3
++
++FROM {{ gitea_base_image }}
++COPY --from=builder /src/gitea /app/gitea/gitea
++RUN apk upgrade --no-cache \
++    && test ! -e /etc/ssl/certs/ca-cert-emSign_ECC_Root_CA_-_G3.pem \
++    && gitea --version | grep -F '28.2.0' | grep -F go1.27.3
+diff --git a/ansible/roles/hermes/README.md b/ansible/roles/hermes/README.md
+index 766d90d..fdd889d 100644
+--- a/ansible/roles/hermes/README.md
++++ b/ansible/roles/hermes/README.md
+@@ -1,8 +1,11 @@
+ # Hermes role
+ 
+-Deploys the official, digest-pinned Hermes container on `lab-agents-01` with
+-the built-in password-gated dashboard and no model provider or published agent
+-API. The existing `homelab-hermes` VirtioFS dataset is mounted at `/opt/data`
++Builds a security overlay on digest-pinned Hermes 0.22.5: fixed Node 26.12.1,
++checksum-pinned brotlicffi 1.2.1.0, certifi 2026.10.23, pip 26.2.2 and updated
++Debian trust. Build checks use no private data mounts. Deployment on
++`lab-agents-01` seeds provider-neutral configuration and the password-gated
++dashboard; operator-configured Codex and Telegram settings are preserved.
++No agent API is published. The existing `homelab-hermes` VirtioFS dataset is mounted at `/opt/data`
+ and owned by the image's runtime UID 10000. `config.yaml` is seeded once with
+ SQLite DELETE journaling, the dashboard password hash, and a stable session
+ signing key; Hermes may subsequently maintain its own config. The plaintext
+diff --git a/ansible/roles/hermes/defaults/main.yml b/ansible/roles/hermes/defaults/main.yml
+index 7aee186..d394b58 100644
+--- a/ansible/roles/hermes/defaults/main.yml
++++ b/ansible/roles/hermes/defaults/main.yml
+@@ -1,5 +1,6 @@
+ ---
+-hermes_image: "nousresearch/hermes-agent:v0.21.6@sha256:55e192fba0cd4fde61142abbff5adeacff40efdb482ccd0ff877924bd274f909"
++hermes_base_image: "nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d"
++hermes_image: "homelab/hermes-agent:0.22.5-security-20261025"
+ hermes_compose_dir: /opt/homelab/hermes
+ hermes_data_dir: /srv/homelab/hermes
+ hermes_dashboard_secret_file: ""
+diff --git a/ansible/roles/hermes/tasks/main.yml b/ansible/roles/hermes/tasks/main.yml
+index dbbe2e8..8355658 100644
+--- a/ansible/roles/hermes/tasks/main.yml
++++ b/ansible/roles/hermes/tasks/main.yml
+@@ -2,7 +2,8 @@
+ - name: Validate the provider-neutral Hermes deployment contract
+   ansible.builtin.assert:
+     that:
+-      - hermes_image is match('^nousresearch/hermes-agent:v[0-9.]+@sha256:[a-f0-9]{64}$')
++      - hermes_base_image is match('^nousresearch/hermes-agent:v[0-9.]+@sha256:[a-f0-9]{64}$')
++      - hermes_image is match('^homelab/hermes-agent:[a-zA-Z0-9._-]+$')
+       - hermes_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+       - hermes_dashboard_secret_file | length > 0
+       - hermes_dashboard_address == ansible_host
+@@ -139,9 +140,44 @@
+   changed_when: false
+   when: not ansible_check_mode
+ 
+-- name: Pull the exact reviewed Hermes image
++- name: Render the security-patched Hermes build
++  ansible.builtin.template:
++    src: Dockerfile.j2
++    dest: '{{ hermes_compose_dir }}/Dockerfile'
++    owner: root
++    group: root
++    mode: '0640'
++  register: hermes_dockerfile
++
++- name: Check for the reviewed security image
++  ansible.builtin.command:
++    argv: [docker, image, inspect, '{{ hermes_image }}']
++  register: hermes_image_present
++  changed_when: false
++  failed_when: hermes_image_present.rc not in [0, 1]
++  when: not ansible_check_mode
++
++- name: Build the patched image before touching the running application
++  ansible.builtin.command:
++    argv: [docker, build, --tag, '{{ hermes_image }}', '{{ hermes_compose_dir }}']
++  changed_when: true
++  when:
++    - not ansible_check_mode
++    - hermes_dockerfile.changed or hermes_image_present.rc == 1
++
++- name: Verify patched dependencies without mounting private Hermes state
+   ansible.builtin.command:
+-    argv: [docker, compose, --project-directory, "{{ hermes_compose_dir }}", pull]
++    argv:
++      - docker
++      - run
++      - --rm
++      - --network
++      - none
++      - --entrypoint
++      - /opt/hermes/.venv/bin/python
++      - '{{ hermes_image }}'
++      - -c
++      - 'import brotlicffi, certifi; assert brotlicffi.__version__ == "1.2.1.0"; assert "emSign ECC Root CA - G3" not in open(certifi.where()).read()'
+   changed_when: false
+   when: not ansible_check_mode
+ 
+diff --git a/ansible/roles/hermes/templates/Dockerfile.j2 b/ansible/roles/hermes/templates/Dockerfile.j2
+new file mode 100644
+index 0000000..e191c67
+--- /dev/null
++++ b/ansible/roles/hermes/templates/Dockerfile.j2
+@@ -0,0 +1,18 @@
++FROM {{ hermes_base_image }}
++
++USER root
++ADD --checksum=sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70 https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl /tmp/security-wheels/
++ADD --checksum=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1 https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl /tmp/security-wheels/
++ADD --checksum=sha256:0a7281a39de91432e90c27ab9c4f9feb3a9cf33fda3873534c2a88270d9f60a2 https://files.pythonhosted.org/packages/f1/93/e2735a441a0f071b8094a2b9baadad5fb9811708c088b294ccb0e90aeb46/brotlicffi-1.2.1.0-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl /tmp/security-wheels/
++
++RUN apt-get update \
++    && apt-get upgrade -y \
++    && /opt/hermes/.venv/bin/python -m ensurepip --upgrade \
++    && /opt/hermes/.venv/bin/python -m pip install --no-index --no-deps /tmp/security-wheels/*.whl \
++    && base_python=$(/opt/hermes/.venv/bin/python -S -c 'import sys; print(sys.base_prefix + "/bin/python3")') \
++    && "$base_python" -m ensurepip --upgrade \
++    && "$base_python" -m pip install --no-index --no-deps /tmp/security-wheels/pip-*.whl /tmp/security-wheels/certifi-*.whl \
++    && /opt/hermes/.venv/bin/python -c 'import brotlicffi, certifi, pip._vendor.certifi as pc; assert brotlicffi.__version__ == "1.2.1.0"; assert "emSign ECC Root CA - G3" not in open(certifi.where()).read(); assert "emSign ECC Root CA - G3" not in open(pc.where()).read()' \
++    && test ! -e /etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem \
++    && test "$(node --version)" = v26.12.1 \
++    && rm -r /tmp/security-wheels /var/lib/apt/lists/*
+diff --git a/architecture.html b/architecture.html
+index dbeea4b..3124aa8 100644
+--- a/architecture.html
++++ b/architecture.html
+@@ -195,7 +195,7 @@
+         <a href="deployment-guide.html">Deployment guide</a>
+       </nav>
+       <h1>Homelab Architecture</h1>
+-      <p class="meta">Canonical design · Draft · Updated 18 September 2026</p>
++      <p class="meta">Canonical design · Updated 25 October 2026</p>
+     </header>
+ 
+     <nav class="tabs" role="tablist" aria-label="Architecture sections">
+@@ -296,6 +296,7 @@
+         </section>
+       </div>
+ 
++
+       <h3>Current AdGuard HTTPS path</h3>
+       <dl class="context-list">
+         <dt>Private name</dt><dd><code>adguard.home.&lt;domain&gt;</code> resolves to Caddy at <code>192.168.1.101</code> only through the new AdGuard DNS server at <code>192.168.1.100</code>. The old <code>.9</code> resolver does not serve this name; router and VPN DNS have not been cut over.</dd>
+@@ -714,7 +715,7 @@
+             <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
+             <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
+             <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
+-            <li><span class="status accepted">D-067 Deployed</span> Use Caddy <code>2.11.4</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM. Container validation loads the scoped token through the same entrypoint as normal startup. Both staging and production wildcard issuance passed.</li>
++            <li><span class="status accepted">D-067 Amended</span> Use Caddy <code>2.11.7</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with Go <code>1.27.3</code>, updated OS certificate trust and only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM. Container validation loads the scoped token through the same entrypoint as normal startup. Both staging and production wildcard issuance passed.</li>
+           </ul>
+         </section>
+         <section>
+@@ -742,7 +743,7 @@
+     <section id="os-panel" role="tabpanel" aria-labelledby="os-tab" hidden>
+       <h2>Operating systems</h2>
+       <ul class="facts">
+-        <li><strong>Hypervisor</strong><br>Proxmox VE 9.1.2 documented baseline</li>
++        <li><strong>Hypervisor</strong><br>Proxmox VE 9.2.21 · patched kernel 7.0.14-25-pve</li>
+         <li><strong>Guest template</strong><br>Ubuntu Server 26.04 LTS via Packer</li>
+         <li><strong>Provisioning</strong><br>Terraform + cloud-init</li>
+         <li><strong>Configuration</strong><br>Remote Ansible over key-only SSH</li>
+@@ -767,7 +768,7 @@
+         <section>
+           <h3>Before implementation</h3>
+           <ul class="compact">
+-            <li><span class="status open">Open</span> Confirm the installed Proxmox patch version and update host firmware/Intel microcode.</li>
++            <li><span class="status open">CPU and image prerequisites</span> Intel microcode is installed, but the current host kernel lacks GDS mitigation support and MMIO retains SMT exposure. Review mitigation support and CPU-performance trade-offs before introducing untrusted workloads. Stopped legacy guests/templates require rebuilding or patch verification before reuse; BIOS firmware remains unreviewed.</li>
+           </ul>
+         </section>
+       </template>
+@@ -947,7 +948,7 @@
+         <section id="services-caddy-panel" role="tabpanel" aria-labelledby="services-caddy-tab" hidden>
+           <h3>Private HTTPS boundary</h3>
+           <dl class="context-list">
+-            <dt>Image</dt><dd>Caddy <code>2.11.4</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
++            <dt>Image</dt><dd>Caddy <code>2.11.7</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
+             <dt>Ingress</dt><dd>TCP 443 bound only to <code>192.168.1.101</code>; the router still forwards no public HTTP or HTTPS port</dd>
+             <dt>Certificate</dt><dd><code>*.home.&lt;domain&gt;</code> issued through Cloudflare DNS-01; staging and production issuance passed on 28 September 2026</dd>
+             <dt>State</dt><dd><code>homelab-reverse-proxy</code> VirtioFS mapping with isolated <code>staging/</code> and <code>production/</code> directories</dd>
+@@ -965,7 +966,7 @@
+           <dl class="context-list">
+             <dt>Host boundary</dt><dd><code>lab-services-01</code>, shared with planned n8n and future Nextcloud and Vaultwarden containers</dd>
+             <dt>Container</dt><dd><code>gitea</code> in the standalone Compose project <code>gitea</code></dd>
+-            <dt>Release</dt><dd><code>1.27.3</code>, immutable image digest <code>sha256:87a67e…c43bef</code></dd>
++            <dt>Release</dt><dd>Gitea <code>28.2.0</code>, rebuilt with Go <code>1.27.3</code> from checksum-pinned source and official embedded web assets. OS trust is updated; persistent data remains outside the image. Schema changes require a consistent application-data backup.</dd>
+             <dt>Identity</dt><dd>Application files use UID/GID <code>1000</code>; administrator is <code>homelab-admin</code>, with the generated bootstrap password already replaced</dd>
+             <dt>Restart policy</dt><dd><code>unless-stopped</code> with a one-minute graceful stop window</dd>
+           </dl>
+@@ -1075,7 +1076,7 @@
+         <h3>Hermes Agent</h3>
+         <dl class="context-list">
+           <dt>Status</dt><dd><span class="status accepted">Provider-neutral dashboard live</span> Model selection remains open</dd>
+-          <dt>Runtime</dt><dd>Ansible-managed Hermes <code>v0.21.6</code> container pinned by digest on <code>lab-agents-01</code>; dashboard only, no model or externally published agent API yet</dd>
++          <dt>Runtime</dt><dd>Ansible-managed Hermes <code>v0.22.5</code> security overlay on a digest-pinned official image: Node <code>26.12.1</code>, <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code> and updated OS trust. Existing provider configuration and durable sessions survive recreation; no publicly published agent API.</dd>
+           <dt>Durable state</dt><dd>Existing <code>homelab-hermes</code> VirtioFS dataset mounted at <code>/opt/data</code>; SQLite uses DELETE journaling rather than WAL across the VM boundary</dd>
+           <dt>Dashboard</dt><dd><code>https://hermes.home.&lt;domain&gt;</code> through Caddy; built-in username/password authentication is mandatory. The private HTTP backend is restricted to Caddy. No public application ingress.</dd>
+           <dt>Gitea identity</dt><dd>Dedicated non-administrator account with write access only to selected sandbox repositories</dd>
+@@ -1113,7 +1114,7 @@
+           <ul class="compact">
+             <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
+             <li><span class="status accepted">D-052 Implemented</span> Begin application deployment with Gitea. Use SQLite with WAL mode to minimize memory on the 4 GB shared-services VM; accept that it does not scale well and later database conversion is not well tested.</li>
+-            <li><span class="status accepted">D-053 Implemented</span> Pin Gitea <code>1.27.3</code> by immutable image digest. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration and OpenID login. Actions remains disabled in the current deployment; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
++            <li><span class="status accepted">D-053 Implemented</span> Use Gitea <code>28.2.0</code> rebuilt with Go <code>1.27.3</code> from checksum-pinned source and a digest-pinned official base. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration and OpenID login. Actions remains disabled in the current deployment; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
+             <li><span class="status accepted">D-054 Implemented</span> Install Docker CE from Docker's official Ubuntu 26.04 repository with exact package versions, refresh apt metadata immediately when its repository or key changes and otherwise only when stale, hold those packages until reviewed upgrades, use the local log driver and live restore, and do not add the administrator to the root-equivalent Docker group.</li>
+             <li><span class="status open">D-055 Partially implemented</span> Private HTTPS through Caddy is live for Gitea, but its direct HTTP endpoint remains reachable across the flat home LAN. Review or restrict that bypass before issuing Hermes a Gitea API token, registering a runner, exposing authenticated n8n tools, or using Gitea as an OCI registry.</li>
+             <li><span class="status accepted">D-057 Amended</span> Prioritize Hermes, its agent-to-Git loop, and the planned n8n automation layer before Nextcloud, Vaultwarden, or centralized secret management. Leave the model provider open until its cost, authentication, and data-handling trade-offs are reviewed.</li>
+diff --git a/implementation.html b/implementation.html
+index 65c489c..9b04b73 100644
+--- a/implementation.html
++++ b/implementation.html
+@@ -472,8 +472,8 @@
+       <dl class="context-list">
+         <dt>Status</dt><dd><span class="status complete">Implemented</span> Live deployment and repeat convergence passed</dd>
+         <dt>Host</dt><dd><code>lab-services-01</code> · <code>192.168.1.101</code></dd>
+-        <dt>Runtime</dt><dd>Official Docker CE <code>29.8.1</code> packages and Compose plugin <code>5.5.1</code>, held at reviewed versions</dd>
+-        <dt>Image</dt><dd><code>docker.gitea.com/gitea:1.27.3</code> pinned by digest</dd>
++        <dt>Runtime</dt><dd>Docker CE <code>29.9.2</code> (Go <code>1.26.10</code>), containerd <code>2.4.2-3</code>, Buildx <code>0.38.1</code> and Compose <code>5.6.1</code>, held at reviewed versions on all three VMs</dd>
++        <dt>Image</dt><dd>Gitea <code>28.2.0</code> security build: checksum-pinned upstream source, official embedded web assets, Go <code>1.27.3</code>, updated Alpine trust. Ansible builds and checks the image before replacing the running container; schema changes require a consistent application-data backup. AdGuard follows the same build pattern at <code>0.107.79</code>, reusing its official frontend archive.</dd>
+         <dt>Endpoints</dt><dd>HTTP <code>192.168.1.101:3000</code> · Git SSH <code>192.168.1.101:2222</code></dd>
+         <dt>State</dt><dd>SQLite WAL plus repositories, LFS, packages, configuration, and keys under <code>/srv/homelab/gitea</code></dd>
+         <dt>Bootstrap</dt><dd>Administrator <code>homelab-admin</code> / <code>admin@gmail.com</code>; first-login password replacement is complete and the ignored generated bootstrap password is intentionally stale. SMTP is not configured, so the email cannot yet receive password recovery.</dd>
+@@ -615,7 +615,7 @@
+         <dt>Current service</dt><dd>AdGuard and WireGuard are active at <code>192.168.1.9</code>; no router, DHCP, or VPN cutover has been made</dd>
+         <dt>New service</dt><dd>Deployed independent AdGuard Compose project on <code>lab-access-01</code> at <code>192.168.1.100</code>, with durable configuration and query data on the existing <code>homelab-adguard</code> VirtioFS mount</dd>
+         <dt>Policy source</dt><dd>The old container's protected YAML was inspected read-only and adapted in <code>ansible/roles/adguard/defaults/main.yml</code>: two upstreams, five filters (three active), no allowlists or user rules, and the AdGuard and router rewrites. Private Gitea and Hermes names are added; broader rewrite planning is deferred.</dd>
+-        <dt>Runtime</dt><dd>Official stable <code>v0.107.79</code> pinned by digest; host-network Compose on the access VM, DNS bound to <code>192.168.1.100:53</code>, admin HTTP backend bound to <code>192.168.1.100:3000</code>, ZFS-backed <code>conf/</code> and <code>work/</code>.</dd>
++        <dt>Runtime</dt><dd>AdGuard <code>v0.107.79</code> security build with Go <code>1.27.3</code> and updated Alpine trust, checksum-pinned source/frontend and digest-pinned base; host-network Compose, DNS <code>192.168.1.100:53</code>, protected admin backend <code>192.168.1.100:3000</code>, ZFS-backed <code>conf/</code> and <code>work/</code>. Reconciliation waits for authenticated DNS readiness; an unchanged policy reports no changes.</dd>
+         <dt>Admin</dt><dd>New generated password in ignored <code>.generated/secrets/adguard-admin-password</code>, installed root-only under <code>/etc/homelab/adguard/</code>. Use <code>https://adguard.home.&lt;domain&gt;</code> after setting a test client's DNS to <code>192.168.1.100</code>; no extra client restriction. The backend HTTP port admits only Caddy and guest-local traffic. Break-glass tunnel: <code>ssh -L 3000:192.168.1.100:3000 user@192.168.1.101</code>.</dd>
+         <dt>Cutover rule</dt><dd>Test DNS on a single client first, compare representative answers from <code>.9</code> and <code>.100</code>, then change router DHCP DNS and later WireGuard peers. Retire old AdGuard and WireGuard independently</dd>
+       </dl>
+@@ -638,7 +638,7 @@
+       <dl class="context-list">
+         <dt>Status</dt><dd><span class="status complete">Production HTTPS live</span> Caddy is healthy on <code>lab-services-01</code>. Separate staging and production wildcard issuance passed through Cloudflare DNS-01; the production Gitea health route passed normal certificate validation</dd>
+         <dt>Termination</dt><dd>One Caddy reverse proxy on <code>lab-services-01</code>; application containers do not receive the certificate private key</dd>
+-        <dt>Image</dt><dd>Caddy <code>2.11.4</code>, locally built from digest-pinned official Alpine builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; no third-party prebuilt image</dd>
++        <dt>Image</dt><dd>Caddy <code>2.11.7</code>, built with Go <code>1.27.3</code> from digest-pinned official Alpine stages, updated certificate trust and only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
+         <dt>Discovery</dt><dd>Declarative Caddyfile routes; Caddy receives no Docker socket</dd>
+         <dt>Candidate names</dt><dd><code>gitea.home.&lt;domain&gt;</code> and <code>n8n.home.&lt;domain&gt;</code> below a wildcard <code>*.home.&lt;domain&gt;</code></dd>
+         <dt>Domain dependencies</dt><dd>Homelab only; no existing email, website, or other service requires migration</dd>
+@@ -780,7 +780,7 @@
+         <dt>Status</dt><dd><span class="status complete">Dashboard foundation live</span> Provider and Git authority remain open</dd>
+         <dt>Host</dt><dd><code>lab-agents-01</code> · <code>192.168.1.102</code></dd>
+         <dt>Model provider</dt><dd><span class="status open">Open</span> Compare cost, authentication, data handling, and usable models before selecting Nous Portal, OpenRouter, OpenAI, or another endpoint</dd>
+-        <dt>Runtime</dt><dd>Ansible-managed Docker Compose using official <code>v0.21.6</code> pinned by immutable digest; no externally published agent API or model credential yet</dd>
++        <dt>Runtime</dt><dd>Ansible builds a security overlay on digest-pinned Hermes <code>v0.22.5</code>: Node <code>26.12.1</code>, checksum-pinned <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code>, updated OS trust. Build validation uses no private data mounts; existing configuration is never overwritten. No externally published agent API.</dd>
+         <dt>Durable mount</dt><dd>Existing <code>homelab-hermes</code> VirtioFS mapping at <code>/srv/homelab/hermes</code>, mounted into the container at <code>/opt/data</code>; SQLite DELETE journaling</dd>
+         <dt>Dashboard</dt><dd>Built-in password gate behind Caddy at <code>https://hermes.home.&lt;domain&gt;</code>; Caddy-only backend firewall, private DNS rewrite, and generated ignored bootstrap login</dd>
+         <dt>Gitea access</dt><dd>Dedicated non-administrator identity; Git over SSH first, limited to selected sandbox repositories</dd>
+@@ -802,7 +802,7 @@
+       <h3>Implementation sequence</h3>
+       <ol class="compact">
+         <li><span class="status complete">Foundation</span> <code>task apps:hermes:deploy</code> installed Docker on agents, verified VirtioFS, and started the digest-pinned image. Production Caddy and AdGuard deployments added the HTTPS route and private DNS rewrite. The existing router DNS and old <code>.9</code> resolver were not cut over.</li>
+-        <li><span class="status complete">Research</span> Selected official stable <code>v0.21.6</code> and Docker Hub's manifest digest; upstream Dockerfile uses UID <code>10000</code>, <code>/opt/data</code>, and a supervised dashboard. A fresh SQLite database on VirtioFS must use DELETE journaling; verify this after first boot.</li>
++        <li><span class="status complete">Runtime</span> Use the reviewed <code>v0.22.5</code> security overlay with runtime UID <code>10000</code>, durable <code>/opt/data</code>, the dashboard gate and SQLite DELETE journaling. Deployment validates the patched image before replacing the running container.</li>
+         <li><span class="status planned">Decide</span> Select the model provider and define a monthly budget, credential type, and permitted outbound endpoints before first chat.</li>
+         <li><span class="status planned">Identity</span> Create a non-administrator Gitea user for Hermes, generate its Git SSH key on the agent VM, and grant only selected sandbox-repository access.</li>
+         <li><span class="status complete">Secrets</span> The dashboard bootstrap helper generated a mode-<code>0600</code> ignored controller file; only its scrypt hash and a signing secret reached the guest config. Add the eventual provider credential separately, without Terraform state, command arguments, or Ansible output.</li>
+-- 
+2.54.0 (Apple Git-157)
+
+
+From e6781be17737d80f0097ce3d9d9cfff789b5aadb Mon Sep 17 00:00:00 2001
+From: Lian <unfazing@gmail.com>
+Date: Sun, 25 Oct 2026 23:34:59 +0800
+Subject: [PATCH 2/2] feat(security): preserve agent management isolation
+
+Apply the permanent nftables boundary through the Hermes deployment while preserving administrator return traffic. Keep one-time campaign procedures outside the active operator interface.
+---
+ ansible/playbooks/hermes.yml                  |  2 +
+ ansible/roles/hermes/README.md                |  2 +-
+ .../roles/security-boundary/tasks/main.yml    | 64 +++++++++++++++++++
+ .../templates/boundary.nft.j2                 | 33 ++++++++++
+ .../templates/management-boundary.service.j2  | 16 +++++
+ architecture.html                             |  1 +
+ implementation.html                           |  1 +
+ 7 files changed, 118 insertions(+), 1 deletion(-)
+ create mode 100644 ansible/roles/security-boundary/tasks/main.yml
+ create mode 100644 ansible/roles/security-boundary/templates/boundary.nft.j2
+ create mode 100644 ansible/roles/security-boundary/templates/management-boundary.service.j2
+
+diff --git a/ansible/playbooks/hermes.yml b/ansible/playbooks/hermes.yml
+index e057885..1983a1e 100644
+--- a/ansible/playbooks/hermes.yml
++++ b/ansible/playbooks/hermes.yml
+@@ -8,6 +8,8 @@
+   gather_facts: true
+   vars:
+     hermes_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
++    security_boundary_profile: agents
+   roles:
++    - security-boundary
+     - docker-engine
+     - hermes
+diff --git a/ansible/roles/hermes/README.md b/ansible/roles/hermes/README.md
+index fdd889d..fbae058 100644
+--- a/ansible/roles/hermes/README.md
++++ b/ansible/roles/hermes/README.md
+@@ -13,7 +13,7 @@ bootstrap password remains only in the ignored controller secret file.
+ 
+ The dashboard listens on the guest at port 9119, but an nftables pre-routing
+ rule admits only Caddy's address. Caddy terminates private HTTPS. The backend
+-firewall is required before Docker starts after a reboot. No Docker socket,
++firewall and management egress boundary are required before Docker starts after a reboot. No Docker socket,
+ Gitea credential, provider key, or CI job is granted here yet.
+ 
+ Run `task apps:hermes:deploy`, then reconcile Caddy and AdGuard with their
+diff --git a/ansible/roles/security-boundary/tasks/main.yml b/ansible/roles/security-boundary/tasks/main.yml
+new file mode 100644
+index 0000000..712d701
+--- /dev/null
++++ b/ansible/roles/security-boundary/tasks/main.yml
+@@ -0,0 +1,64 @@
++---
++- name: Validate the interim boundary profile
++  ansible.builtin.assert:
++    that: security_boundary_profile in ['agents', 'proxmox']
++- name: Install nftables
++  ansible.builtin.apt:
++    name: nftables
++    state: present
++- name: Create the security configuration directory
++  ansible.builtin.file:
++    path: /etc/homelab/security
++    state: directory
++    owner: root
++    group: root
++    mode: '0750'
++- name: Render the narrowly owned management boundary
++  ansible.builtin.template:
++    src: boundary.nft.j2
++    dest: /etc/homelab/security/management-boundary.nft
++    owner: root
++    group: root
++    mode: '0640'
++  register: security_boundary_rules
++- name: Validate boundary rules before activation
++  ansible.builtin.command: nft --check --file /etc/homelab/security/management-boundary.nft
++  changed_when: false
++  when: not ansible_check_mode
++- name: Install the persistent boundary unit
++  ansible.builtin.template:
++    src: management-boundary.service.j2
++    dest: /etc/systemd/system/homelab-management-boundary.service
++    owner: root
++    group: root
++    mode: '0644'
++  register: security_boundary_unit
++- name: Activate the management boundary
++  ansible.builtin.systemd_service:
++    name: homelab-management-boundary.service
++    daemon_reload: true
++    enabled: true
++    state: "{{ 'restarted' if security_boundary_rules.changed or security_boundary_unit.changed else 'started' }}"
++  when: not ansible_check_mode
++- name: Create the Docker dependency directory on the agent VM
++  ansible.builtin.file:
++    path: /etc/systemd/system/docker.service.d
++    state: directory
++    mode: '0755'
++  when: security_boundary_profile == 'agents'
++- name: Require the agent boundary before Docker starts
++  ansible.builtin.copy:
++    dest: /etc/systemd/system/docker.service.d/20-homelab-management-boundary.conf
++    content: |
++      [Unit]
++      Requires=homelab-management-boundary.service
++      After=homelab-management-boundary.service
++    owner: root
++    group: root
++    mode: '0644'
++  register: security_boundary_dependency
++  when: security_boundary_profile == 'agents'
++- name: Load Docker's dependency without restarting containers
++  ansible.builtin.systemd_service:
++    daemon_reload: true
++  when: security_boundary_dependency.changed | default(false)
+diff --git a/ansible/roles/security-boundary/templates/boundary.nft.j2 b/ansible/roles/security-boundary/templates/boundary.nft.j2
+new file mode 100644
+index 0000000..a266a99
+--- /dev/null
++++ b/ansible/roles/security-boundary/templates/boundary.nft.j2
+@@ -0,0 +1,33 @@
++{% if security_boundary_profile == 'agents' %}
++destroy table inet homelab_agent_egress
++table inet homelab_agent_egress {
++    chain protect_management {
++        # Permit replies to management connections initiated toward this VM.
++        ct state established,related accept
++        # Preserve existing router DNS while denying its management interfaces.
++        ip daddr 192.168.1.254 udp dport 53 accept
++        ip daddr 192.168.1.254 tcp dport 53 accept
++        ip daddr { 192.168.1.10, 192.168.1.254 } counter drop
++        # Inkling is the only approved legacy-host workload path.
++        ip daddr 192.168.1.9 tcp dport 3000 accept
++        ip daddr 192.168.1.9 counter drop
++    }
++    chain forwarded {
++        type filter hook prerouting priority -150; policy accept;
++        jump protect_management
++    }
++    chain local {
++        type filter hook output priority -150; policy accept;
++        jump protect_management
++    }
++}
++{% else %}
++destroy table inet homelab_agent_management
++table inet homelab_agent_management {
++    chain input {
++        type filter hook input priority -20; policy accept;
++        ct state established,related accept
++        ip saddr 192.168.1.102 counter drop
++    }
++}
++{% endif %}
+diff --git a/ansible/roles/security-boundary/templates/management-boundary.service.j2 b/ansible/roles/security-boundary/templates/management-boundary.service.j2
+new file mode 100644
+index 0000000..2d5daa7
+--- /dev/null
++++ b/ansible/roles/security-boundary/templates/management-boundary.service.j2
+@@ -0,0 +1,16 @@
++[Unit]
++Description=Homelab interim agent management boundary
++DefaultDependencies=no
++After=local-fs.target
++Before=network-pre.target docker.service shutdown.target
++Conflicts=shutdown.target
++Wants=network-pre.target
++
++[Service]
++Type=oneshot
++ExecStart=/usr/sbin/nft -f /etc/homelab/security/management-boundary.nft
++ExecReload=/usr/sbin/nft -f /etc/homelab/security/management-boundary.nft
++RemainAfterExit=yes
++
++[Install]
++WantedBy=multi-user.target
+diff --git a/architecture.html b/architecture.html
+index 3124aa8..6159353 100644
+--- a/architecture.html
++++ b/architecture.html
+@@ -296,6 +296,7 @@
+         </section>
+       </div>
+ 
++      <p class="callout"><strong>Agent management boundary:</strong> Ansible-owned nftables rules on <code>lab-agents-01</code> block agent-initiated guest and container IPv4 connections to Proxmox <code>.10</code>, router management <code>.254</code> (DNS remains allowed), and legacy <code>.9</code> except Inkling TCP 3000. Blue also rejects new agent-source <code>.102</code> connections. Established return traffic remains allowed so administrators, including clients NATed through red, can still manage the agent VM. Rules persist before Docker starts and replace only their own tables; they never flush Docker or WireGuard rules. Gitea, AdGuard, provider and Telegram paths remain available. This is an interim address-based boundary; VLAN isolation and a complete IPv6 policy remain pending.</p>
+ 
+       <h3>Current AdGuard HTTPS path</h3>
+       <dl class="context-list">
+diff --git a/implementation.html b/implementation.html
+index 9b04b73..cf3a1ee 100644
+--- a/implementation.html
++++ b/implementation.html
+@@ -781,6 +781,7 @@
+         <dt>Host</dt><dd><code>lab-agents-01</code> · <code>192.168.1.102</code></dd>
+         <dt>Model provider</dt><dd><span class="status open">Open</span> Compare cost, authentication, data handling, and usable models before selecting Nous Portal, OpenRouter, OpenAI, or another endpoint</dd>
+         <dt>Runtime</dt><dd>Ansible builds a security overlay on digest-pinned Hermes <code>v0.22.5</code>: Node <code>26.12.1</code>, checksum-pinned <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code>, updated OS trust. Build validation uses no private data mounts; existing configuration is never overwritten. No externally published agent API.</dd>
++        <dt>Management boundary</dt><dd>The Hermes playbook reapplies the <code>security-boundary</code> role before Docker starts. It blocks new agent-to-management connections while permitting established replies for inbound administration. Rules replace only their own nftables table; complete VLAN and IPv6 policies remain planned.</dd>
+         <dt>Durable mount</dt><dd>Existing <code>homelab-hermes</code> VirtioFS mapping at <code>/srv/homelab/hermes</code>, mounted into the container at <code>/opt/data</code>; SQLite DELETE journaling</dd>
+         <dt>Dashboard</dt><dd>Built-in password gate behind Caddy at <code>https://hermes.home.&lt;domain&gt;</code>; Caddy-only backend firewall, private DNS rewrite, and generated ignored bootstrap login</dd>
+         <dt>Gitea access</dt><dd>Dedicated non-administrator identity; Git over SSH first, limited to selected sandbox repositories</dd>
+-- 
+2.54.0 (Apple Git-157)
+

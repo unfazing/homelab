@@ -1,0 +1,256 @@
+---
+- name: Validate the AdGuard deployment contract
+  ansible.builtin.assert:
+    that:
+      - adguard_domain is match('^[a-z0-9.-]+$')
+      - adguard_dns_address == ansible_host
+      - adguard_admin_address == adguard_dns_address
+      - adguard_admin_port | int == 3000
+      - adguard_proxy_address != adguard_admin_address
+      - adguard_admin_username is match('^[a-zA-Z0-9_.-]+$')
+      - adguard_admin_password_file | length > 0
+      - adguard_base_image is match('^adguard/adguardhome:v0\.107\.79@sha256:[a-f0-9]{64}$')
+      - adguard_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
+      - adguard_image is match('^homelab/adguard:')
+      - "'homelab-adguard' in homelab_virtiofs_mappings"
+    fail_msg: "AdGuard requires the private domain, access VM address, ignored administrator secret, and persistent dataset."
+    quiet: true
+
+- name: Create AdGuard project and secret directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ adguard_compose_dir }}"
+    - "{{ adguard_secret_dir }}"
+
+- name: Create durable AdGuard configuration and work directories
+  ansible.builtin.file:
+    path: "{{ adguard_data_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - conf
+    - work
+
+- name: Install nftables for the AdGuard admin backend boundary
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Create the Docker systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the dedicated AdGuard admin backend firewall
+  ansible.builtin.template:
+    src: admin-backend.nft.j2
+    dest: "{{ adguard_secret_dir }}/admin-backend.nft"
+    owner: root
+    group: root
+    mode: "0640"
+  register: adguard_firewall_rules
+
+- name: Validate the AdGuard admin backend firewall
+  ansible.builtin.command:
+    argv:
+      - nft
+      - --check
+      - --file
+      - "{{ adguard_secret_dir }}/admin-backend.nft"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Install the AdGuard admin firewall unit
+  ansible.builtin.template:
+    src: homelab-adguard-admin-firewall.service.j2
+    dest: /etc/systemd/system/homelab-adguard-admin-firewall.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: adguard_firewall_unit
+
+- name: Ensure the admin backend firewall is active before moving the web listener
+  ansible.builtin.systemd_service:
+    name: homelab-adguard-admin-firewall.service
+    daemon_reload: true
+    enabled: true
+    state: "{{ 'restarted' if adguard_firewall_rules.changed or adguard_firewall_unit.changed else 'started' }}"
+  when: not ansible_check_mode
+
+- name: Require the backend firewall before Docker starts on boot
+  ansible.builtin.template:
+    src: docker-firewall-dependency.conf.j2
+    dest: /etc/systemd/system/docker.service.d/10-homelab-adguard-admin-firewall.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: adguard_docker_dependency
+
+- name: Load the Docker service dependency without restarting live DNS
+  ansible.builtin.systemd_service:
+    name: docker.service
+    daemon_reload: true
+    state: started
+  when:
+    - not ansible_check_mode
+    - adguard_docker_dependency.changed
+
+- name: Verify the dedicated backend firewall is loaded
+  ansible.builtin.command:
+    argv:
+      - nft
+      - list
+      - table
+      - inet
+      - homelab_adguard_admin
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Install the ignored administrator password on the access VM
+  ansible.builtin.copy:
+    src: "{{ adguard_admin_password_file }}"
+    dest: "{{ adguard_secret_dir }}/admin-password"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the pinned AdGuard Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ adguard_compose_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Render the source-controlled AdGuard DNS policy
+  ansible.builtin.template:
+    src: policy.json.j2
+    dest: "{{ adguard_compose_dir }}/policy.json"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Install the AdGuard API reconciler
+  ansible.builtin.copy:
+    src: reconcile.py
+    dest: "{{ adguard_compose_dir }}/reconcile.py"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Render the patched AdGuard image build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ adguard_compose_dir }}/Dockerfile"
+    owner: root
+    group: root
+    mode: '0644'
+  register: adguard_dockerfile
+
+- name: Check whether the patched AdGuard image is present
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ adguard_image }}"
+  register: adguard_image_present
+  changed_when: false
+  failed_when: adguard_image_present.rc not in [0, 1]
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Build AdGuard with the patched Go runtime and trust store
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - --tag
+      - "{{ adguard_image }}"
+      - "{{ adguard_compose_dir }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - adguard_image_present.rc == 1 or adguard_dockerfile.changed
+
+- name: Validate the AdGuard Compose project
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ adguard_compose_dir }}"
+      - config
+      - --quiet
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Start the parallel AdGuard container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ adguard_compose_dir }}"
+      - up
+      - --detach
+      - --remove-orphans
+  register: adguard_compose_up
+  changed_when: >-
+    'Created' in (adguard_compose_up.stdout + adguard_compose_up.stderr)
+    or 'Started' in (adguard_compose_up.stdout + adguard_compose_up.stderr)
+    or 'Recreated' in (adguard_compose_up.stdout + adguard_compose_up.stderr)
+  when: not ansible_check_mode
+
+- name: Wait for the protected AdGuard setup or admin API
+  ansible.builtin.wait_for:
+    host: "{{ adguard_admin_address }}"
+    port: "{{ adguard_admin_port }}"
+    timeout: 60
+  when: not ansible_check_mode
+
+- name: Bootstrap and reconcile the AdGuard DNS policy
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ adguard_compose_dir }}/reconcile.py"
+      - --policy
+      - "{{ adguard_compose_dir }}/policy.json"
+      - --password-file
+      - "{{ adguard_secret_dir }}/admin-password"
+      - --username
+      - "{{ adguard_admin_username }}"
+      - --dns-address
+      - "{{ adguard_dns_address }}"
+      - --web-address
+      - "{{ adguard_admin_address }}"
+      - --web-port
+      - "{{ adguard_admin_port | string }}"
+  register: adguard_reconcile
+  changed_when: "'changed=' in adguard_reconcile.stdout and not adguard_reconcile.stdout.endswith('changed=0')"
+  when: not ansible_check_mode
+
+- name: Verify DNS and the protected admin backend listeners
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -H
+      - -lntu
+  register: adguard_listeners
+  changed_when: false
+  failed_when: >-
+    adguard_listeners.rc != 0
+    or (adguard_dns_address ~ ':53') not in adguard_listeners.stdout
+    or (adguard_admin_address ~ ':' ~ (adguard_admin_port | string)) not in adguard_listeners.stdout
+  when: not ansible_check_mode

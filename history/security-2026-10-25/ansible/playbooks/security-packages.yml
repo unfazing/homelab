@@ -1,0 +1,15 @@
+---
+- name: Apply operating system and reviewed container runtime security updates
+  hosts: access:services:agents
+  become: true
+  serial: 1
+  gather_facts: true
+  tasks:
+    - name: Apply guest distribution updates while respecting package holds
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        dpkg_options: force-confdef,force-confold
+    - name: Apply the reviewed Docker package pins and keep them held
+      ansible.builtin.include_role:
+        name: docker-engine

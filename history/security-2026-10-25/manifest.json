@@ -1,0 +1,348 @@
+{
+  "campaign": "2026-10-25",
+  "source_repository": "/Users/lian/dev/homelab",
+  "source_head_before_cleanup": "18dbaccbc2bffcac4d91edf34109ac3db001c794",
+  "captured_at": "2026-10-25T15:11:45.057930+00:00",
+  "files": [
+    {
+      "source": "ansible/inventories/maintenance/hosts.yml",
+      "archive": "ansible/inventories/maintenance/hosts.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "1dc5e88d5716869992a3a71715c02d486ac48c01290cb4a4a26f4a695cf80571"
+    },
+    {
+      "source": "ansible/playbooks/security-boundaries.yml",
+      "archive": "ansible/playbooks/security-boundaries.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "b7ce236fe322e715d347ca4872330c5391d2786b0b1c1ac710ed2017ae165f57"
+    },
+    {
+      "source": "ansible/playbooks/security-checkpoint.yml",
+      "archive": "ansible/playbooks/security-checkpoint.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "86ab2de160e0bcadd95f3f3dbe725498aef0eecb75da50804a4d075f624b2d2a"
+    },
+    {
+      "source": "ansible/playbooks/security-packages.yml",
+      "archive": "ansible/playbooks/security-packages.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "3e10550122ec9b3bbbdc404e1c40462971cc9c66d16c56292e347e03db9ba4b5"
+    },
+    {
+      "source": "ansible/playbooks/security-proxmox.yml",
+      "archive": "ansible/playbooks/security-proxmox.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "8a101336e8922510b5e55bdcaa230b0328ccf5eab3577daa85cdc4d3b6e6b57e"
+    },
+    {
+      "source": "ansible/playbooks/security-reboot.yml",
+      "archive": "ansible/playbooks/security-reboot.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "9d74ecbc14bc21e0e552acf330ad5dfebc0105e908c2d62ec6b761c45c62b38c"
+    },
+    {
+      "source": "ansible/playbooks/security-red-apps.yml",
+      "archive": "ansible/playbooks/security-red-apps.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "0bfdec22f28da380abfcd4897b5f4a5bcde0217f021c2700ab7eaa8f11a3f3df"
+    },
+    {
+      "source": "ansible/playbooks/security-red.yml",
+      "archive": "ansible/playbooks/security-red.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "f5d66d79608df65b8f0ea2075ce14e35d8184998232161c560761540861de0f7"
+    },
+    {
+      "source": "ansible/playbooks/security-verify.yml",
+      "archive": "ansible/playbooks/security-verify.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "a503867ddd62160b3b2deb638f95a0509b69d3e2933876217d608d2131d62b4b"
+    },
+    {
+      "source": "docs/security-remediation-2026-10-25.md",
+      "archive": "docs/security-remediation-2026-10-25.md",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "31c233d86ac260517ae29ae46cce76cdc31f1f76b68e13a85989c3ec95802e69"
+    },
+    {
+      "source": "docs/security-review-2026-10-25.md",
+      "archive": "docs/security-review-2026-10-25.md",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "10f658c9826ec93ba01aa242a4445c4ab9a565900772727c8bd4737e59c30cb5"
+    },
+    {
+      "source": "taskfiles/security.yml",
+      "archive": "taskfiles/security.yml",
+      "kind": "one-time artifact to remove from homelab",
+      "sha256": "d98e7cd0c309960b7bd64f85643ace7c7e993a7d00c7ef62a2a2173e5f4e6b7a"
+    },
+    {
+      "source": "ansible/roles/adguard/README.md",
+      "archive": "runtime-baseline/ansible/roles/adguard/README.md",
+      "kind": "retained runtime source snapshot",
+      "sha256": "98d1f4002100c4b63618474ecd0d109c7b25debc2668c280f6880ab50e9766e2"
+    },
+    {
+      "source": "ansible/roles/adguard/defaults/main.yml",
+      "archive": "runtime-baseline/ansible/roles/adguard/defaults/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "cfd9795663e5e09ba51e9a962e9a13585467992984e9925cc00873d03bd7637d"
+    },
+    {
+      "source": "ansible/roles/adguard/files/reconcile.py",
+      "archive": "runtime-baseline/ansible/roles/adguard/files/reconcile.py",
+      "kind": "retained runtime source snapshot",
+      "sha256": "e89ff2dff84bbe9bf2cca286386e19446adb55a9a9e715f73d74db0f077c8174"
+    },
+    {
+      "source": "ansible/roles/adguard/files/rotate_password.py",
+      "archive": "runtime-baseline/ansible/roles/adguard/files/rotate_password.py",
+      "kind": "retained runtime source snapshot",
+      "sha256": "24c25fcb4c134b247a19e148926dab738e7defb1393a8470ba0e00c501707b93"
+    },
+    {
+      "source": "ansible/roles/adguard/tasks/main.yml",
+      "archive": "runtime-baseline/ansible/roles/adguard/tasks/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "ddc8aa2789bdb87aa36dca02179e1f50c69576d6fd6277c2e1e94c1ebcc0019b"
+    },
+    {
+      "source": "ansible/roles/adguard/tasks/rotate-password.yml",
+      "archive": "runtime-baseline/ansible/roles/adguard/tasks/rotate-password.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "1ed850fd461d94d55e8ce7dbf2e5e4f00157b06b2d7cdfc50c32d1e8a6d76e5e"
+    },
+    {
+      "source": "ansible/roles/adguard/templates/Dockerfile.j2",
+      "archive": "runtime-baseline/ansible/roles/adguard/templates/Dockerfile.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "cfdd7154b0ee9839fc33063fe3188c8a62a1c33ff9ecd6b0e58099d5a8810718"
+    },
+    {
+      "source": "ansible/roles/adguard/templates/admin-backend.nft.j2",
+      "archive": "runtime-baseline/ansible/roles/adguard/templates/admin-backend.nft.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "2f8dcd87e735eed92087633000e9d108209425f16211adabc11d1f9f979e9a1c"
+    },
+    {
+      "source": "ansible/roles/adguard/templates/compose.yml.j2",
+      "archive": "runtime-baseline/ansible/roles/adguard/templates/compose.yml.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "51acb4bede73934a10ae40a3aba87740509c9df7e9964ba6b14cc75f302b071f"
+    },
+    {
+      "source": "ansible/roles/adguard/templates/docker-firewall-dependency.conf.j2",
+      "archive": "runtime-baseline/ansible/roles/adguard/templates/docker-firewall-dependency.conf.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "0c147970124fac66ec8cb49db1412b701baa63c60669275f0d850106c4b19b25"
+    },
+    {
+      "source": "ansible/roles/adguard/templates/homelab-adguard-admin-firewall.service.j2",
+      "archive": "runtime-baseline/ansible/roles/adguard/templates/homelab-adguard-admin-firewall.service.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "38b97ced715f4f37fad52c41276435dfa89489a11a23837f16ace1a1f12a9a09"
+    },
+    {
+      "source": "ansible/roles/adguard/templates/policy.json.j2",
+      "archive": "runtime-baseline/ansible/roles/adguard/templates/policy.json.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "0b8763c781f17fabac3c11ddd7908748fda4ba7fe910ac0d876e6ee8ca1f59ef"
+    },
+    {
+      "source": "ansible/roles/adguard/tests/test_reconcile.py",
+      "archive": "runtime-baseline/ansible/roles/adguard/tests/test_reconcile.py",
+      "kind": "retained runtime source snapshot",
+      "sha256": "772dca1aa827a8be7f6c7bf529ba4bcccac182dbfc04e14170958ec03e500319"
+    },
+    {
+      "source": "ansible/roles/adguard/tests/test_rotate_password.py",
+      "archive": "runtime-baseline/ansible/roles/adguard/tests/test_rotate_password.py",
+      "kind": "retained runtime source snapshot",
+      "sha256": "f05e31b919b600f3fc6a4cafe57be729c12c97a4876150e19e7eaca3a8afe3ff"
+    },
+    {
+      "source": "ansible/roles/caddy/README.md",
+      "archive": "runtime-baseline/ansible/roles/caddy/README.md",
+      "kind": "retained runtime source snapshot",
+      "sha256": "e15fa984f23c54662bf274b08e846ed86dd91b0f428dd99ffdbec3038451ba8d"
+    },
+    {
+      "source": "ansible/roles/caddy/defaults/main.yml",
+      "archive": "runtime-baseline/ansible/roles/caddy/defaults/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "c6e48b443ea5d77881a63a661b03a5508c3198ef0aadaa941b499ed70ead93f7"
+    },
+    {
+      "source": "ansible/roles/caddy/tasks/main.yml",
+      "archive": "runtime-baseline/ansible/roles/caddy/tasks/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "c19687c069ef6297b3ca3cde1172c4f3c574e3ce734961a62393385976ace155"
+    },
+    {
+      "source": "ansible/roles/caddy/templates/Caddyfile.j2",
+      "archive": "runtime-baseline/ansible/roles/caddy/templates/Caddyfile.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "d34b09698f0820079b7a4d06ba193d604629cda49fed1fda4cf7ba981f4100a5"
+    },
+    {
+      "source": "ansible/roles/caddy/templates/Dockerfile.j2",
+      "archive": "runtime-baseline/ansible/roles/caddy/templates/Dockerfile.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "e97204177f2dbc3a9e112d47ace01a3857b53c72e8535981c61e4aa8651ac500"
+    },
+    {
+      "source": "ansible/roles/caddy/templates/compose.yml.j2",
+      "archive": "runtime-baseline/ansible/roles/caddy/templates/compose.yml.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "f6b6cff8b233a0aabf6a497e8e2fd0914740b330a6df424875af9deaf4757c71"
+    },
+    {
+      "source": "ansible/roles/caddy/templates/homelab-caddy-entrypoint.j2",
+      "archive": "runtime-baseline/ansible/roles/caddy/templates/homelab-caddy-entrypoint.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "2781a1cb4704764850d20d8c113f491dee8887081dd3220954dc248854140ac7"
+    },
+    {
+      "source": "ansible/roles/gitea/README.md",
+      "archive": "runtime-baseline/ansible/roles/gitea/README.md",
+      "kind": "retained runtime source snapshot",
+      "sha256": "3243e5acca37a68ca8846d709e48a787dc2f58283e1a64bfa6047e790ef2779d"
+    },
+    {
+      "source": "ansible/roles/gitea/defaults/main.yml",
+      "archive": "runtime-baseline/ansible/roles/gitea/defaults/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "1d16d18fb8b4994468554570a36c1740e7b8f978d58f364d63c633af4d87df62"
+    },
+    {
+      "source": "ansible/roles/gitea/tasks/main.yml",
+      "archive": "runtime-baseline/ansible/roles/gitea/tasks/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "d0cac52672e8e8cc943b060c363d11a59d4dea0ec4285fee76c21214ea19be0e"
+    },
+    {
+      "source": "ansible/roles/gitea/templates/Dockerfile.j2",
+      "archive": "runtime-baseline/ansible/roles/gitea/templates/Dockerfile.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "a7acfc668d3b1476c7839716f4180c889b462d93840dd1cc9ad5dc869e68c712"
+    },
+    {
+      "source": "ansible/roles/gitea/templates/compose.yml.j2",
+      "archive": "runtime-baseline/ansible/roles/gitea/templates/compose.yml.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "7a51c8c5ce92e82d17b5a35d89d9107a45fbde3cc845f1d0ae8e0121651ea9f2"
+    },
+    {
+      "source": "ansible/roles/hermes/README.md",
+      "archive": "runtime-baseline/ansible/roles/hermes/README.md",
+      "kind": "retained runtime source snapshot",
+      "sha256": "1e00bb2cdc2c70fc580066bdde04f04d0b674c27a624631a6c3ea82c47c4e3d5"
+    },
+    {
+      "source": "ansible/roles/hermes/defaults/main.yml",
+      "archive": "runtime-baseline/ansible/roles/hermes/defaults/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "64f7d3c6f928270d7ed82328230ebb284e9f42e59ddc55bb2860d64b923a56aa"
+    },
+    {
+      "source": "ansible/roles/hermes/tasks/main.yml",
+      "archive": "runtime-baseline/ansible/roles/hermes/tasks/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "e07014f6807909354a408762a9216301fbd3a68074ee861033819084bccb1802"
+    },
+    {
+      "source": "ansible/roles/hermes/templates/Dockerfile.j2",
+      "archive": "runtime-baseline/ansible/roles/hermes/templates/Dockerfile.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "9ce5cb6dce6bd62191ed855cf3d145bc4fc0d663739fbdaf5a973f9590291555"
+    },
+    {
+      "source": "ansible/roles/hermes/templates/compose.yml.j2",
+      "archive": "runtime-baseline/ansible/roles/hermes/templates/compose.yml.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "9498a0c860ea0d49e206689eeaf66513dfd490b67e49038c009ed6a4dfb44124"
+    },
+    {
+      "source": "ansible/roles/hermes/templates/config.yaml.j2",
+      "archive": "runtime-baseline/ansible/roles/hermes/templates/config.yaml.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "296b04e3eacb49d30678a5edc71d1d81704271da4cc965b4be28347ee1666d02"
+    },
+    {
+      "source": "ansible/roles/hermes/templates/dashboard-backend.nft.j2",
+      "archive": "runtime-baseline/ansible/roles/hermes/templates/dashboard-backend.nft.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "1e3698cd039a8d14aea3677df441841f6285c96e4a1761d14026f2133f255c8b"
+    },
+    {
+      "source": "ansible/roles/hermes/templates/docker-firewall-dependency.conf.j2",
+      "archive": "runtime-baseline/ansible/roles/hermes/templates/docker-firewall-dependency.conf.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "67637353b8f10e40c84fb95f838561f2ad8b99b6ca4ffbcd3336ca1de07484c7"
+    },
+    {
+      "source": "ansible/roles/hermes/templates/homelab-hermes-dashboard-firewall.service.j2",
+      "archive": "runtime-baseline/ansible/roles/hermes/templates/homelab-hermes-dashboard-firewall.service.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "544087b1c2377fafa1301c8fc360b4b7aebe6b49056b455dc5a91b4ba4a81281"
+    },
+    {
+      "source": "ansible/roles/docker-engine/defaults/main.yml",
+      "archive": "runtime-baseline/ansible/roles/docker-engine/defaults/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "6451b8835fc5f406a1558714c5aee46b0e36acfef842217799ae84e967602fda"
+    },
+    {
+      "source": "ansible/roles/docker-engine/handlers/main.yml",
+      "archive": "runtime-baseline/ansible/roles/docker-engine/handlers/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "63d6e6f33bb033158b20f808d8f5400af06d5545092483669828c1e9dbbbc421"
+    },
+    {
+      "source": "ansible/roles/docker-engine/tasks/main.yml",
+      "archive": "runtime-baseline/ansible/roles/docker-engine/tasks/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "fedf5dbd034dea3f5a9ea7d8e44f45a4dfce80a07bb63c305a45d5bec8cf23e8"
+    },
+    {
+      "source": "ansible/roles/security-boundary/tasks/main.yml",
+      "archive": "runtime-baseline/ansible/roles/security-boundary/tasks/main.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "a386e56c9d4a9fee82394ba6ff60042b4ca7fe74f86e4f1665ea5bff71428bfc"
+    },
+    {
+      "source": "ansible/roles/security-boundary/templates/boundary.nft.j2",
+      "archive": "runtime-baseline/ansible/roles/security-boundary/templates/boundary.nft.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "5fdec90d0f3350ffce051562af0bf119bf437131f1a582c302b07133693e59b3"
+    },
+    {
+      "source": "ansible/roles/security-boundary/templates/management-boundary.service.j2",
+      "archive": "runtime-baseline/ansible/roles/security-boundary/templates/management-boundary.service.j2",
+      "kind": "retained runtime source snapshot",
+      "sha256": "786f1e9903ec30b69f34df2955a96030c59c539fd3c51a74f1cf80b22fc4e4b1"
+    },
+    {
+      "source": "ansible/playbooks/hermes.yml",
+      "archive": "runtime-baseline/ansible/playbooks/hermes.yml",
+      "kind": "retained runtime source snapshot",
+      "sha256": "ac2177108da3b0b4aa5ec3037f23b4dfc6e6b2660e82532c46da544926a1fc77"
+    },
+    {
+      "source": "ansible/ansible.cfg",
+      "archive": "ansible/ansible.cfg",
+      "kind": "historical Ansible configuration",
+      "sha256": "f5882e34367b61b153c749646872ca51146dcdd319c8975aba93cf3e4624873d"
+    }
+  ],
+  "persistent_baseline_commits": [
+    "95552e2e1999680b9c0d707aa6f69bda7f011a2f",
+    "e6781be17737d80f0097ce3d9d9cfff789b5aadb"
+  ],
+  "persistent_baseline_patch": {
+    "path": "runtime-baseline/persistent-security.patch",
+    "sha256": "8af148f5446d3e3fec3499cba7a5fcbf715b47b4cd65ad71fca707e44c855b1c"
+  },
+  "archive_location": "history/security-2026-10-25",
+  "original_archive_head": "2fe583988a5dd88164e45714e2af3a439b8998ab"
+}

@@ -1,0 +1,9 @@
+destroy table inet homelab_adguard_admin
+table inet homelab_adguard_admin {
+    chain input {
+        type filter hook input priority -10; policy accept;
+        ip daddr {{ adguard_admin_address }} tcp dport {{ adguard_admin_port }} iifname "lo" accept
+        ip daddr {{ adguard_admin_address }} tcp dport {{ adguard_admin_port }} ip saddr {{ adguard_proxy_address }} accept
+        ip daddr {{ adguard_admin_address }} tcp dport {{ adguard_admin_port }} drop
+    }
+}

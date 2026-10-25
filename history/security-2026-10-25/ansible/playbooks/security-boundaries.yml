@@ -1,0 +1,17 @@
+---
+- name: Deny agent access to management addresses from the guest and its containers
+  hosts: agents
+  become: true
+  gather_facts: false
+  vars:
+    security_boundary_profile: agents
+  roles:
+    - security-boundary
+
+- name: Reject agent-sourced connections on the Proxmox host itself
+  hosts: proxmox_maintenance
+  gather_facts: false
+  vars:
+    security_boundary_profile: proxmox
+  roles:
+    - security-boundary

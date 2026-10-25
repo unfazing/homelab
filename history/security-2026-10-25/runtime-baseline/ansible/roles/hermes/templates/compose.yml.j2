@@ -1,0 +1,22 @@
+name: hermes
+
+services:
+  hermes:
+    image: "{{ hermes_image }}"
+    container_name: hermes
+    command: ["gateway", "run"]
+    restart: unless-stopped
+    dns:
+      - "{{ hermes_dns_address }}"
+    ports:
+      - "{{ hermes_dashboard_address }}:{{ hermes_dashboard_port }}:9119/tcp"
+    environment:
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: "0.0.0.0"
+      API_SERVER_ENABLED: "false"
+    volumes:
+      - "{{ hermes_data_dir }}:/opt/data"
+    mem_limit: 1792m
+    cpus: 2.0
+    pids_limit: 512
+    stop_grace_period: 30s
