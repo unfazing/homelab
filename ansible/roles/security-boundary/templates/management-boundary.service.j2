@@ -1,0 +1,16 @@
+[Unit]
+Description=Homelab interim agent management boundary
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target docker.service shutdown.target
+Conflicts=shutdown.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/homelab/security/management-boundary.nft
+ExecReload=/usr/sbin/nft -f /etc/homelab/security/management-boundary.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

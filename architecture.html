@@ -296,6 +296,7 @@
         </section>
       </div>
 
+      <p class="callout"><strong>Agent management boundary:</strong> Ansible-owned nftables rules on <code>lab-agents-01</code> block agent-initiated guest and container IPv4 connections to Proxmox <code>.10</code>, router management <code>.254</code> (DNS remains allowed), and legacy <code>.9</code> except Inkling TCP 3000. Blue also rejects new agent-source <code>.102</code> connections. Established return traffic remains allowed so administrators, including clients NATed through red, can still manage the agent VM. Rules persist before Docker starts and replace only their own tables; they never flush Docker or WireGuard rules. Gitea, AdGuard, provider and Telegram paths remain available. This is an interim address-based boundary; VLAN isolation and a complete IPv6 policy remain pending.</p>
 
       <h3>Current AdGuard HTTPS path</h3>
       <dl class="context-list">

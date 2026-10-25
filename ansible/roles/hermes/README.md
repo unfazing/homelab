@@ -13,7 +13,7 @@ bootstrap password remains only in the ignored controller secret file.
 
 The dashboard listens on the guest at port 9119, but an nftables pre-routing
 rule admits only Caddy's address. Caddy terminates private HTTPS. The backend
-firewall is required before Docker starts after a reboot. No Docker socket,
+firewall and management egress boundary are required before Docker starts after a reboot. No Docker socket,
 Gitea credential, provider key, or CI job is granted here yet.
 
 Run `task apps:hermes:deploy`, then reconcile Caddy and AdGuard with their
