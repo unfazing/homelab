@@ -5,6 +5,9 @@
       - gitea_admin_username is match('^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}$')
       - gitea_admin_email is match('^[^@\s]+@[^@\s]+$')
       - gitea_admin_password_file | length > 0
+      - gitea_base_image is match('^docker\.gitea\.com/gitea:28\.2\.0@sha256:[a-f0-9]{64}$')
+      - gitea_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
+      - gitea_image is match('^homelab/gitea:')
       - gitea_http_address == ansible_host
       - gitea_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
       - "'homelab-gitea' in homelab_virtiofs_mappings"
@@ -73,7 +76,16 @@
     - not ansible_check_mode
     - gitea_proxy_network_present.rc == 1
 
-- name: Check whether the pinned Gitea image is present
+- name: Render the patched Gitea image build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ gitea_compose_dir }}/Dockerfile"
+    owner: root
+    group: root
+    mode: '0644'
+  register: gitea_dockerfile
+
+- name: Check whether the patched Gitea image is present
   ansible.builtin.command:
     argv:
       - docker
@@ -86,16 +98,29 @@
   check_mode: false
   when: not ansible_check_mode
 
-- name: Pull the pinned Gitea image
+- name: Build Gitea with the patched Go runtime and trust store
   ansible.builtin.command:
     argv:
       - docker
-      - pull
+      - build
+      - --tag
       - "{{ gitea_image }}"
+      - "{{ gitea_compose_dir }}"
   when:
     - not ansible_check_mode
-    - gitea_image_present.rc == 1
+    - gitea_image_present.rc == 1 or gitea_dockerfile.changed
   changed_when: true
+
+- name: Verify the patched Gitea image without mounting application data
+  ansible.builtin.command:
+    argv: [docker, run, --rm, --network, none, --entrypoint, gitea, "{{ gitea_image }}", --version]
+  register: gitea_security_version
+  changed_when: false
+  failed_when: >-
+    gitea_security_version.rc != 0
+    or '28.2.0' not in gitea_security_version.stdout
+    or 'go1.27.3' not in gitea_security_version.stdout
+  when: not ansible_check_mode
 
 - name: Validate the Gitea Compose project
   ansible.builtin.command:

@@ -1,8 +1,11 @@
 # Hermes role
 
-Deploys the official, digest-pinned Hermes container on `lab-agents-01` with
-the built-in password-gated dashboard and no model provider or published agent
-API. The existing `homelab-hermes` VirtioFS dataset is mounted at `/opt/data`
+Builds a security overlay on digest-pinned Hermes 0.22.5: fixed Node 26.12.1,
+checksum-pinned brotlicffi 1.2.1.0, certifi 2026.10.23, pip 26.2.2 and updated
+Debian trust. Build checks use no private data mounts. Deployment on
+`lab-agents-01` seeds provider-neutral configuration and the password-gated
+dashboard; operator-configured Codex and Telegram settings are preserved.
+No agent API is published. The existing `homelab-hermes` VirtioFS dataset is mounted at `/opt/data`
 and owned by the image's runtime UID 10000. `config.yaml` is seeded once with
 SQLite DELETE journaling, the dashboard password hash, and a stable session
 signing key; Hermes may subsequently maintain its own config. The plaintext

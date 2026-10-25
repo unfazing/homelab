@@ -59,9 +59,14 @@ def bootstrap(
     status, _ = api.request("install/get_addresses", auth=False)
     if status in (403, 404):
         # Installed versions may hide the setup endpoint with either response.
-        current_status, state = api.request("status")
-        if current_status == 200 and state and state.get("running"):
-            return 0
+        # The HTTP listener can open before the DNS engine finishes loading.
+        for _ in range(30):
+            current_status, state = api.request("status")
+            if current_status == 200 and state and state.get("running"):
+                return 0
+            if current_status in (401, 403):
+                raise RuntimeError("AdGuard administrator authentication failed")
+            time.sleep(2)
         raise RuntimeError("AdGuard setup is unavailable but the authenticated API is unhealthy")
     if status != 200:
         raise RuntimeError(f"AdGuard install detection returned HTTP {status}")

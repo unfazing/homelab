@@ -9,6 +9,9 @@
       - adguard_proxy_address != adguard_admin_address
       - adguard_admin_username is match('^[a-zA-Z0-9_.-]+$')
       - adguard_admin_password_file | length > 0
+      - adguard_base_image is match('^adguard/adguardhome:v0\.107\.79@sha256:[a-f0-9]{64}$')
+      - adguard_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
+      - adguard_image is match('^homelab/adguard:')
       - "'homelab-adguard' in homelab_virtiofs_mappings"
     fail_msg: "AdGuard requires the private domain, access VM address, ignored administrator secret, and persistent dataset."
     quiet: true
@@ -146,7 +149,16 @@
     group: root
     mode: "0750"
 
-- name: Check whether the pinned AdGuard image is present
+- name: Render the patched AdGuard image build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ adguard_compose_dir }}/Dockerfile"
+    owner: root
+    group: root
+    mode: '0644'
+  register: adguard_dockerfile
+
+- name: Check whether the patched AdGuard image is present
   ansible.builtin.command:
     argv:
       - docker
@@ -159,16 +171,18 @@
   check_mode: false
   when: not ansible_check_mode
 
-- name: Pull the pinned AdGuard image
+- name: Build AdGuard with the patched Go runtime and trust store
   ansible.builtin.command:
     argv:
       - docker
-      - pull
+      - build
+      - --tag
       - "{{ adguard_image }}"
+      - "{{ adguard_compose_dir }}"
   changed_when: true
   when:
     - not ansible_check_mode
-    - adguard_image_present.rc == 1
+    - adguard_image_present.rc == 1 or adguard_dockerfile.changed
 
 - name: Validate the AdGuard Compose project
   ansible.builtin.command:

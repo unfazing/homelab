@@ -1,5 +1,7 @@
 ---
-gitea_image: "docker.gitea.com/gitea:1.27.3@sha256:87a67ee09d3ae0d1df5fda5dcda3e2a1f9236a45b0a59025d6e00e46adc43bef"
+gitea_base_image: "docker.gitea.com/gitea:28.2.0@sha256:30777c91280d973fa02be48b1ade735bd6859e8f6f7af3b4444d519437852504"
+gitea_go_image: "golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c"
+gitea_image: "homelab/gitea:28.2.0-go1.27.3-security-20261025"
 gitea_compose_dir: /opt/homelab/gitea
 gitea_data_dir: /srv/homelab/gitea
 gitea_http_address: "{{ ansible_host }}"

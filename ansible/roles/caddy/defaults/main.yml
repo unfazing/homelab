@@ -1,9 +1,10 @@
 ---
-caddy_version: "2.11.4"
+caddy_version: "2.11.7"
 caddy_cloudflare_module_version: "v0.2.4"
-caddy_builder_image: "caddy:2.11.4-builder-alpine@sha256:1a1689db91cfb390b2d856a1b3774e796852822cd723fa54c475b272f82bb4b7"
-caddy_runtime_image: "caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
-caddy_image: "homelab/caddy-cloudflare:2.11.4-v0.2.4"
+caddy_builder_image: "caddy:2.11.7-builder-alpine@sha256:ef9b65adf9a224770c6d5f6d1ae1bf99bc3caaa78d8c4bae3ea949ee6984f301"
+caddy_runtime_image: "caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f"
+caddy_go_toolchain: go1.27.3
+caddy_image: "homelab/caddy-cloudflare:2.11.7-v0.2.4-go1.27.3"
 caddy_compose_dir: /opt/homelab/caddy
 caddy_secret_dir: /etc/homelab/reverse-proxy
 caddy_data_dir: /srv/homelab/reverse-proxy

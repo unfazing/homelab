@@ -2,7 +2,8 @@
 - name: Validate the provider-neutral Hermes deployment contract
   ansible.builtin.assert:
     that:
-      - hermes_image is match('^nousresearch/hermes-agent:v[0-9.]+@sha256:[a-f0-9]{64}$')
+      - hermes_base_image is match('^nousresearch/hermes-agent:v[0-9.]+@sha256:[a-f0-9]{64}$')
+      - hermes_image is match('^homelab/hermes-agent:[a-zA-Z0-9._-]+$')
       - hermes_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
       - hermes_dashboard_secret_file | length > 0
       - hermes_dashboard_address == ansible_host
@@ -139,9 +140,44 @@
   changed_when: false
   when: not ansible_check_mode
 
-- name: Pull the exact reviewed Hermes image
+- name: Render the security-patched Hermes build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: '{{ hermes_compose_dir }}/Dockerfile'
+    owner: root
+    group: root
+    mode: '0640'
+  register: hermes_dockerfile
+
+- name: Check for the reviewed security image
   ansible.builtin.command:
-    argv: [docker, compose, --project-directory, "{{ hermes_compose_dir }}", pull]
+    argv: [docker, image, inspect, '{{ hermes_image }}']
+  register: hermes_image_present
+  changed_when: false
+  failed_when: hermes_image_present.rc not in [0, 1]
+  when: not ansible_check_mode
+
+- name: Build the patched image before touching the running application
+  ansible.builtin.command:
+    argv: [docker, build, --tag, '{{ hermes_image }}', '{{ hermes_compose_dir }}']
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - hermes_dockerfile.changed or hermes_image_present.rc == 1
+
+- name: Verify patched dependencies without mounting private Hermes state
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --network
+      - none
+      - --entrypoint
+      - /opt/hermes/.venv/bin/python
+      - '{{ hermes_image }}'
+      - -c
+      - 'import brotlicffi, certifi; assert brotlicffi.__version__ == "1.2.1.0"; assert "emSign ECC Root CA - G3" not in open(certifi.where()).read()'
   changed_when: false
   when: not ansible_check_mode
 

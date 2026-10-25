@@ -1,7 +1,9 @@
 # AdGuard role
 
-Ansible deploys the digest-pinned official AdGuard Home image as a standalone
-Compose project on `lab-access-01`. Host networking preserves original DNS
+Ansible builds AdGuard Home 0.107.79 with Go 1.27.3 from checksum-pinned
+upstream source and its official prebuilt frontend, on a digest-pinned official
+runtime with updated Alpine trust. It deploys as a standalone Compose project
+on `lab-access-01`. Host networking preserves original DNS
 client IPs; DNS binds only to the VM's static address. The admin UI/API binds
 to `192.168.1.100:3000`, while a dedicated nftables input rule admits only
 Caddy at `.101` and guest-local traffic. Docker requires that firewall unit on

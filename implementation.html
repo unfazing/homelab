@@ -472,8 +472,8 @@
       <dl class="context-list">
         <dt>Status</dt><dd><span class="status complete">Implemented</span> Live deployment and repeat convergence passed</dd>
         <dt>Host</dt><dd><code>lab-services-01</code> · <code>192.168.1.101</code></dd>
-        <dt>Runtime</dt><dd>Official Docker CE <code>29.8.1</code> packages and Compose plugin <code>5.5.1</code>, held at reviewed versions</dd>
-        <dt>Image</dt><dd><code>docker.gitea.com/gitea:1.27.3</code> pinned by digest</dd>
+        <dt>Runtime</dt><dd>Docker CE <code>29.9.2</code> (Go <code>1.26.10</code>), containerd <code>2.4.2-3</code>, Buildx <code>0.38.1</code> and Compose <code>5.6.1</code>, held at reviewed versions on all three VMs</dd>
+        <dt>Image</dt><dd>Gitea <code>28.2.0</code> security build: checksum-pinned upstream source, official embedded web assets, Go <code>1.27.3</code>, updated Alpine trust. Ansible builds and checks the image before replacing the running container; schema changes require a consistent application-data backup. AdGuard follows the same build pattern at <code>0.107.79</code>, reusing its official frontend archive.</dd>
         <dt>Endpoints</dt><dd>HTTP <code>192.168.1.101:3000</code> · Git SSH <code>192.168.1.101:2222</code></dd>
         <dt>State</dt><dd>SQLite WAL plus repositories, LFS, packages, configuration, and keys under <code>/srv/homelab/gitea</code></dd>
         <dt>Bootstrap</dt><dd>Administrator <code>homelab-admin</code> / <code>admin@gmail.com</code>; first-login password replacement is complete and the ignored generated bootstrap password is intentionally stale. SMTP is not configured, so the email cannot yet receive password recovery.</dd>
@@ -615,7 +615,7 @@
         <dt>Current service</dt><dd>AdGuard and WireGuard are active at <code>192.168.1.9</code>; no router, DHCP, or VPN cutover has been made</dd>
         <dt>New service</dt><dd>Deployed independent AdGuard Compose project on <code>lab-access-01</code> at <code>192.168.1.100</code>, with durable configuration and query data on the existing <code>homelab-adguard</code> VirtioFS mount</dd>
         <dt>Policy source</dt><dd>The old container's protected YAML was inspected read-only and adapted in <code>ansible/roles/adguard/defaults/main.yml</code>: two upstreams, five filters (three active), no allowlists or user rules, and the AdGuard and router rewrites. Private Gitea and Hermes names are added; broader rewrite planning is deferred.</dd>
-        <dt>Runtime</dt><dd>Official stable <code>v0.107.79</code> pinned by digest; host-network Compose on the access VM, DNS bound to <code>192.168.1.100:53</code>, admin HTTP backend bound to <code>192.168.1.100:3000</code>, ZFS-backed <code>conf/</code> and <code>work/</code>.</dd>
+        <dt>Runtime</dt><dd>AdGuard <code>v0.107.79</code> security build with Go <code>1.27.3</code> and updated Alpine trust, checksum-pinned source/frontend and digest-pinned base; host-network Compose, DNS <code>192.168.1.100:53</code>, protected admin backend <code>192.168.1.100:3000</code>, ZFS-backed <code>conf/</code> and <code>work/</code>. Reconciliation waits for authenticated DNS readiness; an unchanged policy reports no changes.</dd>
         <dt>Admin</dt><dd>New generated password in ignored <code>.generated/secrets/adguard-admin-password</code>, installed root-only under <code>/etc/homelab/adguard/</code>. Use <code>https://adguard.home.&lt;domain&gt;</code> after setting a test client's DNS to <code>192.168.1.100</code>; no extra client restriction. The backend HTTP port admits only Caddy and guest-local traffic. Break-glass tunnel: <code>ssh -L 3000:192.168.1.100:3000 user@192.168.1.101</code>.</dd>
         <dt>Cutover rule</dt><dd>Test DNS on a single client first, compare representative answers from <code>.9</code> and <code>.100</code>, then change router DHCP DNS and later WireGuard peers. Retire old AdGuard and WireGuard independently</dd>
       </dl>
@@ -638,7 +638,7 @@
       <dl class="context-list">
         <dt>Status</dt><dd><span class="status complete">Production HTTPS live</span> Caddy is healthy on <code>lab-services-01</code>. Separate staging and production wildcard issuance passed through Cloudflare DNS-01; the production Gitea health route passed normal certificate validation</dd>
         <dt>Termination</dt><dd>One Caddy reverse proxy on <code>lab-services-01</code>; application containers do not receive the certificate private key</dd>
-        <dt>Image</dt><dd>Caddy <code>2.11.4</code>, locally built from digest-pinned official Alpine builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; no third-party prebuilt image</dd>
+        <dt>Image</dt><dd>Caddy <code>2.11.7</code>, built with Go <code>1.27.3</code> from digest-pinned official Alpine stages, updated certificate trust and only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
         <dt>Discovery</dt><dd>Declarative Caddyfile routes; Caddy receives no Docker socket</dd>
         <dt>Candidate names</dt><dd><code>gitea.home.&lt;domain&gt;</code> and <code>n8n.home.&lt;domain&gt;</code> below a wildcard <code>*.home.&lt;domain&gt;</code></dd>
         <dt>Domain dependencies</dt><dd>Homelab only; no existing email, website, or other service requires migration</dd>
@@ -780,7 +780,7 @@
         <dt>Status</dt><dd><span class="status complete">Dashboard foundation live</span> Provider and Git authority remain open</dd>
         <dt>Host</dt><dd><code>lab-agents-01</code> · <code>192.168.1.102</code></dd>
         <dt>Model provider</dt><dd><span class="status open">Open</span> Compare cost, authentication, data handling, and usable models before selecting Nous Portal, OpenRouter, OpenAI, or another endpoint</dd>
-        <dt>Runtime</dt><dd>Ansible-managed Docker Compose using official <code>v0.21.6</code> pinned by immutable digest; no externally published agent API or model credential yet</dd>
+        <dt>Runtime</dt><dd>Ansible builds a security overlay on digest-pinned Hermes <code>v0.22.5</code>: Node <code>26.12.1</code>, checksum-pinned <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code>, updated OS trust. Build validation uses no private data mounts; existing configuration is never overwritten. No externally published agent API.</dd>
         <dt>Durable mount</dt><dd>Existing <code>homelab-hermes</code> VirtioFS mapping at <code>/srv/homelab/hermes</code>, mounted into the container at <code>/opt/data</code>; SQLite DELETE journaling</dd>
         <dt>Dashboard</dt><dd>Built-in password gate behind Caddy at <code>https://hermes.home.&lt;domain&gt;</code>; Caddy-only backend firewall, private DNS rewrite, and generated ignored bootstrap login</dd>
         <dt>Gitea access</dt><dd>Dedicated non-administrator identity; Git over SSH first, limited to selected sandbox repositories</dd>
@@ -802,7 +802,7 @@
       <h3>Implementation sequence</h3>
       <ol class="compact">
         <li><span class="status complete">Foundation</span> <code>task apps:hermes:deploy</code> installed Docker on agents, verified VirtioFS, and started the digest-pinned image. Production Caddy and AdGuard deployments added the HTTPS route and private DNS rewrite. The existing router DNS and old <code>.9</code> resolver were not cut over.</li>
-        <li><span class="status complete">Research</span> Selected official stable <code>v0.21.6</code> and Docker Hub's manifest digest; upstream Dockerfile uses UID <code>10000</code>, <code>/opt/data</code>, and a supervised dashboard. A fresh SQLite database on VirtioFS must use DELETE journaling; verify this after first boot.</li>
+        <li><span class="status complete">Runtime</span> Use the reviewed <code>v0.22.5</code> security overlay with runtime UID <code>10000</code>, durable <code>/opt/data</code>, the dashboard gate and SQLite DELETE journaling. Deployment validates the patched image before replacing the running container.</li>
         <li><span class="status planned">Decide</span> Select the model provider and define a monthly budget, credential type, and permitted outbound endpoints before first chat.</li>
         <li><span class="status planned">Identity</span> Create a non-administrator Gitea user for Hermes, generate its Git SSH key on the agent VM, and grant only selected sandbox-repository access.</li>
         <li><span class="status complete">Secrets</span> The dashboard bootstrap helper generated a mode-<code>0600</code> ignored controller file; only its scrypt hash and a signing secret reached the guest config. Add the eventual provider credential separately, without Terraform state, command arguments, or Ansible output.</li>

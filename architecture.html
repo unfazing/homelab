@@ -195,7 +195,7 @@
         <a href="deployment-guide.html">Deployment guide</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Draft · Updated 18 September 2026</p>
+      <p class="meta">Canonical design · Updated 25 October 2026</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
@@ -295,6 +295,7 @@
           </dl>
         </section>
       </div>
+
 
       <h3>Current AdGuard HTTPS path</h3>
       <dl class="context-list">
@@ -714,7 +715,7 @@
             <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
             <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
             <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
-            <li><span class="status accepted">D-067 Deployed</span> Use Caddy <code>2.11.4</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>; do not pull an unrelated prebuilt community image. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM. Container validation loads the scoped token through the same entrypoint as normal startup. Both staging and production wildcard issuance passed.</li>
+            <li><span class="status accepted">D-067 Amended</span> Use Caddy <code>2.11.7</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with Go <code>1.27.3</code>, updated OS certificate trust and only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM. Container validation loads the scoped token through the same entrypoint as normal startup. Both staging and production wildcard issuance passed.</li>
           </ul>
         </section>
         <section>
@@ -742,7 +743,7 @@
     <section id="os-panel" role="tabpanel" aria-labelledby="os-tab" hidden>
       <h2>Operating systems</h2>
       <ul class="facts">
-        <li><strong>Hypervisor</strong><br>Proxmox VE 9.1.2 documented baseline</li>
+        <li><strong>Hypervisor</strong><br>Proxmox VE 9.2.21 · patched kernel 7.0.14-25-pve</li>
         <li><strong>Guest template</strong><br>Ubuntu Server 26.04 LTS via Packer</li>
         <li><strong>Provisioning</strong><br>Terraform + cloud-init</li>
         <li><strong>Configuration</strong><br>Remote Ansible over key-only SSH</li>
@@ -767,7 +768,7 @@
         <section>
           <h3>Before implementation</h3>
           <ul class="compact">
-            <li><span class="status open">Open</span> Confirm the installed Proxmox patch version and update host firmware/Intel microcode.</li>
+            <li><span class="status open">CPU and image prerequisites</span> Intel microcode is installed, but the current host kernel lacks GDS mitigation support and MMIO retains SMT exposure. Review mitigation support and CPU-performance trade-offs before introducing untrusted workloads. Stopped legacy guests/templates require rebuilding or patch verification before reuse; BIOS firmware remains unreviewed.</li>
           </ul>
         </section>
       </template>
@@ -947,7 +948,7 @@
         <section id="services-caddy-panel" role="tabpanel" aria-labelledby="services-caddy-tab" hidden>
           <h3>Private HTTPS boundary</h3>
           <dl class="context-list">
-            <dt>Image</dt><dd>Caddy <code>2.11.4</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
+            <dt>Image</dt><dd>Caddy <code>2.11.7</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
             <dt>Ingress</dt><dd>TCP 443 bound only to <code>192.168.1.101</code>; the router still forwards no public HTTP or HTTPS port</dd>
             <dt>Certificate</dt><dd><code>*.home.&lt;domain&gt;</code> issued through Cloudflare DNS-01; staging and production issuance passed on 28 September 2026</dd>
             <dt>State</dt><dd><code>homelab-reverse-proxy</code> VirtioFS mapping with isolated <code>staging/</code> and <code>production/</code> directories</dd>
@@ -965,7 +966,7 @@
           <dl class="context-list">
             <dt>Host boundary</dt><dd><code>lab-services-01</code>, shared with planned n8n and future Nextcloud and Vaultwarden containers</dd>
             <dt>Container</dt><dd><code>gitea</code> in the standalone Compose project <code>gitea</code></dd>
-            <dt>Release</dt><dd><code>1.27.3</code>, immutable image digest <code>sha256:87a67e…c43bef</code></dd>
+            <dt>Release</dt><dd>Gitea <code>28.2.0</code>, rebuilt with Go <code>1.27.3</code> from checksum-pinned source and official embedded web assets. OS trust is updated; persistent data remains outside the image. Schema changes require a consistent application-data backup.</dd>
             <dt>Identity</dt><dd>Application files use UID/GID <code>1000</code>; administrator is <code>homelab-admin</code>, with the generated bootstrap password already replaced</dd>
             <dt>Restart policy</dt><dd><code>unless-stopped</code> with a one-minute graceful stop window</dd>
           </dl>
@@ -1075,7 +1076,7 @@
         <h3>Hermes Agent</h3>
         <dl class="context-list">
           <dt>Status</dt><dd><span class="status accepted">Provider-neutral dashboard live</span> Model selection remains open</dd>
-          <dt>Runtime</dt><dd>Ansible-managed Hermes <code>v0.21.6</code> container pinned by digest on <code>lab-agents-01</code>; dashboard only, no model or externally published agent API yet</dd>
+          <dt>Runtime</dt><dd>Ansible-managed Hermes <code>v0.22.5</code> security overlay on a digest-pinned official image: Node <code>26.12.1</code>, <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code> and updated OS trust. Existing provider configuration and durable sessions survive recreation; no publicly published agent API.</dd>
           <dt>Durable state</dt><dd>Existing <code>homelab-hermes</code> VirtioFS dataset mounted at <code>/opt/data</code>; SQLite uses DELETE journaling rather than WAL across the VM boundary</dd>
           <dt>Dashboard</dt><dd><code>https://hermes.home.&lt;domain&gt;</code> through Caddy; built-in username/password authentication is mandatory. The private HTTP backend is restricted to Caddy. No public application ingress.</dd>
           <dt>Gitea identity</dt><dd>Dedicated non-administrator account with write access only to selected sandbox repositories</dd>
@@ -1113,7 +1114,7 @@
           <ul class="compact">
             <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
             <li><span class="status accepted">D-052 Implemented</span> Begin application deployment with Gitea. Use SQLite with WAL mode to minimize memory on the 4 GB shared-services VM; accept that it does not scale well and later database conversion is not well tested.</li>
-            <li><span class="status accepted">D-053 Implemented</span> Pin Gitea <code>1.27.3</code> by immutable image digest. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration and OpenID login. Actions remains disabled in the current deployment; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
+            <li><span class="status accepted">D-053 Implemented</span> Use Gitea <code>28.2.0</code> rebuilt with Go <code>1.27.3</code> from checksum-pinned source and a digest-pinned official base. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration and OpenID login. Actions remains disabled in the current deployment; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
             <li><span class="status accepted">D-054 Implemented</span> Install Docker CE from Docker's official Ubuntu 26.04 repository with exact package versions, refresh apt metadata immediately when its repository or key changes and otherwise only when stale, hold those packages until reviewed upgrades, use the local log driver and live restore, and do not add the administrator to the root-equivalent Docker group.</li>
             <li><span class="status open">D-055 Partially implemented</span> Private HTTPS through Caddy is live for Gitea, but its direct HTTP endpoint remains reachable across the flat home LAN. Review or restrict that bypass before issuing Hermes a Gitea API token, registering a runner, exposing authenticated n8n tools, or using Gitea as an OCI registry.</li>
             <li><span class="status accepted">D-057 Amended</span> Prioritize Hermes, its agent-to-Git loop, and the planned n8n automation layer before Nextcloud, Vaultwarden, or centralized secret management. Leave the model provider open until its cost, authentication, and data-handling trade-offs are reviewed.</li>

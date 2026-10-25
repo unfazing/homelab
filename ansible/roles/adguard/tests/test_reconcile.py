@@ -2,6 +2,7 @@
 
 import importlib.util
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -61,6 +62,23 @@ class RewriteConvergenceTests(unittest.TestCase):
 
 
 class BootstrapDetectionTests(unittest.TestCase):
+    def test_installed_service_waits_for_dns_readiness_without_reconfiguration(self):
+        class StartingAPI:
+            calls = 0
+
+            def request(self, path, auth=True):
+                if path == "install/get_addresses":
+                    return 404, None
+                self.calls += 1
+                return 200, {"running": self.calls > 1}
+
+        api = StartingAPI()
+        with patch.object(MODULE.time, "sleep") as sleep:
+            self.assertEqual(MODULE.bootstrap(api, {}, "server", "unused",
+                                             "192.168.1.100", "192.168.1.100", 3000), 0)
+        sleep.assert_called_once_with(2)
+        self.assertEqual(api.calls, 2)
+
     def test_installed_service_hiding_setup_endpoint_is_not_reconfigured(self):
         class InstalledAPI:
             def request(self, path, auth=True):

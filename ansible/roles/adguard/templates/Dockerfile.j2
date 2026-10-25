@@ -1,0 +1,15 @@
+FROM {{ adguard_go_image }} AS builder
+ENV GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+ADD --checksum=sha256:5f4fa119f24ea741bb8cecfa74203165fe6b86b904cef05ff429fb227b07d425 https://codeload.github.com/AdguardTeam/AdGuardHome/tar.gz/refs/tags/v0.107.79 /tmp/source.tar.gz
+ADD --checksum=sha256:30184c157d4aefe5371b575a43c0ab5a7314aef039a820cc421ea67bab994ce8 https://github.com/AdguardTeam/AdGuardHome/releases/download/v0.107.79/AdGuardHome_frontend.tar.gz /tmp/frontend.tar.gz
+WORKDIR /src
+RUN tar -xzf /tmp/source.tar.gz --strip-components=1 \
+    && tar -xzf /tmp/frontend.tar.gz \
+    && CHANNEL=release VERSION=v0.107.79 SOURCE_DATE_EPOCH=0 PARALLELISM=2 sh scripts/make/go-build.sh \
+    && go version -m AdGuardHome | grep -F go1.27.3
+
+FROM {{ adguard_base_image }}
+COPY --from=builder /src/AdGuardHome /opt/adguardhome/AdGuardHome
+RUN apk upgrade --no-cache \
+    && test ! -e /etc/ssl/certs/ca-cert-emSign_ECC_Root_CA_-_G3.pem \
+    && /opt/adguardhome/AdGuardHome --version

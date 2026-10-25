@@ -1,0 +1,18 @@
+FROM {{ hermes_base_image }}
+
+USER root
+ADD --checksum=sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70 https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl /tmp/security-wheels/
+ADD --checksum=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1 https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl /tmp/security-wheels/
+ADD --checksum=sha256:0a7281a39de91432e90c27ab9c4f9feb3a9cf33fda3873534c2a88270d9f60a2 https://files.pythonhosted.org/packages/f1/93/e2735a441a0f071b8094a2b9baadad5fb9811708c088b294ccb0e90aeb46/brotlicffi-1.2.1.0-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl /tmp/security-wheels/
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && /opt/hermes/.venv/bin/python -m ensurepip --upgrade \
+    && /opt/hermes/.venv/bin/python -m pip install --no-index --no-deps /tmp/security-wheels/*.whl \
+    && base_python=$(/opt/hermes/.venv/bin/python -S -c 'import sys; print(sys.base_prefix + "/bin/python3")') \
+    && "$base_python" -m ensurepip --upgrade \
+    && "$base_python" -m pip install --no-index --no-deps /tmp/security-wheels/pip-*.whl /tmp/security-wheels/certifi-*.whl \
+    && /opt/hermes/.venv/bin/python -c 'import brotlicffi, certifi, pip._vendor.certifi as pc; assert brotlicffi.__version__ == "1.2.1.0"; assert "emSign ECC Root CA - G3" not in open(certifi.where()).read(); assert "emSign ECC Root CA - G3" not in open(pc.where()).read()' \
+    && test ! -e /etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem \
+    && test "$(node --version)" = v26.12.1 \
+    && rm -r /tmp/security-wheels /var/lib/apt/lists/*
