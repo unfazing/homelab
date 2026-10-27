@@ -4,7 +4,11 @@
     that:
       - cloudflare_ddns_account_id is match('^[0-9a-f]{32}$')
       - cloudflare_ddns_api_token | length >= 20
-      - cloudflare_ddns_record_label is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$')
+      - cloudflare_ddns_record_labels is sequence and cloudflare_ddns_record_labels is not string
+      - cloudflare_ddns_record_labels | length > 0
+      - cloudflare_ddns_record_labels | length <= 10
+      - cloudflare_ddns_record_labels | unique | length == cloudflare_ddns_record_labels | length
+      - cloudflare_ddns_record_labels | select('match', '^(@|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)$') | list | length == cloudflare_ddns_record_labels | length
       - cloudflare_ddns_ttl | int >= 60
       - cloudflare_ddns_ipv4_source_url is match('^https://')
     fail_msg: "Cloudflare DDNS requires a valid account ID, scoped API token, DNS label, TTL, and HTTPS IPv4 source."
@@ -17,6 +21,7 @@
       - curl
       - jq
     update_cache: true
+    cache_valid_time: 3600
     state: present
 
 - name: Create the Cloudflare DDNS service account
@@ -36,8 +41,8 @@
     mode: "0750"
 
 - name: Install the Cloudflare DDNS updater
-  ansible.builtin.template:
-    src: cloudflare-ddns.sh.j2
+  ansible.builtin.copy:
+    src: cloudflare-ddns.sh
     dest: /usr/local/sbin/homelab-cloudflare-ddns
     owner: root
     group: root
@@ -82,7 +87,7 @@
     state: started
   when: not ansible_check_mode
 
-- name: Reconcile the DNS-only WireGuard record now
+- name: Reconcile the allowlisted DNS-only WireGuard records now
   ansible.builtin.systemd:
     name: cloudflare-ddns.service
     state: started

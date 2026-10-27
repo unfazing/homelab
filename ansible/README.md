@@ -10,7 +10,7 @@ Ansible configures the Proxmox host and the guests created by Terraform. VM life
 - `roles/persistent-data` mounts only the VirtioFS tags assigned by Terraform; application roles own dataset permissions.
 - `roles/docker-engine` installs reviewed Docker CE and Compose versions from Docker's official repository without granting the administrator user root-equivalent Docker-group access.
 - `roles/wireguard` configures the native WireGuard service on `lab-access-01`.
-- `roles/cloudflare-ddns` maintains the DNS-only WireGuard A record through a hardened systemd timer on `lab-access-01`.
+- `roles/cloudflare-ddns` maintains the apex and `vpn` DNS-only A records through a hardened systemd timer on `lab-access-01`.
 - `roles/caddy` builds the pinned Cloudflare-enabled Caddy image and terminates private HTTPS on `lab-services-01` without mounting the Docker socket.
 - `roles/adguard` will configure an AdGuard Compose project on `lab-access-01` after its deployment contract is approved.
 - `roles/gitea` deploys the pinned Gitea Compose project on `lab-services-01`; Nextcloud and password-manager remain placeholders.

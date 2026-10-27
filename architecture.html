@@ -719,7 +719,7 @@
           <rect class="node control" x="275" y="120" width="190" height="115" rx="10"></rect>
           <text class="eyebrow" x="295" y="150">PUBLIC DNS</text>
           <text class="label" x="295" y="183">Cloudflare DNS</text>
-          <text class="small" x="295" y="210">vpn.&lt;domain&gt; · A+DDNS</text>
+          <text class="small" x="295" y="210">donk.live · DDNS live</text>
 
           <rect class="node" x="530" y="120" width="190" height="115" rx="10"></rect>
           <text class="eyebrow" x="550" y="150">HOME EDGE</text>
@@ -777,7 +777,7 @@
             <li><span class="status accepted">D-037 Accepted</span> During the flat-LAN transition, Terraform assigns VM IDs <code>1000</code>–<code>1002</code> and static addresses <code>192.168.1.100</code>–<code>192.168.1.102</code> in capability order. The F620 DHCP pool must end at or below <code>192.168.1.99</code> before apply; the target VLAN migration replaces these temporary addresses.</li>
             <li><span class="status accepted">D-064 Accepted</span> Terminate private application HTTPS at one reverse proxy on <code>lab-services-01</code>. Use a publicly trusted <code>*.home.&lt;domain&gt;</code> certificate renewed through ACME DNS-01 against Cloudflare authoritative DNS. Persist ACME state on dedicated ZFS storage and keep the scoped Cloudflare token separately root-readable and Ansible-managed.</li>
             <li><span class="status accepted">D-065 Accepted</span> Keep domain registration at Namecheap, migrate the full authoritative DNS zone to Cloudflare, replace Namecheap DDNS with a Cloudflare updater for the DNS-only WireGuard record, and publish no application A/AAAA records.</li>
-            <li><span class="status accepted">D-066 Implemented</span> Run the Cloudflare DDNS updater as an unprivileged systemd service on <code>lab-access-01</code> every five minutes. It may reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record and must fail closed if its token exposes more than one zone or DNS contains duplicate matching records.</li>
+            <li><span class="status accepted">D-066 Implemented · amended 27 October</span> Run Cloudflare DDNS on <code>lab-access-01</code> every five minutes, maintaining DNS-only A records for both the domain apex (existing client endpoint) and <code>vpn.&lt;domain&gt;</code> (compatibility). Use an explicit label allowlist <code>@, vpn</code>; preflight every selected record before changing any. Refuse ambiguous zones, duplicate A records and CNAME conflicts. Preserve other DNS records; update only address, TTL or proxy-state drift.</li>
             <li><span class="status accepted">D-067 Amended</span> Use Caddy <code>2.11.7</code> as the internal reverse proxy. Build from digest-pinned official builder and runtime images with Go <code>1.27.3</code>, updated OS certificate trust and only <code>caddy-dns/cloudflare</code> <code>v0.2.4</code>. Use declarative Caddyfile routes without mounting the Docker socket, keep staging and production ACME state separate, and expose only TCP 443 on the services VM. Container validation loads the scoped token through the same entrypoint as normal startup. Both staging and production wildcard issuance passed.</li>
           </ul>
         </section>
@@ -785,7 +785,7 @@
           <h3>Before implementation</h3>
           <ul class="compact">
             <li><span class="status open">Open</span> Decide whether the travel profile tunnels IPv6 or deliberately disables it.</li>
-            <li><span class="status accepted">Partial</span> The public hostname is <code>vpn.&lt;domain&gt;</code>; the external WireGuard UDP port remains to be confirmed.</li>
+            <li><span class="status accepted">Confirmed client endpoint</span> Existing reported profile uses <code>donk.live:27272</code> and DNS <code>192.168.1.100</code>. DDNS now maintains both apex and <code>vpn</code> records. Server listen port/router internal mapping still need inspection.</li>
             <li><span class="status accepted">Complete</span> The F620 DHCP end address is <code>192.168.1.99</code>, reserving <code>192.168.1.100–103</code> for the four-VM topology.</li>
             <li><span class="status open">Open</span> Decide whether the Xiaomi cameras require vendor-cloud internet access.</li>
             <li><span class="status open">Open</span> Choose whether DNS fails closed with one AdGuard instance or gains a second resolver.</li>

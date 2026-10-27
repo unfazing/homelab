@@ -693,9 +693,11 @@
       <dl class="context-list">
         <dt>Operator interface</dt><dd><code>task apps:ddns:check</code> and <code>task apps:ddns:deploy</code></dd>
         <dt>Runtime</dt><dd>An unprivileged <code>cloudflare-ddns</code> system user and a hardened systemd oneshot triggered every five minutes with a randomized delay</dd>
-        <dt>Scope</dt><dd>Derive the single active zone visible to the token and reconcile only the DNS-only <code>vpn.&lt;domain&gt;</code> A record with TTL 300</dd>
+        <dt>Scope</dt><dd>Derive one active zone from the token and reconcile the explicitly allowlisted apex (<code>@</code>) and <code>vpn</code> DNS-only A records, TTL 300. The existing <code>donk.live:27272</code> client endpoint is preserved.</dd>
+        <dt>Fix deployed · 27 October</dt><dd>Eight offline tests exercise the actual shell script with fake HTTP: stale/missing records, both names following IP changes, no-op repeats, ambiguous records, invalid labels, multiple zones and proxy/TTL drift. Task check/deploy passed. Live API and Cloudflare/Google public resolver answers matched home IPv4 for both records; timer run succeeded.</dd>
+        <dt>Source</dt><dd>The environment-driven guest script lives at <code>ansible/roles/cloudflare-ddns/files/cloudflare-ddns.sh</code>, installed with Ansible copy; secret environment and units remain templates. Root Task file checks and deployment-guide links follow the source move.</dd>
         <dt>Public IPv4 source</dt><dd>Cloudflare trace over outbound HTTPS; no new inbound port is opened</dd>
-        <dt>Safety</dt><dd>Refuse zero or multiple visible zones and duplicate matching A records; create a missing record and update only when its address, TTL, or proxy state differs</dd>
+        <dt>Safety</dt><dd>Preflight all names before writes; refuse ambiguous zones, duplicate A records, CNAME conflicts and invalid/duplicate labels. Preserve unrelated records. Writes occur only for missing records or IP/TTL/proxy drift; API failure during writes may leave a partial update, retried by the timer.</dd>
         <dt>Verification</dt><dd>Deployment is idempotent; the Cloudflare API and a public DNS-over-HTTPS resolver returned the same DNS-only WireGuard record</dd>
       </dl>
 

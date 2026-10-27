@@ -105,7 +105,7 @@ tasks:
           ansible/roles/caddy/templates/Caddyfile.j2 \
           ansible/roles/caddy/templates/compose.yml.j2 \
           ansible/roles/cloudflare-ddns/tasks/main.yml \
-          ansible/roles/cloudflare-ddns/templates/cloudflare-ddns.sh.j2 \
+          ansible/roles/cloudflare-ddns/files/cloudflare-ddns.sh \
           ansible/roles/docker-engine/tasks/main.yml \
           ansible/roles/gitea/tasks/main.yml \
           ansible/roles/persistent-data/tasks/main.yml \
