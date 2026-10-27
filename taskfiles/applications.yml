@@ -14,6 +14,41 @@ env:
   ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
 
 tasks:
+  homepage:secrets:
+    internal: true
+    cmds:
+      - python3 taskfiles/scripts/app/homepage-secrets.py
+
+  homepage:check:
+    desc: Preview Homepage, scoped observer identities and private dashboard ingress
+    deps: [":config:inventory", "caddy:credentials", "homepage:secrets"]
+    cmds:
+      - ansible-playbook --check -i "{{.INVENTORY}}" ansible/playbooks/homepage.yml
+
+  homepage:deploy:
+    desc: Deploy the authenticated Homepage dashboard and approved integrations
+    deps: [":config:inventory", "caddy:credentials", "homepage:secrets"]
+    preconditions:
+      - sh: test -s .generated/secrets/adguard-admin-password && test ! -e .generated/secrets/.adguard-rotate.lock
+        msg: Existing AdGuard bootstrap secret is required; do not run during password rotation
+    cmds:
+      - ansible-playbook -i "{{.INVENTORY}}" ansible/playbooks/homepage.yml
+
+  homepage:verify:
+    desc: Verify Homepage login, live widgets, secret redaction and restricted Caddy reads
+    deps: ["adguard:domain"]
+    cmds:
+      - ansible-playbook -i "{{.INVENTORY}}" ansible/playbooks/homepage-verify.yml
+
+  homepage:credentials:
+    desc: Show the private dashboard login (operator use only)
+    deps: ["adguard:domain"]
+    preconditions:
+      - sh: test -s .generated/secrets/homepage-dashboard-password
+        msg: Deploy Homepage first
+    cmds:
+      - python3 taskfiles/scripts/app/homepage-secrets.py credentials
+
   caddy:credentials:
     internal: true
     preconditions:
@@ -26,7 +61,7 @@ tasks:
 
   caddy:check:
     desc: Preview the pinned Caddy staging deployment
-    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret", "homepage:secrets"]
     cmds:
       - mkdir -p "{{.LOCAL_TEMP}}"
       - >-
@@ -38,7 +73,7 @@ tasks:
 
   caddy:check-production:
     desc: Preview Caddy changes against the live production certificate state
-    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret", "homepage:secrets"]
     cmds:
       - mkdir -p "{{.LOCAL_TEMP}}"
       - >-
@@ -50,7 +85,7 @@ tasks:
 
   caddy:deploy-staging:
     desc: Build Caddy and prove Cloudflare DNS-01 against Let's Encrypt staging
-    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret", "homepage:secrets"]
     cmds:
       - mkdir -p "{{.LOCAL_TEMP}}"
       - >-
@@ -62,7 +97,7 @@ tasks:
 
   caddy:deploy-production:
     desc: Switch Caddy to a publicly trusted production certificate after staging passes
-    deps: [":config:inventory", "caddy:credentials", "gitea:secret"]
+    deps: [":config:inventory", "caddy:credentials", "gitea:secret", "homepage:secrets"]
     preconditions:
       - sh: test "${HOMELAB_CONFIRM_PRODUCTION_CERTS:-}" = "yes"
         msg: Set HOMELAB_CONFIRM_PRODUCTION_CERTS=yes only after the staging deployment passes

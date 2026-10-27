@@ -22,6 +22,7 @@ assert_equal 'private Gitea rewrite' '192.168.1.101' "$(answer "$resolver" "gite
 assert_equal 'private AdGuard HTTPS rewrite' '192.168.1.101' "$(answer "$resolver" "adguard.home.$domain")"
 assert_equal 'private Hermes rewrite' '192.168.1.101' "$(answer "$resolver" "hermes.home.$domain")"
 assert_equal 'private Inkling rewrite' '192.168.1.101' "$(answer "$resolver" "inkling.home.$domain")"
+assert_equal 'private Homepage rewrite' '192.168.1.101' "$(answer "$resolver" "dashboard.home.$domain")"
 
 public_answer="$(answer "$resolver" example.org)"
 [[ -n "$public_answer" ]] || {

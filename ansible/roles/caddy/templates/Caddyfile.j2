@@ -1,5 +1,10 @@
 {
+{% if caddy_homepage_enabled %}
+	admin 127.0.0.1:2019
+	persist_config off
+{% else %}
 	admin off
+{% endif %}
 	acme_ca {{ caddy_acme_ca }}
 	auto_https disable_redirects
 	email {{ caddy_acme_email }}
@@ -31,7 +36,36 @@
 		reverse_proxy {{ caddy_inkling_upstream }}
 	}
 
+{% if caddy_homepage_enabled %}
+	@homepage host {{ homepage_hostname }}
+	handle @homepage {
+		reverse_proxy homepage:3000 {
+			header_up -Authorization
+		}
+	}
+{% endif %}
+
 	handle {
 		respond "Unknown private service" 404
 	}
 }
+
+{% if caddy_homepage_enabled %}
+# Only the dedicated internal network can reach this listener. No admin writes.
+http://{{ homepage_proxy_caddy_ip }}:2020 {
+	bind {{ homepage_proxy_caddy_ip }}
+	@upstreams {
+		method GET
+		path /reverse_proxy/upstreams
+	}
+	handle @upstreams {
+		reverse_proxy 127.0.0.1:2019 {
+			header_up Host 127.0.0.1:2019
+			header_up Origin http://127.0.0.1:2019
+		}
+	}
+	handle {
+		respond "Not available" 404
+	}
+}
+{% endif %}

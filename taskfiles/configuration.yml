@@ -47,6 +47,8 @@ tasks:
         -e "hermes_dashboard_secret_file=/tmp/hermes-syntax-placeholder"
         ansible/playbooks/hermes.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/hermes-git.yml
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/homepage.yml
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/homepage-verify.yml
 
   ping:
     desc: Verify Ansible connectivity to every Terraform VM

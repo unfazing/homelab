@@ -1,0 +1,5 @@
+---
+- name: Prepare the shared Homepage proxy network
+  ansible.builtin.include_role:
+    name: homepage
+    tasks_from: network

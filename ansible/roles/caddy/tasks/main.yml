@@ -73,6 +73,10 @@
     - staging
     - production
 
+- name: Configure the Homepage login and isolated statistics boundary
+  ansible.builtin.include_tasks: homepage.yml
+  when: caddy_homepage_enabled
+
 - name: Install the Cloudflare ACME token
   ansible.builtin.copy:
     dest: "{{ caddy_secret_dir }}/cloudflare_api_token"

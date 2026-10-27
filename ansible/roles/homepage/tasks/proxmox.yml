@@ -1,0 +1,32 @@
+---
+- name: Create the private Proxmox observer configuration directory
+  ansible.builtin.file:
+    path: /etc/homelab/homepage-observer
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+- name: Install the scoped Proxmox observer provisioner
+  ansible.builtin.copy:
+    src: provision-proxmox.py
+    dest: /etc/homelab/homepage-observer/provision.py
+    owner: root
+    group: root
+    mode: '0700'
+- name: Reconcile the dedicated read-only Proxmox identity
+  ansible.builtin.command: python3 /etc/homelab/homepage-observer/provision.py
+  register: homepage_pve_identity
+  changed_when: (homepage_pve_identity.stdout | from_json).changed
+  no_log: true
+  when: not ansible_check_mode
+- name: Read only the observer token for the services play
+  ansible.builtin.slurp:
+    src: /etc/homelab/homepage-observer/proxmox-token
+  register: homepage_pve_token
+  no_log: true
+  when: not ansible_check_mode
+- name: Read the public Proxmox CA certificate
+  ansible.builtin.slurp:
+    src: /etc/pve/pve-root-ca.pem
+  register: homepage_pve_ca
+  when: not ansible_check_mode

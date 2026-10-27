@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 
 
-def replace_user_hash(config: str, username: str, password_hash: str) -> str:
+def user_section(config: str):
     lines = config.splitlines(keepends=True)
     starts = [i for i, line in enumerate(lines) if line.strip() == "users:" and line == "users:\n"]
     if len(starts) != 1:
@@ -27,12 +27,21 @@ def replace_user_hash(config: str, username: str, password_hash: str) -> str:
         (i for i in range(start, len(lines)) if lines[i].strip() and not lines[i][0].isspace()),
         len(lines),
     )
-    body = lines[start:end]
-    names = [line.strip().removeprefix("- name:").strip().strip("\"'") for line in body if re.match(r"^\s+- name:", line)]
-    password_indexes = [i for i, line in enumerate(body) if re.match(r"^\s+password:", line)]
-    if names != [username] or len(password_indexes) != 1:
+    return lines, start, end
+
+
+def replace_user_hash(config: str, username: str, password_hash: str) -> str:
+    lines, start, end = user_section(config)
+    entries = [i for i in range(start, end) if re.match(r"^\s+- name:", lines[i])]
+    matches = [i for i in entries if lines[i].split('name:', 1)[1].strip().strip("\"'") == username]
+    if len(matches) != 1:
         raise RuntimeError("Expected exactly one matching AdGuard web user")
-    index = start + password_indexes[0]
+    entry = matches[0]
+    entry_end = next((i for i in entries if i > entry), end)
+    password_indexes = [i for i in range(entry + 1, entry_end) if re.match(r"^\s+password:", lines[i])]
+    if len(password_indexes) != 1:
+        raise RuntimeError("Expected exactly one matching AdGuard web user")
+    index = password_indexes[0]
     prefix = lines[index].split("password:", 1)[0]
     lines[index] = f"{prefix}password: {password_hash}\n"
     return "".join(lines)

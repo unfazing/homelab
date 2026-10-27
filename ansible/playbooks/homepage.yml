@@ -1,0 +1,59 @@
+---
+- name: Converge dashboard DNS and provision the separate AdGuard identity
+  hosts: access
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  vars:
+    adguard_domain: "{{ homepage_domain }}"
+    adguard_admin_password_file: "{{ playbook_dir }}/../../.generated/secrets/adguard-admin-password"
+  roles:
+    - adguard
+  tasks:
+    - name: Grant the explicitly approved AdGuard dashboard identity
+      ansible.builtin.include_role:
+        name: adguard
+        tasks_from: homepage-user
+
+- name: Add the existing Proxmox host for scoped observer provisioning
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Use existing trusted root SSH access to blue
+      ansible.builtin.add_host:
+        name: homepage-blue
+        groups: homepage_proxmox
+        ansible_host: 192.168.1.10
+        ansible_user: root
+        ansible_python_interpreter: /usr/bin/python3
+      changed_when: false
+
+- name: Provision only Homepage's read-only Proxmox identity
+  hosts: homepage_proxmox
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  tasks:
+    - ansible.builtin.include_role:
+        name: homepage
+        tasks_from: proxmox
+
+- name: Deploy Homepage and its protected private HTTPS route
+  hosts: services
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  vars:
+    caddy_domain: "{{ homepage_domain }}"
+    caddy_acme_email: "{{ lookup('ansible.builtin.env', 'CADDY_ACME_EMAIL') }}"
+    caddy_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_ACME_API_TOKEN') }}"
+    caddy_acme_environment: production
+    caddy_acme_ca: https://acme-v02.api.letsencrypt.org/directory
+  roles:
+    - homepage
+    - caddy
+  tasks:
+    - name: Verify authenticated widgets and denied control paths
+      ansible.builtin.include_role:
+        name: homepage
+        tasks_from: verify

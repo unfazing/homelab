@@ -1,0 +1,22 @@
+---
+- name: Inspect the dedicated Homepage proxy network
+  ansible.builtin.command:
+    argv: [docker, network, inspect, "{{ homepage_proxy_network }}"]
+  register: homepage_network
+  changed_when: false
+  failed_when: homepage_network.rc not in [0, 1]
+  check_mode: false
+
+- name: Refuse to reuse a network with a different isolation contract
+  ansible.builtin.assert:
+    that:
+      - (homepage_network.stdout | from_json)[0].Internal
+      - (homepage_network.stdout | from_json)[0].IPAM.Config[0].Subnet == homepage_proxy_subnet
+    quiet: true
+  when: homepage_network.rc == 0
+
+- name: Create the isolated Caddy to Homepage network
+  ansible.builtin.command:
+    argv: [docker, network, create, --internal, --subnet, "{{ homepage_proxy_subnet }}", "{{ homepage_proxy_network }}"]
+  when: homepage_network.rc == 1 and not ansible_check_mode
+  changed_when: true

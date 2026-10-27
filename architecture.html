@@ -164,10 +164,16 @@
     body.flyout-open { overflow: hidden; }
     body.flyout-resizing { cursor: ew-resize; user-select: none; }
     .status { display: inline-block; padding: 2px 8px; border-radius: 99px; white-space: nowrap; font-size: .78rem; font-weight: 700; }
-    .accepted { color: var(--green); background: var(--green-soft); }
-    .proposed { color: var(--blue); background: var(--blue-soft); }
-    .open { color: var(--amber); background: var(--amber-soft); }
+    .accepted, .live { color: var(--green); background: var(--green-soft); }
+    .proposed, .planned { color: var(--blue); background: var(--blue-soft); }
+    .open, .migration { color: var(--amber); background: var(--amber-soft); }
     .deferred { color: var(--muted); background: var(--surface-2); }
+    svg .planned-node { fill: var(--surface); stroke-dasharray: 7 5; }
+    svg .planned-link { stroke-dasharray: 7 5; }
+    .explainer { margin: 26px 0; padding: 0 16px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .explainer summary { padding: 14px 0; color: var(--blue); font-weight: 700; cursor: pointer; }
+    .explainer summary:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+    .explainer h3:first-of-type { margin-top: 10px; }
     .placeholder { min-height: 180px; display: grid; place-items: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
     .compact { margin: 8px 0; padding-left: 21px; }
     .compact li + li { margin-top: 5px; }
@@ -296,7 +302,56 @@
         </section>
       </div>
 
+      <h3>Current private application path · no VLANs yet</h3>
+      <p class="callout"><strong>Operator dashboard:</strong> <code>dashboard.home.&lt;domain&gt;</code> resolves privately to Caddy at <code>.101</code> and requires its own login. Caddy reaches Homepage through the internal <code>172.30.90.0/29</code> Docker bridge; its private statistics listener exposes one GET path only. Homepage's AdGuard credential carries full DNS administration authority under D-082. Neither Homepage HTTP nor Caddy management ports are host-published; agents receive no dashboard credential.</p>
       <p class="callout"><strong>Agent management boundary:</strong> Ansible-owned nftables rules on <code>lab-agents-01</code> block agent-initiated guest and container IPv4 connections to Proxmox <code>.10</code>, router management <code>.254</code> (DNS remains allowed), and legacy <code>.9</code> except Inkling TCP 3000. Blue also rejects new agent-source <code>.102</code> connections. Established return traffic remains allowed so administrators, including clients NATed through red, can still manage the agent VM. Rules persist before Docker starts and replace only their own tables; they never flush Docker or WireGuard rules. Gitea, AdGuard, provider and Telegram paths remain available. This is an interim address-based boundary; VLAN isolation and a complete IPv6 policy remain pending.</p>
+      <figure>
+        <div class="diagram-scroll">
+        <svg viewBox="0 0 1100 470" role="img" aria-labelledby="current-path-title current-path-desc">
+          <title id="current-path-title">Live flat-LAN DNS and HTTPS traffic</title>
+          <desc id="current-path-desc">A test LAN client asks the new AdGuard at 192.168.1.100 for a private application name and receives Caddy's 192.168.1.101 address. The client then connects to Caddy over HTTPS. Caddy forwards to Gitea on the services VM, AdGuard administration on the access VM, or Hermes on the agents VM. Router and VPN DNS cutover is not yet recorded; the old 192.168.1.9 resolver did not answer the latest check.</desc>
+          <defs>
+            <marker id="current-path-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <text class="title" x="35" y="42">Live traffic · test client on 192.168.1.0/24</text>
+
+          <rect class="node" x="40" y="130" width="255" height="215" rx="10"></rect>
+          <text class="eyebrow" x="65" y="165">PRIVATE CLIENT</text>
+          <text class="label" x="65" y="205">LAN laptop or phone</text>
+          <text class="small" x="65" y="242">Uses new DNS .100 for trial</text>
+          <text class="small" x="65" y="272">No public app connection</text>
+
+          <rect class="node network" x="390" y="95" width="260" height="130" rx="10"></rect>
+          <text class="eyebrow" x="415" y="125">DNS · LAB-ACCESS-01</text>
+          <text class="label" x="415" y="160">AdGuard · .100:53</text>
+          <text class="small" x="415" y="190">Private names resolve to .101</text>
+          <path d="M295 160 H390" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#current-path-arrow)"></path>
+          <text class="eyebrow" x="304" y="149">QUERY</text>
+          <path d="M390 205 H295" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#current-path-arrow)"></path>
+          <text class="eyebrow" x="309" y="195">.101 ANSWER</text>
+
+          <rect class="node control" x="390" y="275" width="260" height="115" rx="10"></rect>
+          <text class="eyebrow" x="415" y="306">HTTPS · LAB-SERVICES-01</text>
+          <text class="label" x="415" y="340">Caddy · .101:443</text>
+          <text class="small" x="415" y="367">Wildcard certificate</text>
+          <path d="M295 325 H390" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#current-path-arrow)"></path>
+          <text class="eyebrow" x="304" y="311">HTTPS</text>
+
+          <rect class="node storage" x="750" y="205" width="315" height="185" rx="10"></rect>
+          <text class="eyebrow" x="775" y="235">PRIVATE HTTP BACKENDS</text>
+          <text class="small" x="775" y="272">Gitea · local Docker network</text>
+          <text class="small" x="775" y="310">AdGuard UI · access .100:3000</text>
+          <text class="small" x="775" y="348">Hermes · agents .102:9119</text>
+          <path d="M650 330 H750" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#current-path-arrow)"></path>
+          <text class="eyebrow" x="656" y="317">PROXY</text>
+
+          <text class="small" x="40" y="437">Router/VPN DNS cutover pending; .9 DNS unresponsive. The .100 resolver is live; no VLAN policy is active.</text>
+        </svg>
+        </div>
+        <figcaption>DNS gives the client Caddy's private address; the client—not AdGuard—then makes the HTTPS request. Guest firewall rules admit AdGuard and Hermes HTTP backend traffic sourced from Caddy's VM; this is not strong isolation against spoofing on the flat LAN.</figcaption>
+      </figure>
 
       <h3>Current AdGuard HTTPS path</h3>
       <dl class="context-list">
@@ -306,6 +361,9 @@
         <dt>Client policy</dt><dd>No client certificate or client-IP allowlist is configured at Caddy. Any client with private network reachability to Caddy can reach the login page; AdGuard's own password is required to administer it. Whether to add client restrictions after VLAN migration remains open.</dd>
       </dl>
 
+      <p class="muted">Live TLS: Caddy serves a publicly trusted wildcard certificate obtained through Cloudflare DNS-01; no application HTTP or HTTPS port is forwarded from the WAN.</p>
+      <details class="explainer">
+        <summary>How private HTTPS certificates work · issuance, use, and alternatives</summary>
       <h3>Selected certificate model and considered alternatives</h3>
       <p>A certificate enables encrypted, authenticated HTTPS; it does not make an application public. Routing and firewall policy still keep every application private.</p>
 
@@ -338,7 +396,7 @@
           <text class="title" x="40" y="42">Issuance and renewal · internet required only here</text>
 
           <rect class="node control" x="40" y="135" width="320" height="250" rx="10"></rect>
-          <text class="eyebrow" x="65" y="166">HOME · SERVICES ZONE</text>
+          <text class="eyebrow" x="65" y="166">HOME · SERVICES VM</text>
           <text class="label" x="65" y="199">Reverse proxy</text>
           <text class="small" x="65" y="229">lab-services-01 · outbound HTTPS</text>
           <line class="divider" x1="65" y1="252" x2="335" y2="252"></line>
@@ -393,14 +451,14 @@
           <text class="title" x="40" y="42">Normal use · private DNS + LAN routing + HTTPS</text>
 
           <rect class="node" x="40" y="105" width="255" height="180" rx="10"></rect>
-          <text class="eyebrow" x="65" y="136">AGENTS ZONE · NO INTERNET NEEDED</text>
+          <text class="eyebrow" x="65" y="136">AGENTS VM · NO INTERNET NEEDED</text>
           <text class="label" x="65" y="169">Hermes</text>
           <text class="small" x="65" y="199">gitea.home.&lt;domain&gt;</text>
           <text class="small" x="65" y="223">n8n.home.&lt;domain&gt;</text>
           <text class="small" x="65" y="253">Validates certificate locally</text>
 
           <rect class="node control" x="470" y="105" width="310" height="180" rx="10"></rect>
-          <text class="eyebrow" x="495" y="136">SERVICES ZONE · TLS TERMINATION</text>
+          <text class="eyebrow" x="495" y="136">SERVICES VM · TLS TERMINATION</text>
           <text class="label" x="495" y="169">Reverse proxy</text>
           <text class="small" x="495" y="199">Presents *.home.&lt;domain&gt;</text>
           <text class="small" x="495" y="223">Selects backend by hostname</text>
@@ -446,7 +504,9 @@
         </div>
         <figcaption>Once issued, the public CA is not part of ordinary traffic. LAN-only agents can use HTTPS because AdGuard returns a private address and the operating system validates the certificate locally.</figcaption>
       </figure>
+      </details>
 
+      <h3>Target physical topology · not deployed</h3>
       <figure>
         <div class="diagram-scroll">
         <svg viewBox="0 0 1000 455" role="img" aria-labelledby="target-network-title target-network-desc">
@@ -478,10 +538,10 @@
           <text class="small" x="555" y="213">Access ports</text>
 
           <rect class="node network" x="785" y="100" width="180" height="125" rx="10"></rect>
-          <text class="eyebrow" x="805" y="130">EXISTING · COMPUTE</text>
+          <text class="eyebrow" x="805" y="130">TARGET · PROXMOX CONFIG</text>
           <text class="label" x="805" y="163">Proxmox blue</text>
-          <text class="small" x="805" y="190">VLAN-aware vmbr0</text>
-          <text class="small" x="805" y="213">One tagged NIC</text>
+          <text class="small" x="805" y="190">Future VLAN-aware vmbr0</text>
+          <text class="small" x="805" y="213">Future tagged VM NICs</text>
 
           <path d="M225 162 H285" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
           <path d="M475 162 H535" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#target-network-arrow)"></path>
@@ -504,7 +564,7 @@
         <figcaption>The router enforces policy between zones. VLANs provide separation only when paired with default-deny firewall rules.</figcaption>
       </figure>
 
-      <h3>Proposed segmentation</h3>
+      <h3>Target VLAN segmentation · not deployed</h3>
       <figure>
         <div class="diagram-scroll">
         <svg class="wide-diagram" viewBox="0 0 1200 820" role="img" aria-labelledby="logical-network-title logical-network-desc">
@@ -926,19 +986,21 @@
           <button id="services-overview-tab" role="tab" aria-selected="true" aria-controls="services-overview-panel" type="button">Overview</button>
           <button id="services-caddy-tab" role="tab" aria-selected="false" aria-controls="services-caddy-panel" type="button">Caddy</button>
           <button id="services-gitea-tab" role="tab" aria-selected="false" aria-controls="services-gitea-panel" type="button">Gitea</button>
+          <button id="services-homepage-tab" role="tab" aria-selected="false" aria-controls="services-homepage-panel" type="button">Homepage</button>
           <button id="services-n8n-tab" role="tab" aria-selected="false" aria-controls="services-n8n-panel" type="button">n8n</button>
           <button id="services-nextcloud-tab" role="tab" aria-selected="false" aria-controls="services-nextcloud-panel" type="button">Nextcloud</button>
           <button id="services-vaultwarden-tab" role="tab" aria-selected="false" aria-controls="services-vaultwarden-panel" type="button">Vaultwarden</button>
         </nav>
 
         <section id="services-overview-panel" role="tabpanel" aria-labelledby="services-overview-tab">
-          <p>Gitea, planned n8n, and future Nextcloud share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Vaultwarden remains allocated a dataset but its deployment is deferred. Each deployed application has a separate Compose project, container network, secret set, and ZFS-backed dataset.</p>
+          <p>Gitea, Homepage, planned n8n, and future Nextcloud share one VM-level trust, maintenance, and failure boundary to reduce host memory use. Vaultwarden deployment is deferred. Applications have separate Compose projects, networks and secrets. Durable application state uses ZFS; Homepage's configuration-only deployment is rebuilt from Git and separately recovered credentials, with no new dataset.</p>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Application</th><th>Durable state</th><th>Status</th></tr></thead>
               <tbody>
                 <tr><td>Gitea</td><td>SQLite database, repositories, LFS, packages, attachments, configuration, keys, and indexes</td><td><span class="status accepted">Implemented</span></td></tr>
                 <tr><td>Caddy</td><td>Separate staging and production ACME accounts, certificates, private keys, and renewal metadata</td><td><span class="status accepted">Production HTTPS live</span></td></tr>
+                <tr><td>Homepage</td><td>Rebuildable YAML from Git; separately recovered credentials; cache and logs disposable</td><td><span class="status live">Private operator dashboard</span></td></tr>
                 <tr><td>n8n</td><td>Workflow definitions, database, execution history, configuration, and credential ciphertext</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Nextcloud</td><td>User files, database, configuration, application state, and encryption material</td><td><span class="status proposed">Planned</span></td></tr>
                 <tr><td>Vaultwarden</td><td>Database, attachments, keys, and configuration</td><td><span class="status deferred">Deferred</span></td></tr>
@@ -951,13 +1013,14 @@
         <section id="services-caddy-panel" role="tabpanel" aria-labelledby="services-caddy-tab" hidden>
           <h3>Private HTTPS boundary</h3>
           <dl class="context-list">
-            <dt>Image</dt><dd>Caddy <code>2.11.7</code> built locally from digest-pinned official Alpine stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
+            <dt>Image</dt><dd>Caddy <code>2.11.7</code>, Go <code>1.27.3</code>, updated Alpine certificate trust; built locally from digest-pinned official stages with <code>caddy-dns/cloudflare</code> <code>v0.2.4</code></dd>
             <dt>Ingress</dt><dd>TCP 443 bound only to <code>192.168.1.101</code>; the router still forwards no public HTTP or HTTPS port</dd>
             <dt>Certificate</dt><dd><code>*.home.&lt;domain&gt;</code> issued through Cloudflare DNS-01; staging and production issuance passed on 28 September 2026</dd>
             <dt>State</dt><dd><code>homelab-reverse-proxy</code> VirtioFS mapping with isolated <code>staging/</code> and <code>production/</code> directories</dd>
             <dt>Secret</dt><dd>Root-only Cloudflare token outside the durable dataset; injected from a read-only Compose secret, required non-empty at startup, and absent from image layers and command arguments</dd>
-            <dt>Container boundary</dt><dd>Read-only root filesystem, dropped capabilities except <code>NET_BIND_SERVICE</code>, no Docker socket, no admin API, and a shared <code>homelab-proxy</code> network containing only Caddy and explicitly attached backends. A checksum label makes route-file changes recreate the container.</dd>
-            <dt>AdGuard route</dt><dd><code>adguard.home.&lt;domain&gt;</code> uses the existing production wildcard certificate and proxies to the access VM; the private DNS answer is Caddy's <code>192.168.1.101</code>. There is no client allowlist, and AdGuard retains its own login. The old <code>.9</code> DNS service does not serve this new name.</dd>
+            <dt>Container boundary</dt><dd>Read-only root filesystem, capabilities limited to <code>NET_BIND_SERVICE</code>, no Docker socket, and separate Gitea/Homepage proxy networks. The admin API binds container loopback only; D-082 grants Homepage only the upstream-statistics GET through its private bridge listener. Configuration and login-hash checksums trigger recreation on changes.</dd>
+            <dt>AdGuard route</dt><dd><code>adguard.home.&lt;domain&gt;</code> uses the existing production wildcard certificate and proxies to the access VM; the private DNS answer is Caddy's <code>192.168.1.101</code>. There is no client allowlist, and AdGuard retains its own login. The old <code>.9</code> DNS service did not answer the latest check.</dd>
+            <dt>Inkling route</dt><dd><code>inkling.home.&lt;domain&gt;</code> privately resolves to Caddy at <code>192.168.1.101</code>; Caddy forwards to <code>http://192.168.1.9:3000</code>. The legacy backend currently redirects <code>/</code> to <code>/sources</code>, which returns 200 over trusted HTTPS. Its deployment is outside IaC, and application authentication has not been assessed.</dd>
           </dl>
           <p class="callout"><strong>Gitea boundary:</strong> Caddy reaches <code>gitea:3000</code> through the named proxy network. The host publishes that HTTP port only on <code>127.0.0.1</code>; clients and Hermes use private HTTPS. The staging deployment task switches this live proxy to an untrusted staging certificate; use it only during a planned test window.</p>
         </section>
@@ -1028,6 +1091,114 @@
             <li>Private HTTPS through Caddy is live and Gitea advertises it. Router and VPN DNS are not yet cut over; clients must use the new AdGuard resolver to resolve the private name. SMTP, off-host backups, restore automation, upgrades, and removal workflows are not implemented.</li>
             <li>CI jobs never execute on this VM or on <code>lab-agents-01</code>. Planned <code>lab-runner-01</code> receives no application datasets or deployment credentials. <a href="https://docs.gitea.com/runner/">Runner isolation remains an explicit security boundary.</a></li>
           </ul>
+        </section>
+
+        <section id="services-homepage-panel" role="tabpanel" aria-labelledby="services-homepage-tab" hidden>
+          <h3>Homepage operator dashboard</h3>
+          <p><span class="status live">Deployed · 26 October 2026</span> A private launchpad and status overview. Maintenance continues through Task and each application's own UI; the dashboard receives no deployment credentials or command execution. Its normal AdGuard account is an explicit DNS-administration trust exception.</p>
+          <nav class="tabs subtabs" role="tablist" aria-label="Homepage design details">
+            <button id="homepage-overview-tab" role="tab" aria-selected="true" aria-controls="homepage-overview-panel" type="button">Deployment</button>
+            <button id="homepage-access-tab" role="tab" aria-selected="false" aria-controls="homepage-access-panel" type="button">Access &amp; networking</button>
+            <button id="homepage-integrations-tab" role="tab" aria-selected="false" aria-controls="homepage-integrations-panel" type="button">Integrations</button>
+          </nav>
+          <section id="homepage-overview-panel" role="tabpanel" aria-labelledby="homepage-overview-tab">
+            <dl class="context-list">
+              <dt>Audience · accepted</dt><dd>Owner-only dashboard with native shared-password sessions behind Caddy HTTPS; no household or Hermes access to dashboard credentials</dd>
+              <dt>Placement</dt><dd>Independent Compose project on <code>lab-services-01</code>, inside the existing 4 GiB budget. Homepage is limited to 512 MiB / 0.5 CPU; its snapshot reader to 96 MiB / 0.1 CPU. No additional VM. Access services stay small and agents remain separated from monitoring credentials.</dd>
+              <dt>Private route</dt><dd><code>dashboard.home.&lt;domain&gt;</code> → AdGuard answer <code>192.168.1.101</code> → Caddy HTTPS → Homepage native login. The internal <code>172.30.90.0/29</code> Docker bridge contains Caddy <code>.2</code>, Homepage <code>.3</code> and the read-only snapshot server <code>.4:8080</code>. Only Homepage also has a separate widget egress network. No dashboard/snapshot host port or WAN forward; the existing wildcard certificate covers the name.</dd>
+              <dt>Network ownership</dt><dd>The Homepage role owns the shared internal bridge through <code>tasks/network.yml</code>; Homepage and Caddy reuse that entry point. Each convergence checks isolation and recreates a missing network after a VM rebuild. Shared settings remain in <code>ansible/vars/homepage.yml</code>.</dd>
+              <dt>Client DNS</dt><dd>Use AdGuard <code>192.168.1.100</code> to resolve private names. Homepage explicitly uses this resolver; the VM host and household clients do not inherit that container setting. Router/VPN DNS cutover remains separate.</dd>
+              <dt>Image</dt><dd><a href="https://github.com/gethomepage/homepage/releases/tag/v2.7.0">v2.7.0</a>, digest <code>19c5c091…8182d5f</code>; inspected Node <code>24.22.1</code>, Next.js <code>16.4.1</code> and updated Alpine trust. The TLS preload overrides upstream widget agents' disabled verification; blue's CA is explicitly trusted. The Python collector clears only strict X.509 mode for blue's legacy CA (missing key-usage extension), retaining chain and hostname checks. Public TLS probes use default validation. Recheck compatibility on upgrades/CA renewal.</dd>
+              <dt>Configuration</dt><dd>Ansible renders read-only YAML under <code>/opt/homelab/homepage/config</code>. Widget secrets use <code>HOMEPAGE_FILE_*</code>; native password/session files are loaded inside the Node process, avoiding secret values in Compose or Docker inspection. <code>task apps:homepage:credentials</code> retrieves the unchanged password; native login has no username. Preserve the separate controller session-secret file to retain sessions across recreation.</dd>
+              <dt>Boundary</dt><dd>Non-root Homepage and snapshot server, no Docker socket, privileged mode, host networking or application datasets. Exact Host allowlist; MCP/configuration writes disabled. Native authentication protects direct application requests too. The privileged host collector is a separate administrator trust boundary under D-083; its JSON reader has no credentials or egress.</dd>
+              <dt>Recovery</dt><dd>No application database or new dataset. Ignored controller files preserve dashboard/AdGuard credentials and the Gitea observer token; blue retains the Proxmox observer token. Recreate the VM and converge these sources. Losing them requires explicit recovery or revocation/reissue. Do not mount application datasets or host filesystems for metrics; a dashboard on blue cannot independently report blue's outage.</dd>
+            </dl>
+            <p class="callout"><strong>Accepted trust expansion · D-082/083:</strong> Homepage's normal AdGuard credential can administer DNS and disclose resolver data. Proxmox/Gitea remain read-only; Caddy's full API stays on loopback. Only the trusted host collector reads raw active configuration locally, retaining it in memory and exporting allowlisted metadata. Homepage receives neither raw configuration nor provisioning/agent/Cloudflare tokens, private certificate keys, administrator SSH keys or Docker access. Native sessions protect dashboard data and APIs.</p>
+          </section>
+          <section id="homepage-access-panel" role="tabpanel" aria-labelledby="homepage-access-tab" hidden>
+            <h3>Login ownership</h3>
+            <p><span class="status live">Native password · verified</span> Homepage owns login, secure session cookies and logout. Caddy retains HTTPS; its former Basic Auth gate is removed. Reuse the existing password without a username. Both password and stable signing secret have ignored controller recovery files; VM administrators remain trusted. Convergence refuses mismatched controller recovery files instead of silently replacing an existing login.</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Approach</th><th>Advantages</th><th>Trade-offs</th></tr></thead>
+              <tbody>
+                <tr><td>Caddy Basic Auth · superseded</td><td>One gate for dashboard pages and APIs; login configuration stays with the proxy</td><td>Browser credential prompt; direct container access bypasses this gate. Relies on private networking and trusted VM administrators.</td></tr>
+                <tr><td>Native password · selected</td><td>Application login page, cookie sessions and logout; also checks requests that bypass Caddy</td><td>Shared password, no per-user dashboard permissions; separately preserve password and session-signing secret. No native login-attempt rate limiting.</td></tr>
+                <tr><td>Native OIDC · future option</td><td>Delegates sign-in and any MFA policy to an identity provider</td><td>Additional service dependency and client secret. Restrict permitted users at the provider; Homepage adds no claim-based authorization.</td></tr>
+              </tbody>
+            </table></div>
+            <p><strong>Selected:</strong> native password login with Caddy retaining HTTPS. Verify native API protection before removing the edge gate. No VM, DNS or certificate change; the monitoring extension adds one internal snapshot reader. See <a href="https://gethomepage.dev/installation/#security-authentication">upstream authentication guidance</a>.</p>
+            <h3>Two networks, one Homepage container</h3>
+            <figure>
+              <div class="diagram-scroll">
+                <svg viewBox="0 0 1000 680" role="img" aria-labelledby="homepage-network-title homepage-network-desc">
+                  <title id="homepage-network-title">Deployed Homepage browser and widget traffic</title>
+                  <desc id="homepage-network-desc">A browser resolves the dashboard through AdGuard and connects to Caddy on the VM's LAN port 443. Caddy forwards to Homepage over an internal Docker bridge. Homepage reads Caddy statistics on that bridge and uses a separate egress network for service API requests.</desc>
+                  <defs><marker id="homepage-network-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="var(--muted)"/></marker></defs>
+                  <rect class="node" x="100" y="24" width="250" height="70" rx="9"/>
+                  <text class="label" x="120" y="53">Your browser</text><text class="small" x="120" y="77">LAN / WireGuard client</text>
+                  <rect class="node" x="560" y="24" width="330" height="70" rx="9"/>
+                  <text class="label" x="580" y="53">AdGuard DNS · .100</text><text class="small" x="580" y="77">Dashboard name → 192.168.1.101</text>
+                  <path d="M350 59H560" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#homepage-network-arrow)"/>
+                  <text class="small" x="393" y="45">DNS lookup</text>
+                  <rect class="boundary" x="40" y="125" width="920" height="410" rx="12"/>
+                  <text class="label" x="60" y="153">lab-services-01 · 192.168.1.101</text>
+                  <rect class="network" x="70" y="175" width="860" height="215" rx="10"/>
+                  <text class="label" x="90" y="204">Internal Docker bridge · 172.30.90.0/29</text>
+                  <text class="small" x="90" y="225">Caddy + Homepage + snapshot reader · no external connectivity through this network</text>
+                  <rect class="node" x="100" y="245" width="250" height="65" rx="9"/>
+                  <text class="label" x="120" y="272">Caddy · 172.30.90.2</text><text class="small" x="120" y="295">HTTPS / route forwarding</text>
+                  <rect class="node" x="560" y="245" width="330" height="65" rx="9"/>
+                  <text class="label" x="580" y="272">Homepage · 172.30.90.3:3000</text><text class="small" x="580" y="295">Native login · no published host port</text>
+                  <g fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#homepage-network-arrow)">
+                    <path d="M225 94V112H50V233H225V245"/>
+                    <path d="M350 277H560"/>
+                    <path d="M600 310V365H225V310"/>
+                    <path d="M750 310V425"/>
+                    <path d="M750 490V590"/>
+                  </g>
+                  <text class="small" x="240" y="117">HTTPS · .101:443</text>
+                  <text class="small" x="405" y="265">HTTP proxy</text>
+                  <text class="small" x="325" y="351">GET statistics · .2:2020</text>
+                  <rect class="control" x="560" y="425" width="330" height="65" rx="9"/>
+                  <text class="label" x="580" y="452">Homepage egress network</text><text class="small" x="580" y="475">Separate attachment · DNS via .100</text>
+                  <text class="small" x="765" y="562">Verified HTTPS</text>
+                  <rect class="node" x="560" y="590" width="330" height="65" rx="9"/>
+                  <text class="label" x="580" y="617">Service APIs</text><text class="small" x="580" y="640">Proxmox · AdGuard · Gitea</text>
+                </svg>
+              </div>
+              <figcaption>Solid arrows show request direction; responses return on the same connections. DNS provides an address and does not carry web traffic. Also on this bridge: the internal <code>.4:8080</code> reader serves only curated JSON collected by the host timer; it has no outbound network or credentials. Caddy's full API remains on container loopback.</figcaption>
+            </figure>
+            <ul class="compact">
+              <li><strong>Proxy network:</strong> private container addresses inside the VM, not LAN machines or VLANs. Caddy reaches port 3000 without publishing it; the statistics listener permits only the approved GET path. The snapshot reader adds only <code>GET /snapshot</code> on <code>.4:8080</code>.</li>
+              <li><strong>Egress network:</strong> Homepage fetches widget data with its service credentials. It permits outbound connectivity; there is no destination allowlist restricting it to these APIs.</li>
+              <li><strong>Browser boundary:</strong> widget requests run on Homepage and return results to the browser. Opening a service link goes directly to that application and its own login; Homepage login provides no SSO.</li>
+              <li><strong>Host boundary:</strong> VM administrators, Docker control and the local collector remain trusted. Native login protects ordinary direct application requests, not a compromised host.</li>
+            </ul>
+          </section>
+          <section id="homepage-integrations-panel" role="tabpanel" aria-labelledby="homepage-integrations-tab" hidden>
+            <p><strong>Caddy layout:</strong> one card under Network combines current upstream counters with compact hostname → destination / certificate-days rows. Shared issuer/expiry/TLS-version details appear once per distinct certificate metadata set, followed by snapshot freshness/errors. No separate inventory section; wildcard/fallback metadata stays in the snapshot without duplicating concrete route rows.</p>
+            <p class="muted">VM RAM is explicitly host-accounted Proxmox memory (<code>memhost</code>, fallback <code>mem</code>) versus configured allocation, not guest Linux memory usage. Uptime and network/disk rates come from the audit API; guest filesystem usage and memory working set remain deferred pending a guest metrics source.</p>
+            <p>Groups: Infrastructure, Network, Development &amp; AI, Applications, and Operations. Live tiles describe actual deployments; planned services stay in a clearly separate roadmap group. An HTTP response or login page is not proof that DNS forwarding, model calls, jobs, backups or VPN internet routing work.</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Integration</th><th>Useful information</th><th>Pilot / authority boundary</th></tr></thead>
+              <tbody>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/proxmox/">Proxmox + per-VM metrics</a></td><td>Live blue CPU/RAM and guest counts; VM 1000–1002 metrics available from each tile</td><td>Dedicated <code>homepage@pve!dashboard</code>, privilege-separated <code>PVEAuditor</code> on user and token at <code>/</code>; effective rights are audit-only. Verified TLS trusts blue's CA. The widget currently shows 3 running / 7 non-template VMs; two templates are excluded. Does not provide ZFS/SMART/patch monitoring.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/gitea/">Gitea</a></td><td>Visible repositories, notifications, issues and pull requests</td><td>Live under restricted <code>homepage-observer</code>, zero repository-creation quota and read-only repository/issue/notification scopes. Counts reflect its visibility. Repository/team grants remain operator-managed; no agent/admin token reuse.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/adguard-home/">AdGuard</a></td><td>Live query, blocking and latency statistics</td><td>Dedicated normal <code>homepage</code> user over private HTTPS. This is administrator-equivalent DNS access, explicitly approved in D-082. Existing operator credentials and password rotation are preserved.</td></tr>
+                <tr><td>Hermes</td><td>Dashboard link and suitable unauthenticated reachability/status check</td><td>No listed native widget. Do not enable the agent API, expose sessions/provider credentials, or give Homepage the Hermes control login just for a tile. Model/Telegram health remains a separate functional test.</td></tr>
+                <tr><td>Inkling</td><td>HTTPS link and frontend availability; future explicit application health JSON</td><td>No built-in integration required. Current frontend checks do not verify the generation pipeline or backend secrets; any custom health endpoint must export only approved status fields.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/caddy/">Caddy</a></td><td>Live upstream count, current requests and failure state</td><td>Only <code>GET /reverse_proxy/upstreams</code> through private <code>172.30.90.2:2020</code>. Full admin API stays on container loopback <code>127.0.0.1:2019</code>; no host-published management ports, configuration access or writes from Homepage.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/configs/docker/">Docker containers</a></td><td>Container state and CPU/RAM/network statistics</td><td>Defer direct integration. A read-only socket mount does not make the Docker API safe. Later consider a tightly filtered GET-only socket proxy per host with authenticated private transport; even read APIs may expose environment secrets. No open TCP 2375 or dashboard socket mount.</td></tr>
+                <tr><td>WireGuard + DDNS</td><td>Future wg-easy handshake/peer totals and updater's last successful run</td><td>WireGuard deployment and a separate read-only integration remain planned. Dedicated widget statistics remain deferred pending v15 API/authentication review. Do not reuse its full VPN administrator login or Cloudflare token in Homepage; sanitized exports must omit keys and profiles.</td></tr>
+                <tr><td>Host storage, patches and backups</td><td>Blue/red/guest filesystems, sensors; ZFS health, snapshot age, pending reboot, dated remediation status</td><td>Later choose a host metrics agent such as <a href="https://gethomepage.dev/widgets/services/glances/">Glances</a> or a narrow status exporter. Homepage's <a href="https://gethomepage.dev/widgets/info/resources/">Resources widget</a> describes its container, not all hosts. Status exports need timestamps and must become stale/unknown rather than show a permanent green check.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/whatsupdocker/">What's Up Docker</a></td><td>Watched images and available updates</td><td>Optional later update-awareness service after reviewing its Docker discovery permissions. Report candidates for human-reviewed image/pin upgrades; do not enable automatic replacement of our custom security builds. An available image update is not a vulnerability assessment.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/beszel/">Beszel</a></td><td>Alternative host overview and per-system CPU/RAM/disk/network</td><td>Alternative to a Glances approach, not another required monitoring stack. Current Homepage documentation requires a Beszel superuser for its widget; defer that credential grant and reassess least-privilege support before selecting it.</td></tr>
+                <tr><td><a href="https://gethomepage.dev/widgets/services/uptime-kuma/">Uptime Kuma</a></td><td>History, incidents and alerting beyond the open dashboard</td><td>Optional later service with its own persistence/recovery plan; Homepage consumes a private Kuma status page. Not a prerequisite for the pilot or independent host-outage monitoring when placed on the same laptop.</td></tr>
+                <tr><td>Future n8n / Nextcloud / Vaultwarden / CI</td><td>Links first; Nextcloud has a native widget, others can use reviewed health/custom API sources</td><td>Do not label them live or start the retired AIO controller. Add API scopes only when deployed. No workflow execution, vault secrets, runner registration token or deployment authority in Homepage.</td></tr>
+              </tbody>
+            </table></div>
+            <p class="muted">Built-in <a href="https://gethomepage.dev/configs/services/">site monitoring</a> and <a href="https://gethomepage.dev/widgets/services/customapi/">custom JSON widgets</a> cover simple cases. Authenticated status checks need suitable internal health endpoints; do not remove application authentication to make a tile green.</p>
+          </section>
         </section>
 
         <section id="services-n8n-panel" role="tabpanel" aria-labelledby="services-n8n-tab" hidden>
@@ -1130,6 +1301,10 @@
           <h3>Decisions</h3>
           <ul class="compact">
             <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
+            <li><span class="status accepted">D-080 Amended</span> Homepage is an owner-only operator dashboard. Native shared-password authentication with a persistent session secret replaces Caddy Basic Auth; Caddy retains HTTPS. The operator approved this migration and richer VM/Caddy summaries on 26 October. AdGuard/Caddy statistics remain approved; Jellyfin is excluded.</li>
+            <li><span class="status accepted">D-083 Implemented</span> A root-owned services-VM timer reads Caddy's active configuration locally and Proxmox's existing audit-only API token. It exports only allowlisted route/VM fields and public TLS probe results, never raw configuration or secrets. A non-root, internal-only snapshot server shares read-only JSON with Homepage; it has no Docker socket, credentials or egress. Discover exact hostnames under the private home domain every minute; label wildcard/catch-all routes without inventing hostnames. Show age/failures and mark stale data unknown. Compact route/TLS rows live in Network → Caddy. No new guest metrics agent, VM, WAN ingress or data dataset.</li>
+            <li><span class="status accepted">D-081 Accepted</span> Deploy Homepage in its own Compose project on <code>lab-services-01</code>, with a dedicated proxy network, rebuildable Git-managed YAML, separately injected secrets and no additional VM/dataset. Use dedicated read-only Proxmox/Gitea identities; no Docker socket, Homepage MCP or deployment authority. Revisit a dedicated management VM if credentials or resource demand grow.</li>
+            <li><span class="status accepted">D-082 Accepted · trust expansion</span> Give Homepage a separate normal AdGuard user: it has administrator-equivalent DNS/configuration authority, not a read-only metrics role. Compromise of Homepage can therefore alter DNS and access resolver data; its secret remains outside Git and Hermes and is independently revocable. Enable Caddy's full admin API only on container loopback; expose only <code>GET /reverse_proxy/upstreams</code> through a listener bound to the dedicated Caddy–Homepage Docker network. Homepage cannot reach config/load/stop or write methods through that listener; nothing publishes ports 2019/2020 to the host or LAN. Caddy counts describe current upstream requests/failure state, not historical totals.</li>
             <li><span class="status accepted">D-052 Implemented</span> Begin application deployment with Gitea. Use SQLite with WAL mode to minimize memory on the 4 GB shared-services VM; accept that it does not scale well and later database conversion is not well tested.</li>
             <li><span class="status accepted">D-053 Amended</span> Use Gitea <code>28.2.0</code> with the source-controlled Go <code>1.27.3</code> security build and digest-pinned official base. Bind direct HTTP to host loopback <code>127.0.0.1:3000</code>, advertise private Caddy HTTPS, and bind Git SSH to <code>192.168.1.101:2222</code>; disable registration and OpenID login. Actions remains disabled; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> required a first-login password change, now complete; the generated bootstrap secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved. Email is metadata only without SMTP, so password-recovery mail is unavailable.</li>
             <li><span class="status accepted">D-054 Implemented</span> Install Docker CE from Docker's official Ubuntu 26.04 repository with exact package versions, refresh apt metadata immediately when its repository or key changes and otherwise only when stale, hold those packages until reviewed upgrades, use the local log driver and live restore, and do not add the administrator to the root-equivalent Docker group.</li>

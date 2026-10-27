@@ -1,0 +1,73 @@
+- Infrastructure:
+    - Proxmox blue:
+        icon: proxmox
+        href: https://192.168.1.10:8006
+        description: Read-only cluster metrics; templates excluded from VM count
+        widget:
+          type: proxmox
+          url: https://192.168.1.10:8006
+          username: "{{ homepage_proxmox_token_id }}"
+          password: "{{ '{{HOMEPAGE_FILE_PROXMOX_TOKEN}}' }}"
+          node: blue
+          fields: [vms, resources.cpu, resources.mem]
+{% for vm in homepage_observer_vms %}
+    - {{ vm.name }}:
+        href: https://192.168.1.10:8006/#v1:0:=qemu%2F{{ vm.id }}
+        description: VM {{ vm.id }} · sampled every minute · I/O rates need two samples
+        proxmoxNode: blue
+        proxmoxVMID: {{ vm.id }}
+        widget:
+          type: customapi
+          url: http://172.30.90.4:8080/snapshot
+          refreshInterval: 15000
+          display: list
+          mappings:
+{% for field, label in [('status','Status'),('cpu','CPU / allocation'),('memory','Host RAM / VM allocation'),('uptime','Uptime'),('network_in','Network in'),('network_out','Network out'),('disk_read','Disk reads'),('disk_write','Disk writes')] %}
+            - field: vms.{{ vm.id }}.{{ field }}
+              label: {{ label }}
+              format: text
+{% endfor %}
+{% endfor %}
+- Network:
+    - AdGuard:
+        icon: adguard-home
+        href: https://adguard.home.{{ homepage_domain }}
+        description: Dedicated normal user has DNS administration authority
+        widget:
+          type: adguard
+          url: https://adguard.home.{{ homepage_domain }}
+          username: homepage
+          password: "{{ '{{HOMEPAGE_FILE_ADGUARD_PASSWORD}}' }}"
+    - Caddy:
+        icon: caddy
+        description: Live routes and served TLS · requests are current, not lifetime totals
+        widgets:
+          - type: caddy
+            url: http://{{ homepage_proxy_caddy_ip }}:2020
+          - type: customapi
+            url: http://172.30.90.4:8080/snapshot
+            refreshInterval: 15000
+            display: dynamic-list
+            mappings:
+              items: caddy_rows
+              name: name
+              label: summary
+- Development & AI:
+    - Gitea:
+        icon: gitea
+        href: https://gitea.home.{{ homepage_domain }}
+        siteMonitor: https://gitea.home.{{ homepage_domain }}/api/healthz
+        description: Observer identity; private repo access remains operator-managed
+        widget:
+          type: gitea
+          url: https://gitea.home.{{ homepage_domain }}
+          key: "{{ '{{HOMEPAGE_FILE_GITEA_TOKEN}}' }}"
+    - Hermes:
+        icon: mdi-robot
+        href: https://hermes.home.{{ homepage_domain }}
+        description: Open the authenticated agent dashboard
+    - Inkling:
+        icon: mdi-palette
+        href: https://inkling.home.{{ homepage_domain }}
+        siteMonitor: https://inkling.home.{{ homepage_domain }}/sources
+        description: Frontend availability; generation pipeline not tested

@@ -1,0 +1,75 @@
+name: homepage
+services:
+  homepage:
+    image: "{{ homepage_image }}"
+    container_name: homepage
+    user: "{{ homepage_uid }}:{{ homepage_uid }}"
+    entrypoint: [node]
+    command: [server.js]
+    restart: unless-stopped
+    environment:
+      PUID: "{{ homepage_uid }}"
+      PGID: "{{ homepage_uid }}"
+      HOSTNAME: 0.0.0.0
+      HOMEPAGE_ALLOWED_HOSTS: "{{ homepage_hostname }}"
+      HOMEPAGE_AUTH_ENABLED: "true"
+      HOMEPAGE_EXTERNAL_URL: "https://{{ homepage_hostname }}"
+      HOMEPAGE_MCP_ENABLED: "false"
+      HOMEPAGE_MCP_ALLOW_WRITE: "false"
+      HOMEPAGE_FILE_PROXMOX_TOKEN: /run/secrets/proxmox-token
+      HOMEPAGE_FILE_GITEA_TOKEN: /run/secrets/gitea-token
+      HOMEPAGE_FILE_ADGUARD_PASSWORD: /run/secrets/adguard-password
+      NODE_EXTRA_CA_CERTS: /run/secrets/proxmox-ca.pem
+      NODE_OPTIONS: --require=/app/verified-tls.cjs
+    dns:
+      - "{{ hostvars[groups['access'][0]].ansible_host }}"
+    volumes:
+      - "{{ homepage_compose_dir }}/config:/app/config:ro"
+      - "{{ homepage_secret_dir }}:/run/secrets:ro"
+      - "{{ homepage_compose_dir }}/verified-tls.cjs:/app/verified-tls.cjs:ro"
+    tmpfs:
+      - /tmp:mode=1777
+      - /app/config/logs:uid={{ homepage_uid }},gid={{ homepage_uid }},mode=0700
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+    networks:
+      default: {}
+      dashboard:
+        ipv4_address: "{{ homepage_proxy_app_ip }}"
+    labels:
+      io.homelab.config-checksum: "{{ homepage_config_checksum }}"
+      io.homelab.secrets-checksum: "{{ homepage_secrets_checksum | default('pending') }}"
+  observer:
+    image: "{{ homepage_image }}"
+    container_name: homepage-observer
+    user: "{{ homepage_uid }}:{{ homepage_uid }}"
+    entrypoint: [node, /observer.cjs]
+    restart: unless-stopped
+    volumes:
+      - "{{ homepage_compose_dir }}/observer.cjs:/observer.cjs:ro"
+      - /var/lib/homelab/homepage-observer:/snapshot:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 96m
+    cpus: 0.1
+    pids_limit: 32
+    healthcheck:
+      test: [CMD, node, -e, "require('http').get('http://172.30.90.4:8080/snapshot',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      dashboard:
+        ipv4_address: 172.30.90.4
+    labels:
+      io.homelab.reader-checksum: "{{ lookup('ansible.builtin.file', role_path ~ '/files/observer.cjs') | hash('sha256') }}"
+networks:
+  dashboard:
+    name: "{{ homepage_proxy_network }}"
+    external: true

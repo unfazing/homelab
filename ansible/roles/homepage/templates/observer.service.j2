@@ -1,0 +1,16 @@
+[Unit]
+Description=Collect allowlisted Homepage VM and active Caddy metadata
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {{ homepage_compose_dir }}/collect.py
+TimeoutStartSec=55
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/homelab/homepage-observer
+# Docker access makes this a trusted host administrator; never grant it to Homepage.

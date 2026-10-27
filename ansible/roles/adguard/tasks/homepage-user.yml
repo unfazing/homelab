@@ -1,0 +1,28 @@
+---
+- name: Install the bcrypt utility for the dedicated dashboard account
+  ansible.builtin.apt:
+    name: apache2-utils
+    state: present
+- name: Install the shared named-user editor and Homepage provisioner
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ adguard_compose_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0700'
+  loop: [rotate_password.py, provision_homepage.py]
+- name: Install the separate Homepage AdGuard secret
+  ansible.builtin.copy:
+    src: "{{ homepage_adguard_password_file }}"
+    dest: "{{ adguard_secret_dir }}/homepage-password"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+- name: Provision Homepage's separately revocable normal AdGuard user
+  ansible.builtin.command:
+    argv: [python3, "{{ adguard_compose_dir }}/provision_homepage.py", --domain, "{{ homepage_domain }}"]
+  register: adguard_homepage_user
+  changed_when: (adguard_homepage_user.stdout | from_json).changed
+  no_log: true
+  when: not ansible_check_mode

@@ -13,7 +13,11 @@ services:
     ports:
       - "{{ caddy_bind_address }}:443:443/tcp"
     networks:
-      - proxy
+      proxy: {}
+{% if caddy_homepage_enabled %}
+      homepage:
+        ipv4_address: "{{ homepage_proxy_caddy_ip }}"
+{% endif %}
     secrets:
       - cloudflare_api_token
     volumes:
@@ -45,3 +49,8 @@ networks:
   proxy:
     name: "{{ caddy_proxy_network }}"
     external: true
+{% if caddy_homepage_enabled %}
+  homepage:
+    name: "{{ homepage_proxy_network }}"
+    external: true
+{% endif %}

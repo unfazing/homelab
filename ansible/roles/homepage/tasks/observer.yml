@@ -1,0 +1,45 @@
+---
+- name: Create the rebuildable metadata snapshot directory
+  ansible.builtin.file:
+    path: /var/lib/homelab/homepage-observer
+    state: directory
+    owner: root
+    group: "{{ homepage_uid }}"
+    mode: '0750'
+- name: Install the local collector and unprivileged JSON reader
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ homepage_compose_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [collect.py, observer.cjs]
+- name: Render the non-secret collection targets for the three managed VMs
+  ansible.builtin.copy:
+    content: "{{ {'domain': homepage_domain, 'caddy_address': ansible_host, 'vms': homepage_observer_vms} | to_nice_json }}\n"
+    dest: "{{ homepage_compose_dir }}/observer.json"
+    owner: root
+    group: root
+    mode: '0644'
+- name: Install the read-only collection service and timer
+  ansible.builtin.template:
+    src: "observer.{{ item }}.j2"
+    dest: "/etc/systemd/system/homelab-homepage-observer.{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [service, timer]
+  register: homepage_observer_units
+- name: Enable the snapshot collection timer
+  ansible.builtin.systemd_service:
+    name: homelab-homepage-observer.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ homepage_observer_units.changed }}"
+  when: not ansible_check_mode
+- name: Refresh the private allowlisted snapshot without logging raw configuration
+  ansible.builtin.systemd_service:
+    name: homelab-homepage-observer.service
+    state: started
+  changed_when: false
+  when: not ansible_check_mode

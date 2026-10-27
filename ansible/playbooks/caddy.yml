@@ -6,6 +6,8 @@
   hosts: services
   become: true
   gather_facts: true
+  vars_files:
+    - ../vars/homepage.yml
   vars:
     caddy_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
     caddy_acme_email: "{{ lookup('ansible.builtin.env', 'CADDY_ACME_EMAIL') }}"

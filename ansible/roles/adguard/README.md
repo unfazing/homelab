@@ -43,3 +43,12 @@ lock directory before retrying.
 
 The previous unpinned native installer has been retired. This role is invoked
 by `task apps:adguard:deploy`, not the generic site playbook.
+
+Homepage deployment explicitly adds a separate normal `homepage` account for
+live DNS statistics. AdGuard has no read-only role here: this credential can
+administer DNS/configuration, as accepted in architecture decision D-082.
+The guarded account provisioner preserves the existing operator password,
+briefly stops AdGuard for the YAML edit, verifies both users and DNS, and rolls
+back on failure. Named-user password rotation preserves other users. The
+dashboard credential lives in ignored controller and protected guest files;
+ordinary operator password rotation does not rotate this separate account.

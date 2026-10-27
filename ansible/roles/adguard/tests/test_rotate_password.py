@@ -26,13 +26,19 @@ class ConfigEditTests(unittest.TestCase):
         self.assertIn("auth_attempts: 5\n", changed)
         self.assertNotIn("$2a$old", changed)
 
-    def test_multiple_users_are_rejected(self):
+    def test_other_users_are_preserved(self):
         config = (
             "users:\n  - name: server\n    password: old\n"
             "  - name: other\n    password: other\n"
         )
-        with self.assertRaisesRegex(RuntimeError, "exactly one"):
-            rotation.replace_user_hash(config, "server", "$2y$new")
+        changed = rotation.replace_user_hash(config, "server", "$2y$new")
+        self.assertIn('name: other\n    password: other\n', changed)
+        self.assertIn('name: server\n    password: $2y$new\n', changed)
+
+    def test_duplicate_target_users_are_rejected(self):
+        config = 'users:\n  - name: server\n    password: old\n  - name: server\n    password: other\n'
+        with self.assertRaisesRegex(RuntimeError, 'exactly one'):
+            rotation.replace_user_hash(config, 'server', '$2y$new')
 
     def test_password_file_preserves_surrounding_spaces(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,0 +1,10 @@
+---
+- name: Verify the private Homepage dashboard
+  hosts: services
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  tasks:
+    - ansible.builtin.include_role:
+        name: homepage
+        tasks_from: verify

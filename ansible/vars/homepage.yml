@@ -1,0 +1,13 @@
+---
+# Shared Homepage/Caddy contract. No secret values belong in this file.
+homepage_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+homepage_hostname: "dashboard.home.{{ homepage_domain }}"
+homepage_proxy_network: homelab-homepage
+homepage_proxy_subnet: 172.30.90.0/29
+homepage_proxy_caddy_ip: 172.30.90.2
+homepage_proxy_app_ip: 172.30.90.3
+homepage_uid: '10001'
+homepage_password_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-dashboard-password"
+homepage_session_secret_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-session-secret"
+homepage_adguard_password_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-adguard-password"
+homepage_gitea_token_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-gitea-token"

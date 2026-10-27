@@ -1,0 +1,23 @@
+---
+- name: Install the read-only Homepage acceptance checks
+  ansible.builtin.copy:
+    src: verify.py
+    dest: "{{ homepage_compose_dir }}/verify.py"
+    owner: root
+    group: root
+    mode: '0700'
+- name: Verify authenticated widgets and denied control paths without logging credentials
+  ansible.builtin.command:
+    argv: [python3, "{{ homepage_compose_dir }}/verify.py"]
+    stdin: "{{ {'domain': homepage_domain, 'password': lookup('ansible.builtin.file', homepage_password_file) | trim} | to_json }}"
+  register: homepage_verified
+  no_log: true
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+- name: Require the private dashboard checks to pass
+  ansible.builtin.assert:
+    that: homepage_verified.rc == 0
+    fail_msg: "{{ homepage_verified.stderr | default('Homepage verification did not run') }}"
+    success_msg: "{{ homepage_verified.stdout }}"
+  when: not ansible_check_mode
