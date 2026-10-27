@@ -172,7 +172,7 @@ tasks:
         ansible/playbooks/adguard.yml
 
   adguard:verify:
-    desc: Compare old and new DNS answers without changing any client settings
+    desc: Verify private names, filtering, and public DNS on the new AdGuard resolver
     deps: ["adguard:domain"]
     cmds:
       - bash taskfiles/scripts/app/adguard-verify.sh

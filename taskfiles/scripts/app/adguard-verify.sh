@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-old=192.168.1.9
-new=192.168.1.100
+resolver=192.168.1.100
 domain="${HOMELAB_DOMAIN:?Set HOMELAB_DOMAIN}"
 
 answer() {
@@ -18,18 +17,15 @@ assert_equal() {
   printf 'PASS %s → %s\n' "$name" "$actual"
 }
 
-assert_equal 'old blocked domain' '0.0.0.0' "$(answer "$old" doubleclick.net)"
-assert_equal 'new blocked domain' '0.0.0.0' "$(answer "$new" doubleclick.net)"
-assert_equal 'old router rewrite' '192.168.1.254' "$(answer "$old" router.home.net)"
-assert_equal 'new router rewrite' '192.168.1.254' "$(answer "$new" router.home.net)"
-assert_equal 'new AdGuard rewrite' "$new" "$(answer "$new" adguard.home.net)"
-assert_equal 'private Gitea rewrite' '192.168.1.101' "$(answer "$new" "gitea.home.$domain")"
-assert_equal 'private AdGuard HTTPS rewrite' '192.168.1.101' "$(answer "$new" "adguard.home.$domain")"
+assert_equal 'blocked domain' '0.0.0.0' "$(answer "$resolver" doubleclick.net)"
+assert_equal 'private Gitea rewrite' '192.168.1.101' "$(answer "$resolver" "gitea.home.$domain")"
+assert_equal 'private AdGuard HTTPS rewrite' '192.168.1.101' "$(answer "$resolver" "adguard.home.$domain")"
+assert_equal 'private Hermes rewrite' '192.168.1.101' "$(answer "$resolver" "hermes.home.$domain")"
+assert_equal 'private Inkling rewrite' '192.168.1.101' "$(answer "$resolver" "inkling.home.$domain")"
 
-public_old="$(answer "$old" example.org)"
-public_new="$(answer "$new" example.org)"
-[[ -n "$public_old" && -n "$public_new" ]] || {
-  echo 'FAIL public DNS did not resolve on both resolvers' >&2
+public_answer="$(answer "$resolver" example.org)"
+[[ -n "$public_answer" ]] || {
+  echo 'FAIL public DNS did not resolve on the new resolver' >&2
   exit 1
 }
-printf 'PASS public DNS answered on both resolvers\n'
+printf 'PASS public DNS answered on the new resolver\n'

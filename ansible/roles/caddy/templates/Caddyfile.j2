@@ -26,6 +26,11 @@
 		reverse_proxy {{ caddy_hermes_upstream }}
 	}
 
+	@inkling host {{ caddy_inkling_hostname }}
+	handle @inkling {
+		reverse_proxy {{ caddy_inkling_upstream }}
+	}
+
 	handle {
 		respond "Unknown private service" 404
 	}

@@ -47,10 +47,23 @@ class RewriteConvergenceTests(unittest.TestCase):
         self.assertEqual(MODULE.reconcile_rewrites(api, desired), 0)
         self.assertEqual(len(api.writes), 1)
 
+    def test_removed_legacy_aliases_change_once(self):
+        desired = [{"domain": "gitea.home.example", "answer": "192.168.1.101"}]
+        old = [
+            {"domain": "adguard.home.net", "answer": "192.168.1.100"},
+            {"domain": "router.home.net", "answer": "192.168.1.254"},
+        ]
+        api = FakeAPI([*old, *desired])
+
+        self.assertEqual(MODULE.reconcile_rewrites(api, desired), 2)
+        self.assertEqual(api.rewrites, desired)
+        self.assertEqual(MODULE.reconcile_rewrites(api, desired), 0)
+        self.assertEqual(len(api.writes), 2)
+
     def test_changed_answer_and_disabled_rewrites_converge_once(self):
-        desired = [{"domain": "adguard.home.net", "answer": "192.168.1.100"}]
+        desired = [{"domain": "gitea.home.example", "answer": "192.168.1.101"}]
         api = FakeAPI(
-            [{"domain": "adguard.home.net", "answer": "192.168.1.9"}],
+            [{"domain": "gitea.home.example", "answer": "192.168.1.9"}],
             enabled=False,
         )
 

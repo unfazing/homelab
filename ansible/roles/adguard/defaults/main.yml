@@ -53,15 +53,13 @@ adguard_policy:
       url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_5.txt
       enabled: true
   rewrites:
-    - domain: adguard.home.net
-      answer: "{{ adguard_dns_address }}"
     - domain: "adguard.home.{{ adguard_domain }}"
       answer: "{{ adguard_proxy_address }}"
-    - domain: router.home.net
-      answer: 192.168.1.254
     - domain: "gitea.home.{{ adguard_domain }}"
       answer: "{{ adguard_gitea_address }}"
     - domain: "hermes.home.{{ adguard_domain }}"
+      answer: "{{ adguard_proxy_address }}"
+    - domain: "inkling.home.{{ adguard_domain }}"
       answer: "{{ adguard_proxy_address }}"
   querylog:
     enabled: true
