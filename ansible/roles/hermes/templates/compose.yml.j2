@@ -6,6 +6,8 @@ services:
     container_name: hermes
     command: ["gateway", "run"]
     restart: unless-stopped
+    dns:
+      - "{{ hermes_dns_address }}"
     ports:
       - "{{ hermes_dashboard_address }}:{{ hermes_dashboard_port }}:9119/tcp"
     environment:

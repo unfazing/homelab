@@ -96,7 +96,7 @@
         <a href="deployment-guide.html">Deployment guide</a>
       </nav>
       <h1>Homelab Implementation</h1>
-      <p class="meta">Executable specification · Planning · Updated 18 September 2026</p>
+      <p class="meta">Executable specification · Updated 27 October 2026</p>
       <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
     </header>
 
@@ -187,7 +187,7 @@
             <tr><td>Terraform deployment</td><td><span class="status complete">Three VMs and seven mappings applied</span></td><td>Add the isolated runner later</td></tr>
             <tr><td>Ansible hand-off</td><td><span class="status complete">Gitea, AdGuard, Caddy, and Hermes converged</span></td><td>Choose a model provider and restricted Git identity; plan n8n on services; add the runner only after isolation review</td></tr>
             <tr><td>AdGuard migration</td><td><span class="status open">Parallel resolver verified; cutover pending</span></td><td>DNS parity passed at .100; change client DNS only after a single-client trial and explicit router/VPN cutover</td></tr>
-            <tr><td>Internal TLS</td><td><span class="status complete">Caddy production certificate live</span></td><td>Configure private DNS, migrate Gitea's advertised URL, and observe or rehearse renewal</td></tr>
+            <tr><td>Internal TLS</td><td><span class="status complete">Caddy production certificate and Gitea HTTPS URL live</span></td><td>Cut router/VPN clients over to private DNS and observe or rehearse renewal</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
           </tbody>
         </table>
@@ -474,7 +474,7 @@
         <dt>Host</dt><dd><code>lab-services-01</code> · <code>192.168.1.101</code></dd>
         <dt>Runtime</dt><dd>Docker CE <code>29.9.2</code> (Go <code>1.26.10</code>), containerd <code>2.4.2-3</code>, Buildx <code>0.38.1</code> and Compose <code>5.6.1</code>, held at reviewed versions on all three VMs</dd>
         <dt>Image</dt><dd>Gitea <code>28.2.0</code> security build: checksum-pinned upstream source, official embedded web assets, Go <code>1.27.3</code>, updated Alpine trust. Ansible builds and checks the image before replacing the running container; schema changes require a consistent application-data backup. AdGuard follows the same build pattern at <code>0.107.79</code>, reusing its official frontend archive.</dd>
-        <dt>Endpoints</dt><dd>HTTP <code>192.168.1.101:3000</code> · Git SSH <code>192.168.1.101:2222</code></dd>
+        <dt>Endpoints</dt><dd>Caddy HTTPS <code>gitea.home.&lt;domain&gt;</code> · loopback HTTP <code>127.0.0.1:3000</code> · Git SSH <code>192.168.1.101:2222</code></dd>
         <dt>State</dt><dd>SQLite WAL plus repositories, LFS, packages, configuration, and keys under <code>/srv/homelab/gitea</code></dd>
         <dt>Bootstrap</dt><dd>Administrator <code>homelab-admin</code> / <code>admin@gmail.com</code>; first-login password replacement is complete and the ignored generated bootstrap password is intentionally stale. SMTP is not configured, so the email cannot yet receive password recovery.</dd>
       </dl>
@@ -597,7 +597,7 @@
           <li><span class="status complete">Passed</span> The image is digest-pinned and Docker packages are exact-version pinned and held.</li>
           <li><span class="status complete">Passed</span> Gitea is healthy, registration and Actions are disabled, and a second convergence reported zero changes.</li>
           <li><span class="status complete">Passed</span> Gitea data is owned by UID/GID 1000 on the <code>homelab-gitea</code> VirtioFS mount, never the root disk.</li>
-          <li><span class="status complete">Passed</span> HTTP and Git SSH listen only on <code>192.168.1.101:3000</code> and <code>192.168.1.101:2222</code>.</li>
+          <li><span class="status complete">Passed</span> Direct HTTP listens only on <code>127.0.0.1:3000</code>; a LAN connection to <code>192.168.1.101:3000</code> failed, while Caddy HTTPS and local health returned 200. Git SSH remains at <code>192.168.1.101:2222</code>.</li>
         </ul>
 
         <h3>Operator follow-up</h3>
@@ -777,16 +777,28 @@
     <section id="hermes-panel" role="tabpanel" aria-labelledby="hermes-tab" hidden>
       <h2>Hermes Agent plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">Dashboard foundation live</span> Provider and Git authority remain open</dd>
+        <dt>Status</dt><dd><span class="status complete">Dashboard, Git identity, and repository transfer live</span></dd>
         <dt>Host</dt><dd><code>lab-agents-01</code> · <code>192.168.1.102</code></dd>
-        <dt>Model provider</dt><dd><span class="status open">Open</span> Compare cost, authentication, data handling, and usable models before selecting Nous Portal, OpenRouter, OpenAI, or another endpoint</dd>
+        <dt>Model provider</dt><dd>Codex, configured manually by the operator; exact model, billing limits, and credential recovery are not recorded</dd>
         <dt>Runtime</dt><dd>Ansible builds a security overlay on digest-pinned Hermes <code>v0.22.5</code>: Node <code>26.12.1</code>, checksum-pinned <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code>, updated OS trust. Build validation uses no private data mounts; existing configuration is never overwritten. No externally published agent API.</dd>
         <dt>Management boundary</dt><dd>The Hermes playbook reapplies the <code>security-boundary</code> role before Docker starts. It blocks new agent-to-management connections while permitting established replies for inbound administration. Rules replace only their own nftables table; complete VLAN and IPv6 policies remain planned.</dd>
         <dt>Durable mount</dt><dd>Existing <code>homelab-hermes</code> VirtioFS mapping at <code>/srv/homelab/hermes</code>, mounted into the container at <code>/opt/data</code>; SQLite DELETE journaling</dd>
         <dt>Dashboard</dt><dd>Built-in password gate behind Caddy at <code>https://hermes.home.&lt;domain&gt;</code>; Caddy-only backend firewall, private DNS rewrite, and generated ignored bootstrap login</dd>
-        <dt>Gitea access</dt><dd>Dedicated non-administrator identity; Git over SSH first, limited to selected sandbox repositories</dd>
-        <dt>Deployment authority</dt><dd>None; Hermes creates branches and commits, including proposed n8n workflow definitions, but cannot bypass protected branches, publish workflows, alter Actions secrets, or invoke homelab deployment</dd>
+        <dt>Gitea access</dt><dd>Restricted non-administrator <code>lab-agent</code> (<code>lab-agent@home.&lt;domain&gt;</code>) uses a durable SSH key for Git and a scoped API token for issues and pull requests; it can create up to 10 private personal repos and has manually granted team access to <code>lab-agents-org/colouring-book-v1</code></dd>
+        <dt>Telegram gate</dt><dd>Explicit VPN-only remote-control exception: one owner Telegram ID via outbound gateway traffic, with no allow-all, group grants, or other paired identities before Git provisioning</dd>
+        <dt>Deployment authority</dt><dd>None; direct <code>main</code> push is accepted for agent-owned repos, but Hermes cannot publish n8n workflows, alter Actions secrets, or invoke homelab deployment</dd>
       </dl>
+
+      <h3>Effective Gitea permissions and provisioning</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Permission</th><th>Grant mechanism</th><th>Boundary</th></tr></thead>
+        <tbody>
+          <tr><td>Authenticate and push over Git SSH</td><td><code>hermes-git</code> Ansible role generates a mode-<code>0600</code> Ed25519 key on the durable agents mount; <code>gitea-agent</code> registers its public half using a temporary administrator token that it revokes</td><td>Git clone, branch pushes, and user-only push-to-create; no administrator credential on Hermes</td></tr>
+          <tr><td>Create issues and pull requests</td><td><code>gitea-agent</code> issues one <code>write:issue</code> + <code>write:repository</code> token; Ansible installs it as <code>/srv/homelab/hermes/secrets/gitea-api-token</code>, owner UID/GID <code>10000</code>, mode <code>0600</code>. An agent-visible Python helper and local Hermes skill use private HTTPS.</td><td>Token is absent from Git, arguments, and Ansible logs; route scopes are not repository-specific. No Actions/admin scope. A missing token file requires explicit revocation and rotation, not silent duplication.</td></tr>
+          <tr><td>Create and push personal repositories</td><td><code>gitea-agent</code> sets <code>max_repo_creation=10</code>; Gitea Compose enables user SSH push-to-create and <code>FORCE_PRIVATE</code></td><td>Only <code>lab-agent/</code>; organization push-to-create is off; new <code>main</code> branches accept direct pushes</td></tr>
+          <tr><td>Write <code>colouring-book-v1</code> after transfer</td><td>The operator created private <code>lab-agents-org</code> and its <code>Agents</code> team; the repository was transferred and assigned to that team through Gitea's API, not Ansible</td><td>Write: code, issues, pulls, releases, wiki, projects, packages. Read: external issues/wiki. Actions: none. No org ownership/admin, org-repo creation, or access to all org repos. Gitea's aggregate <code>permission=none</code> reflects custom per-feature grants.</td></tr>
+        </tbody>
+      </table></div>
 
       <h3>State layout</h3>
       <div class="table-wrap">
@@ -794,23 +806,38 @@
           <thead><tr><th>Path</th><th>Purpose</th><th>Recovery expectation</th></tr></thead>
           <tbody>
             <tr><td><code>/srv/homelab/hermes/config.yaml</code></td><td>Dashboard auth hash, signing secret, and SQLite journal policy</td><td>Mode <code>0600</code>, container UID <code>10000</code>; no plaintext login password</td></tr>
-            <tr><td><code>/srv/homelab/hermes/</code></td><td>Hermes sessions, memory, skills, and later provider configuration</td><td>Durable single <code>/opt/data</code> volume; SQLite DELETE journal on VirtioFS</td></tr>
+            <tr><td><code>/srv/homelab/hermes/</code></td><td>Hermes sessions, memory, skills, and operator-managed Codex/Telegram settings</td><td>Durable single <code>/opt/data</code> volume; SQLite DELETE journal on VirtioFS</td></tr>
+            <tr><td><code>/srv/homelab/hermes/.ssh</code></td><td>Agent's Git key, pinned Gitea host key, and SSH alias</td><td>Private key stays on the agents dataset with mode <code>0600</code>; only public key is registered in Gitea</td></tr>
+            <tr><td><code>/srv/homelab/hermes/secrets/gitea-api-token</code></td><td>Agent's issue/PR HTTP API credential</td><td>Durable UID/GID <code>10000</code>, mode <code>0600</code>; explicit rotation needed if the file or dataset is lost</td></tr>
+            <tr><td><code>/srv/homelab/hermes/tools/homelab-gitea.py</code> and <code>skills/software-development/homelab-gitea/</code></td><td>Issue/PR commands and Hermes's usage guide</td><td>Ansible-reconcilable code; no token embedded</td></tr>
             <tr><td><code>/srv/homelab/hermes/workspaces</code></td><td>Repository clones and generated artifacts</td><td>Cache only; accepted code must exist in Gitea</td></tr>
           </tbody>
         </table>
       </div>
 
+      <h3>Agent Gitea workflow</h3>
+      <p>Hermes pushes feature branches over Git SSH, then uses the installed helper for HTTP-only operations. Add <code>--body-file path</code> for a description. The helper reads its token internally; never paste it into prompts or arguments.</p>
+      <pre><code>git push -u origin HEAD
+python3 /opt/data/tools/homelab-gitea.py repo lab-agents-org/colouring-book-v1
+python3 /opt/data/tools/homelab-gitea.py issue-create lab-agents-org/colouring-book-v1 --title "..."
+python3 /opt/data/tools/homelab-gitea.py pr-create lab-agents-org/colouring-book-v1 --head feature/name --base main --title "..."</code></pre>
+
       <h3>Implementation sequence</h3>
       <ol class="compact">
         <li><span class="status complete">Foundation</span> <code>task apps:hermes:deploy</code> installed Docker on agents, verified VirtioFS, and started the digest-pinned image. Production Caddy and AdGuard deployments added the HTTPS route and private DNS rewrite. The existing router DNS and old <code>.9</code> resolver were not cut over.</li>
         <li><span class="status complete">Runtime</span> Use the reviewed <code>v0.22.5</code> security overlay with runtime UID <code>10000</code>, durable <code>/opt/data</code>, the dashboard gate and SQLite DELETE journaling. Deployment validates the patched image before replacing the running container.</li>
-        <li><span class="status planned">Decide</span> Select the model provider and define a monthly budget, credential type, and permitted outbound endpoints before first chat.</li>
-        <li><span class="status planned">Identity</span> Create a non-administrator Gitea user for Hermes, generate its Git SSH key on the agent VM, and grant only selected sandbox-repository access.</li>
+        <li><span class="status complete">Operator setup</span> Codex provider and Telegram integration were configured manually. The live environment has one Telegram allowed-user entry and no allow-all flags or pairing files; the preflight will recheck these before every Git grant. Confirm the ID belongs to the owner; model/budget details remain to be recorded.</li>
+        <li><span class="status complete">Original identity</span> <code>task apps:hermes:git:deploy</code> created the durable SSH key and restricted account, then verified the original administrator-owned sandbox and protected <code>main</code>. That repository policy is superseded; the SSH key remains in use.</li>
+        <li><span class="status complete">Creation authority</span> Gitea Compose enables user-only SSH push-to-create and forces private repositories; idempotent Ansible reconciliation sets <code>lab-agent</code>'s quota to 10. New personal repos have writable <code>main</code> by default.</li>
+        <li><span class="status complete">Issue and PR access</span> Gitea HTTP moved to host loopback and now advertises Caddy HTTPS. Hermes Compose uses AdGuard <code>192.168.1.100</code> for private DNS. The scoped agent token was issued once and installed on the durable mount; the helper read <code>lab-agents-org/colouring-book-v1</code> over HTTPS with issues and pulls enabled and <code>pull=true</code>, <code>push=true</code>. A new-branch Git push dry-run passed, and Hermes lists the local skill. No test branch, issue, or PR was created. A second <code>task apps:hermes:git:deploy</code> changed nothing.</li>
         <li><span class="status complete">Secrets</span> The dashboard bootstrap helper generated a mode-<code>0600</code> ignored controller file; only its scrypt hash and a signing secret reached the guest config. Add the eventual provider credential separately, without Terraform state, command arguments, or Ansible output.</li>
         <li><span class="status complete">Initial verification</span> HTTPS returned the dashboard login redirect; unauthenticated status reported <code>auth_required=true</code> with the basic provider; direct LAN access to <code>.102:9119</code> timed out. The mounted <code>homelab-hermes</code> filesystem is VirtioFS and <code>state.db</code> uses DELETE journaling. Post-deployment guest memory was 2.5 GiB total, 1.4 GiB available, with the Hermes container using about 531 MiB of its 1.75 GiB limit. Proxmox assigns 3 GiB with ballooning off; Ubuntu reserves 320 MiB for the crash kernel and reports less usable memory.</li>
         <li><span class="status complete">Persistence verification</span> A repeat Ansible convergence changed nothing. After a container restart, the dashboard returned to healthy status with basic authentication still required, and the existing SQLite database retained DELETE journaling. A full VM-recreation test is deferred until Git identity and recovery design are in place.</li>
-        <li><span class="status planned">Exercise</span> Have Hermes clone a sandbox repository over SSH, push a feature branch, and preserve its memory across container and VM restarts.</li>
-        <li><span class="status planned">Review</span> Create pull requests manually until Hermes' Gitea identity, repository permissions, and the still-reachable direct Gitea HTTP endpoint are reviewed; private HTTPS is already live.</li>
+        <li><span class="status complete">Earlier Git proof</span> The Hermes container cloned the old sandbox, pushed an empty test commit to a feature branch, and was rejected by its protected <code>main</code>. This only describes the superseded policy.</li>
+        <li><span class="status complete">New Git proof</span> The Hermes container created a private <code>lab-agent/</code> repository over SSH and pushed twice to <code>main</code>. The temporary repository and clean clone were removed. The old <code>homelab-admin/agent-sandbox</code> and its clean clone were deleted after checking their test-only history.</li>
+        <li><span class="status complete">Organization transfer</span> The operator created private <code>lab-agents-org</code> and its <code>Agents</code> team. A one-time Gitea API transfer moved <code>colouring-book-v1</code> from <code>lab-agent/</code> to that organization and assigned the team. Repository ID <code>3</code>, privacy, <code>main</code> commit <code>7e2f011</code>, and history were preserved. The clean Hermes checkout now uses the organization SSH URL; fetch and a dry-run push of a new branch passed. A second identity-only Ansible run changed nothing. Future repository and team changes are manual in Gitea, not Ansible-managed.</li>
+        <li><span class="status planned">Recovery proof</span> Verify the operator-configured Codex/Telegram state, Git key, and memory survive VM recreation; only container-restart persistence has been tested so far.</li>
+        <li><span class="status planned">Review</span> Hermes can now propose pull requests, but agent-owned <code>main</code> still accepts direct pushes. Decide whether to protect selected branches before adding CI or deployment hooks.</li>
         <li><span class="status planned">Automation</span> After n8n is deployed, expose only approved execution tools to Hermes and keep n8n administration unavailable.</li>
       </ol>
 
@@ -818,7 +845,9 @@
       <ul class="compact">
         <li>The container receives no host Docker socket, Proxmox credential, router credential, infrastructure-repository write, or protected-branch bypass.</li>
         <li>The provider credential is absent from Git, Terraform state, Compose output, process arguments, and Ansible logs.</li>
-        <li>Hermes can write only approved sandbox and workflow-definition repositories and cannot administer Gitea or n8n, publish workflows, or read Actions secrets.</li>
+        <li>Hermes can own at most 10 private repositories under <code>lab-agent/</code>, push their <code>main</code> branches, and write the explicitly shared organization repository; it cannot own the organization, create its repositories, administer Gitea, access the homelab infrastructure repository, publish n8n workflows, or read Actions secrets.</li>
+        <li>The Telegram preflight rejects extra allowed users, global/group allowlists, allow-all modes, and paired identities before granting Git access; one numeric ID alone does not prove ownership, so confirm it in Telegram.</li>
+        <li>Push-to-create works over SSH; issues and pull requests use the separate scoped token over Caddy HTTPS. Gitea globally forces private visibility, organization push-to-create stays off, and the temporary administrator token used for account reconciliation is revoked.</li>
         <li>State, skills, and sessions survive container and VM recreation; cloned code is recoverable from Gitea.</li>
         <li>A second Ansible convergence reports no changes.</li>
         <li>The web dashboard is reachable only through private HTTPS and requires its own login; no unauthenticated or public dashboard/API port exists.</li>
@@ -841,7 +870,7 @@
         <table>
           <thead><tr><th>Actor</th><th>May do</th><th>Must not do</th></tr></thead>
           <tbody>
-            <tr><td>Hermes</td><td>Create code and push feature branches in selected repositories</td><td>Merge protected branches, modify pipeline secrets, or deploy</td></tr>
+            <tr><td>Hermes</td><td>Create private personal repositories and push their <code>main</code>; propose changes to separately protected deployment repositories</td><td>Modify pipeline secrets or deploy</td></tr>
             <tr><td>Gitea Runner</td><td>Execute repository-controlled test, lint, and build jobs</td><td>Reach Proxmox/router management, mount application data, or hold administrator SSH keys</td></tr>
             <tr><td>Human operator</td><td>Review, merge, and invoke Task/Ansible deployment</td><td>Delegate final approval to agent-authored workflow code during the initial phase</td></tr>
           </tbody>
@@ -867,7 +896,7 @@
         <li>The runner VM has no ZFS application mapping and cannot reach Proxmox, router management, or unrelated application ports.</li>
         <li>A workflow cannot inspect other jobs, Gitea data, Hermes state, or an application host's Docker daemon.</li>
         <li>Repository-controlled jobs receive no deployment, administrator SSH, Terraform, or Proxmox credentials.</li>
-        <li>An agent-authored change cannot reach a protected branch or deployment without human action.</li>
+        <li>Agent-owned repositories can receive direct <code>main</code> pushes. Reviewed deployment repositories and any future runner execution remain separately gated; no agent-authored change deploys without human action.</li>
         <li>Recreating the runner VM requires re-registration but loses no authoritative application data.</li>
       </ul>
     </section>

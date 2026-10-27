@@ -70,6 +70,7 @@ tasks:
           ansible/playbooks/adguard.yml \
           ansible/playbooks/adguard-rotate-password.yml \
           ansible/playbooks/hermes.yml \
+          ansible/playbooks/hermes-git.yml \
           ansible/roles/adguard/defaults/main.yml \
           ansible/roles/adguard/tasks/main.yml \
           ansible/roles/adguard/files/reconcile.py \
@@ -89,6 +90,16 @@ tasks:
           ansible/roles/hermes/templates/dashboard-backend.nft.j2 \
           ansible/roles/hermes/templates/homelab-hermes-dashboard-firewall.service.j2 \
           ansible/roles/hermes/templates/docker-firewall-dependency.conf.j2 \
+          ansible/roles/hermes-git/defaults/main.yml \
+          ansible/roles/hermes-git/tasks/main.yml \
+          ansible/roles/hermes-git/files/verify-telegram-gate.py \
+          ansible/roles/hermes-git/templates/ssh-config.j2 \
+          ansible/roles/hermes-git/templates/gitconfig.j2 \
+          ansible/roles/hermes-git/templates/homelab-gitea.py.j2 \
+          ansible/roles/hermes-git/templates/gitea-skill.md.j2 \
+          ansible/roles/gitea-agent/defaults/main.yml \
+          ansible/roles/gitea-agent/tasks/main.yml \
+          ansible/roles/gitea-agent/files/reconcile-agent-identity.py \
           ansible/roles/caddy/tasks/main.yml \
           ansible/roles/caddy/templates/Dockerfile.j2 \
           ansible/roles/caddy/templates/Caddyfile.j2 \

@@ -1,0 +1,108 @@
+---
+- name: Read Gitea's existing SSH host identity
+  hosts: services
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the durable Gitea SSH host public key
+      ansible.builtin.slurp:
+        src: /srv/homelab/gitea/ssh/ssh_host_ed25519_key.pub
+      register: gitea_ssh_host_key_file
+
+    - name: Make the verified host key available to the agents play
+      ansible.builtin.set_fact:
+        gitea_ssh_host_key: "{{ (gitea_ssh_host_key_file.content | b64decode).split()[:2] | join(' ') }}"
+
+- name: Create Hermes's durable Git SSH identity
+  hosts: agents
+  become: true
+  gather_facts: false
+  roles:
+    - hermes-git
+
+- name: Reconcile the agent's bounded Gitea identity
+  hosts: services
+  become: true
+  gather_facts: false
+  vars:
+    gitea_agent_public_key: "{{ hostvars[groups['agents'][0]].hermes_git_public_key }}"
+  roles:
+    - gitea-agent
+
+- name: Prove the Hermes container authenticates as the intended account
+  hosts: agents
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Install a newly issued API credential only on its first grant
+      ansible.builtin.copy:
+        content: "{{ (hostvars[groups['services'][0]].gitea_agent_reconcile.stdout | from_json).api_token }}\n"
+        dest: /srv/homelab/hermes/secrets/gitea-api-token
+        owner: '10000'
+        group: '10000'
+        mode: '0600'
+      no_log: true
+      when:
+        - not ansible_check_mode
+        - (hostvars[groups['services'][0]].gitea_agent_reconcile.stdout | from_json).api_token is not none
+
+    - name: Require the durable API credential to exist with restricted permissions
+      ansible.builtin.stat:
+        path: /srv/homelab/hermes/secrets/gitea-api-token
+      register: hermes_gitea_token_installed
+      when: not ansible_check_mode
+
+    - name: Refuse an unrecoverable or insecure API credential
+      ansible.builtin.assert:
+        that:
+          - hermes_gitea_token_installed.stat.exists
+          - hermes_gitea_token_installed.stat.uid == 10000
+          - hermes_gitea_token_installed.stat.gid == 10000
+          - hermes_gitea_token_installed.stat.mode == '0600'
+        fail_msg: The scoped Gitea token is absent or insecure; do not issue a duplicate. Investigate or explicitly rotate it.
+        quiet: true
+      when: not ansible_check_mode
+
+    - name: Verify the scoped token can read the assigned repository over HTTPS
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - --user
+          - hermes
+          - hermes
+          - python3
+          - /opt/data/tools/homelab-gitea.py
+          - repo
+          - lab-agents-org/colouring-book-v1
+      register: hermes_gitea_repository
+      changed_when: false
+      failed_when: >-
+        hermes_gitea_repository.rc != 0
+        or (hermes_gitea_repository.stdout | from_json).full_name != 'lab-agents-org/colouring-book-v1'
+        or (hermes_gitea_repository.stdout | from_json).html_url != 'https://gitea.home.' ~ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') ~ '/lab-agents-org/colouring-book-v1'
+        or not (hermes_gitea_repository.stdout | from_json).has_issues
+        or not (hermes_gitea_repository.stdout | from_json).has_pull_requests
+        or not (hermes_gitea_repository.stdout | from_json).permissions.pull
+        or not (hermes_gitea_repository.stdout | from_json).permissions.push
+      when: not ansible_check_mode
+
+    - name: Authenticate to Gitea using the agent's SSH identity
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - --user
+          - hermes
+          - -e
+          - HOME=/opt/data
+          - hermes
+          - ssh
+          - -T
+          - gitea-homelab
+      register: hermes_gitea_ssh_auth
+      changed_when: false
+      failed_when: >-
+        hermes_gitea_ssh_auth.rc != 0
+        or 'Hi there, lab-agent!' not in (hermes_gitea_ssh_auth.stdout + hermes_gitea_ssh_auth.stderr)
+      when: not ansible_check_mode

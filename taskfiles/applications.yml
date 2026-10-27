@@ -108,7 +108,7 @@ tasks:
 
   gitea:check:
     desc: Preview the pinned Docker and Gitea deployment
-    deps: [":config:inventory", "gitea:secret"]
+    deps: [":config:inventory", "adguard:domain", "gitea:secret"]
     cmds:
       - mkdir -p "{{.LOCAL_TEMP}}"
       - >-
@@ -118,7 +118,7 @@ tasks:
 
   gitea:deploy:
     desc: Install pinned Docker CE and deploy Gitea on lab-services-01
-    deps: [":config:inventory", "gitea:secret"]
+    deps: [":config:inventory", "adguard:domain", "gitea:secret"]
     cmds:
       - mkdir -p "{{.LOCAL_TEMP}}"
       - >-
@@ -237,3 +237,17 @@ tasks:
       - |
         jq -r '"Username: \(.username)\nPassword: \(.password)"' .generated/secrets/hermes-dashboard.json
         printf 'HTTPS: https://hermes.home.%s/ (client DNS must use 192.168.1.100)\n' "$HOMELAB_DOMAIN"
+
+  hermes:git:check:
+    desc: Preview Hermes Git identity, scoped Gitea API, and private DNS
+    deps: [":config:inventory", "adguard:domain"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - ansible-playbook --check --diff -i "{{.INVENTORY}}" ansible/playbooks/hermes-git.yml
+
+  hermes:git:deploy:
+    desc: Enable Hermes Git SSH plus scoped Gitea issue and pull-request access
+    deps: [":config:inventory", "adguard:domain"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - ansible-playbook --diff -i "{{.INVENTORY}}" ansible/playbooks/hermes-git.yml

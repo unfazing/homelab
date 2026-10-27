@@ -1,0 +1,30 @@
+---
+- name: Verify the requested account and bounded repository quota
+  ansible.builtin.assert:
+    that:
+      - gitea_agent_username == 'lab-agent'
+      - gitea_agent_admin_username == 'homelab-admin'
+      - gitea_agent_repo_limit | int > 0
+      - gitea_agent_public_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+ .+$')
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Install the Gitea-side reconciliation helper
+  ansible.builtin.copy:
+    src: reconcile-agent-identity.py
+    dest: "{{ gitea_agent_compose_dir }}/reconcile-agent-identity.py"
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Reconcile the restricted account, SSH key, and creation quota
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ gitea_agent_compose_dir }}/reconcile-agent-identity.py"
+    stdin: "{{ {'username': gitea_agent_username, 'email': gitea_agent_email, 'admin_username': gitea_agent_admin_username, 'repo_limit': gitea_agent_repo_limit, 'key_title': gitea_agent_key_title, 'public_key': gitea_agent_public_key, 'compose_dir': gitea_agent_compose_dir, 'api_address': gitea_agent_api_address} | to_json }}"
+    stdin_add_newline: false
+  register: gitea_agent_reconcile
+  changed_when: (gitea_agent_reconcile.stdout | from_json).changed
+  no_log: true
+  when: not ansible_check_mode

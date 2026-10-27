@@ -195,7 +195,7 @@
         <a href="deployment-guide.html">Deployment guide</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Updated 25 October 2026</p>
+      <p class="meta">Canonical design · Updated 27 October 2026</p>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
@@ -696,6 +696,7 @@
           <h3>Decisions</h3>
           <ul class="compact">
             <li><span class="status accepted">D-016 Accepted</span> Forward exactly one public UDP port from the router to WireGuard on <code>lab-access-01</code>.</li>
+            <li><span class="status accepted">D-073 Accepted</span> Telegram is a deliberate exception to VPN-only remote control of Hermes, not another home port-forward. Hermes connects outward to Telegram; only the owner's single numeric Telegram user ID may issue commands. Deny broad gateway/group grants and extra paired identities before granting agent Git write access. Telegram delivery and account security are additional trust dependencies.</li>
             <li><span class="status accepted">Accepted</span> WAN IPv4 matches the externally observed address; the port-forward design has worked previously.</li>
             <li><span class="status deferred">Superseded</span> The existing Namecheap DDNS script will be retired when Cloudflare becomes authoritative DNS.</li>
             <li><span class="status accepted">D-020 Accepted</span> Maintain separate full-tunnel travel and DNS-only WireGuard client profiles.</li>
@@ -957,12 +958,12 @@
             <dt>Container boundary</dt><dd>Read-only root filesystem, dropped capabilities except <code>NET_BIND_SERVICE</code>, no Docker socket, no admin API, and a shared <code>homelab-proxy</code> network containing only Caddy and explicitly attached backends. A checksum label makes route-file changes recreate the container.</dd>
             <dt>AdGuard route</dt><dd><code>adguard.home.&lt;domain&gt;</code> uses the existing production wildcard certificate and proxies to the access VM; the private DNS answer is Caddy's <code>192.168.1.101</code>. There is no client allowlist, and AdGuard retains its own login. The old <code>.9</code> DNS service does not serve this new name.</dd>
           </dl>
-          <p class="callout"><strong>Transition:</strong> Caddy reaches Gitea directly as <code>gitea:3000</code> through the named proxy network while port 3000 remains available on the flat LAN. Gitea's advertised URL and direct HTTP binding change after private DNS is verified. The staging deployment task switches this live proxy to an untrusted staging certificate; use it only before production cutover or during a planned test window.</p>
+          <p class="callout"><strong>Gitea boundary:</strong> Caddy reaches <code>gitea:3000</code> through the named proxy network. The host publishes that HTTP port only on <code>127.0.0.1</code>; clients and Hermes use private HTTPS. The staging deployment task switches this live proxy to an untrusted staging certificate; use it only during a planned test window.</p>
         </section>
 
         <section id="services-gitea-panel" role="tabpanel" aria-labelledby="services-gitea-tab" hidden>
           <h3>Effective Gitea configuration</h3>
-          <p class="callout"><strong>Current-stage exposure:</strong> Gitea is not public, but before the VLAN firewall is implemented any device on <code>192.168.1.0/24</code> can reach its two bound ports. The final network policy must limit access to approved WireGuard clients, trusted management devices, and the agents-to-Gitea rule.</p>
+          <p class="callout"><strong>Current-stage exposure:</strong> Gitea is not public. Direct HTTP is host-loopback-only, while Git SSH on <code>192.168.1.101:2222</code> and Caddy HTTPS remain reachable on the flat LAN. Future VLAN policy must limit them to approved clients and agents.</p>
 
           <dl class="context-list">
             <dt>Host boundary</dt><dd><code>lab-services-01</code>, shared with planned n8n and future Nextcloud and Vaultwarden containers</dd>
@@ -977,7 +978,7 @@
             <table>
               <thead><tr><th>Surface</th><th>Effective value</th><th>Boundary</th></tr></thead>
               <tbody>
-                <tr><td>Web and API</td><td><code>http://192.168.1.101:3000/</code> and HTTPS through Caddy</td><td>Direct HTTP remains bound to the services VM during the transition; Gitea still advertises the HTTP URL until private DNS and URL migration are verified</td></tr>
+                <tr><td>Web and API</td><td><code>https://gitea.home.&lt;domain&gt;/</code> through Caddy</td><td>Gitea advertises HTTPS; host port <code>127.0.0.1:3000</code> is for local health and reconciliation only</td></tr>
                 <tr><td>Git over SSH</td><td><code>192.168.1.101:2222</code> → container port <code>22</code></td><td>Separate from guest administration SSH on port <code>22</code></td></tr>
                 <tr><td>Container health</td><td><code>GET /api/healthz</code> every 15 seconds</td><td>Five-second timeout, 12 retries, 30-second start period</td></tr>
                 <tr><td>Public ingress</td><td>None</td><td>No router forwarding; WireGuard remains the only planned public UDP ingress</td></tr>
@@ -994,6 +995,9 @@
                 <tr><td>Installation</td><td><code>INSTALL_LOCK=true</code></td><td>Disable the web installer after automated configuration</td></tr>
                 <tr><td>Registration</td><td>Disabled</td><td>Only administrators create accounts</td></tr>
                 <tr><td>Default visibility</td><td>Users and repositories default to private</td><td>Avoid accidental LAN-wide discovery</td></tr>
+                <tr><td>Agent repositories</td><td><code>lab-agent</code> (<code>lab-agent@home.&lt;domain&gt;</code>) may create up to 10 private repositories in its own namespace through SSH push-to-create</td><td>Never in <code>homelab-admin</code>; agent-owned <code>main</code> accepts normal pushes. Global force-private prevents public visibility.</td></tr>
+                <tr><td>Shared agent project</td><td>Private <code>lab-agents-org/colouring-book-v1</code>, transferred from <code>lab-agent/</code> with its history intact</td><td><code>homelab-admin</code> owns the organization; <code>lab-agent</code> accesses this repository through the manually configured <code>Agents</code> team.</td></tr>
+                <tr><td>Agent API</td><td>One <code>lab-agent</code> token scoped to <code>write:issue</code> and <code>write:repository</code></td><td>Used by Hermes over Caddy HTTPS for issues and pull requests; no administrator or Actions scope. These API scopes are not repository-specific; the account's grants remain the repository boundary.</td></tr>
                 <tr><td>OpenID</td><td>Sign-in and sign-up disabled</td><td>No unreviewed external identity path</td></tr>
                 <tr><td>Actions</td><td>Disabled now; enable after runner acceptance</td><td>Gitea schedules jobs but never executes them on the services or agents VM</td></tr>
                 <tr><td>Logging</td><td>Gitea logs to container stdout; Docker uses the bounded <code>local</code> log driver</td><td>Prevent unbounded JSON log growth on the VM OS disk</td></tr>
@@ -1020,7 +1024,7 @@
           <h3>Deliberate limits</h3>
           <ul class="compact">
             <li>SQLite is suitable for the initial low-concurrency workload but is the scaling limit; migration to PostgreSQL requires a planned conversion and restore test.</li>
-            <li>TLS, an internal reverse proxy, SMTP, off-host backups, restore automation, upgrades, and removal workflows are not implemented.</li>
+            <li>Private HTTPS through Caddy is live and Gitea advertises it. Router and VPN DNS are not yet cut over; clients must use the new AdGuard resolver to resolve the private name. SMTP, off-host backups, restore automation, upgrades, and removal workflows are not implemented.</li>
             <li>CI jobs never execute on this VM or on <code>lab-agents-01</code>. Planned <code>lab-runner-01</code> receives no application datasets or deployment credentials. <a href="https://docs.gitea.com/runner/">Runner isolation remains an explicit security boundary.</a></li>
           </ul>
         </section>
@@ -1076,15 +1080,26 @@
       <section id="agents-app-panel" role="tabpanel" aria-labelledby="agents-app-tab" hidden>
         <h3>Hermes Agent</h3>
         <dl class="context-list">
-          <dt>Status</dt><dd><span class="status accepted">Provider-neutral dashboard live</span> Model selection remains open</dd>
+          <dt>Status</dt><dd><span class="status accepted">Dashboard and restricted Git live</span> Codex provider and Telegram configured by the operator</dd>
           <dt>Runtime</dt><dd>Ansible-managed Hermes <code>v0.22.5</code> security overlay on a digest-pinned official image: Node <code>26.12.1</code>, <code>brotlicffi 1.2.1.0</code>, <code>certifi 2026.10.23</code>, <code>pip 26.2.2</code> and updated OS trust. Existing provider configuration and durable sessions survive recreation; no publicly published agent API.</dd>
           <dt>Durable state</dt><dd>Existing <code>homelab-hermes</code> VirtioFS dataset mounted at <code>/opt/data</code>; SQLite uses DELETE journaling rather than WAL across the VM boundary</dd>
           <dt>Dashboard</dt><dd><code>https://hermes.home.&lt;domain&gt;</code> through Caddy; built-in username/password authentication is mandatory. The private HTTP backend is restricted to Caddy. No public application ingress.</dd>
-          <dt>Gitea identity</dt><dd>Dedicated non-administrator account with write access only to selected sandbox repositories</dd>
-          <dt>Initial Git path</dt><dd>Git over SSH; no Gitea API token crosses the current plaintext HTTP connection</dd>
-          <dt>Authority</dt><dd>Create branches and commits; protected default branches, infrastructure repositories, Actions secrets, and deployment credentials remain unavailable</dd>
+          <dt>Gitea identity</dt><dd>Dedicated restricted, non-administrator <code>lab-agent</code> account; may own up to 10 private repositories under <code>lab-agent/</code></dd>
+          <dt>Git and API path</dt><dd>Git over SSH for branches and push-to-create; scoped HTTPS API token for issues and pull requests</dd>
+          <dt>Telegram</dt><dd>Outbound integration, restricted to one owner user ID; no broad or group grants and no additional paired identities at Git provisioning time</dd>
+          <dt>Authority</dt><dd>Own private repositories and push directly to their <code>main</code>; no administrator namespace, infrastructure-repository access, Actions secrets, or deployment credentials</dd>
         </dl>
-        <p>Hermes may host future agents, but it never accepts CI jobs or a host Docker socket. The dashboard can change agent settings and read its credentials, so its login is high authority even before a model provider is selected. Outbound HTTPS is limited to the eventual model/tool providers. Code accepted into Gitea remains canonical; workspaces are disposable caches even though the agent's memory, skills, sessions, and credentials are durable.</p>
+        <h3>Effective Git grants</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Grant</th><th>How it is applied</th><th>Limit</th></tr></thead>
+          <tbody>
+            <tr><td>Git authentication</td><td>Ansible creates an Ed25519 key on the durable Hermes mount and registers only its public half on the restricted <code>lab-agent</code> Gitea account</td><td>SSH handles clone, branch pushes, and user-only push-to-create; no web password on Hermes</td></tr>
+            <tr><td>Issue and PR API</td><td>Ansible issues one <code>write:issue</code> + <code>write:repository</code> token and installs it as mode <code>0600</code> in Hermes's durable <code>secrets/</code>; an agent-visible helper reads it without placing it in arguments or Git</td><td>HTTPS through Caddy only; the token cannot be re-read from Gitea if lost and must then be explicitly rotated. The account's team grants, not the token, bound repository access.</td></tr>
+            <tr><td>Personal repositories</td><td>Ansible sets a 10-repository quota; Gitea enables user SSH push-to-create and forces new repositories private</td><td>Own namespace only; organization push-to-create disabled</td></tr>
+            <tr><td>Organization repository</td><td>The operator-created <code>Agents</code> team in <code>lab-agents-org</code> contains <code>lab-agent</code> and is assigned to <code>colouring-book-v1</code> in Gitea</td><td>Write on code, issues, pull requests, releases, wiki, projects, and packages; read on external issues/wiki; no Actions. The team has no org-repo creation or all-repos access. Gitea reports aggregate permission <code>none</code> because these are per-feature grants.</td></tr>
+          </tbody>
+        </table></div>
+        <p>Hermes may host future agents, but it never accepts CI jobs or a host Docker socket. The operator configured Codex as the model provider and Telegram messaging; exact model and spending controls are not yet recorded. The dashboard and Telegram account are high-authority control surfaces. The SSH key and scoped API token remain on the agents dataset, readable by Hermes; compromise of the agent can use both. Ansible manages identity and credentials, not repository ownership, organization membership, or team grants. Direct <code>main</code> pushes remove the review gate for agent-owned code; they do not grant deployment authority while Gitea Actions remains disabled. Workspaces are disposable caches even though the agent's memory, skills, sessions, and credentials are durable.</p>
       </section>
 
       <section id="runner-app-panel" role="tabpanel" aria-labelledby="runner-app-tab" hidden>
@@ -1106,7 +1121,7 @@
         <li>Terraform creates each VM, OS disk, network attachment, and data attachment.</li>
         <li>Ansible installs and configures applications.</li>
         <li>Application data is restored or mounted from ZFS-backed storage.</li>
-        <li>Hermes proposes code and n8n workflow definitions through branches; CI tests what can be automated; a human approves merges, workflow publication, and deployment.</li>
+        <li>Hermes may push agent-owned code directly to <code>main</code>; n8n workflow publication and deployment still require human approval. Future CI must treat agent-written code as untrusted.</li>
       </ol>
       <p class="muted">Terraform owns only each VirtioFS mapping and VM attachment. ZFS datasets live outside Terraform state, so ordinary VM destruction cannot delete durable data.</p>
       <template data-flyout data-title="Applications">
@@ -1115,17 +1130,21 @@
           <ul class="compact">
             <li><span class="status accepted">D-001 Accepted</span> No application is exposed directly to the public internet.</li>
             <li><span class="status accepted">D-052 Implemented</span> Begin application deployment with Gitea. Use SQLite with WAL mode to minimize memory on the 4 GB shared-services VM; accept that it does not scale well and later database conversion is not well tested.</li>
-            <li><span class="status accepted">D-053 Implemented</span> Use Gitea <code>28.2.0</code> rebuilt with Go <code>1.27.3</code> from checksum-pinned source and a digest-pinned official base. Bind HTTP and SSH only to <code>192.168.1.101</code> on ports <code>3000</code> and <code>2222</code>; disable registration and OpenID login. Actions remains disabled in the current deployment; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> and require a password change; the first-login change is complete and the generated secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved by Gitea. Email is metadata only until a future SMTP decision, so password-recovery mail is unavailable.</li>
+            <li><span class="status accepted">D-053 Amended</span> Use Gitea <code>28.2.0</code> with the source-controlled Go <code>1.27.3</code> security build and digest-pinned official base. Bind direct HTTP to host loopback <code>127.0.0.1:3000</code>, advertise private Caddy HTTPS, and bind Git SSH to <code>192.168.1.101:2222</code>; disable registration and OpenID login. Actions remains disabled; D-059 governs its controlled enablement. Bootstrap administrator <code>homelab-admin</code> with <code>admin@gmail.com</code> required a first-login password change, now complete; the generated bootstrap secret is intentionally stale. Generic names such as <code>user</code> and <code>admin</code> are reserved. Email is metadata only without SMTP, so password-recovery mail is unavailable.</li>
             <li><span class="status accepted">D-054 Implemented</span> Install Docker CE from Docker's official Ubuntu 26.04 repository with exact package versions, refresh apt metadata immediately when its repository or key changes and otherwise only when stale, hold those packages until reviewed upgrades, use the local log driver and live restore, and do not add the administrator to the root-equivalent Docker group.</li>
-            <li><span class="status open">D-055 Partially implemented</span> Private HTTPS through Caddy is live for Gitea, but its direct HTTP endpoint remains reachable across the flat home LAN. Review or restrict that bypass before issuing Hermes a Gitea API token, registering a runner, exposing authenticated n8n tools, or using Gitea as an OCI registry.</li>
-            <li><span class="status accepted">D-057 Amended</span> Prioritize Hermes, its agent-to-Git loop, and the planned n8n automation layer before Nextcloud, Vaultwarden, or centralized secret management. Leave the model provider open until its cost, authentication, and data-handling trade-offs are reviewed.</li>
-            <li><span class="status accepted">D-058 Accepted</span> Give Hermes a dedicated non-administrator Gitea identity limited to selected sandbox repositories. It may push feature branches but receives no infrastructure-repository write, protected-branch bypass, Actions-secret, deployment, Proxmox, router, or host Docker-socket authority.</li>
+            <li><span class="status accepted">D-055 Implemented for Gitea</span> Caddy's private HTTPS route is live and Gitea advertises it. Direct HTTP is bound only to host loopback; the former LAN HTTP bypass was verified unreachable before issuing Hermes's reusable API token. Git SSH and Caddy HTTPS remain on the flat LAN until VLAN/client policy is implemented.</li>
+            <li><span class="status accepted">D-057 Amended</span> Prioritize Hermes, its agent-to-Git loop, and the planned n8n automation layer before Nextcloud, Vaultwarden, or centralized secret management. The operator selected Codex for Hermes; model, cost ceiling, and credential recovery remain to be documented.</li>
+            <li><span class="status accepted">D-058 Amended</span> Give Hermes a dedicated non-administrator Gitea identity with no infrastructure-repository write, Actions-secret, deployment, Proxmox, router, or host Docker-socket authority. Agent-owned repositories and direct <code>main</code> pushes are permitted by D-075; the n8n workflow promotion boundary in D-062 remains separately reviewed.</li>
             <li><span class="status accepted">D-059 Accepted</span> Enable Gitea Actions only after <code>lab-runner-01</code> passes isolation tests. The runner is CI-only; it may test, lint, build, and later publish artifacts, while deployment remains an explicit Task/Ansible operation from the trusted administrator Mac.</li>
             <li><span class="status accepted">D-060 Accepted</span> Until centralized secret management is revisited, keep the small interim secret set in ignored controller files with mode <code>0600</code>, exclude it from Terraform and logs, and install only narrowly scoped credentials on their target VM.</li>
             <li><span class="status accepted">D-061 Accepted</span> Place the initial n8n deployment on <code>lab-services-01</code> as an isolated Compose project with a dedicated ZFS dataset. Revisit a separate <code>lab-automation-01</code> if credential sensitivity, workload size, or availability requirements outgrow the shared-services boundary.</li>
             <li><span class="status accepted">D-062 Accepted</span> Hermes may propose n8n workflow changes through feature branches in a private Gitea repository, but a human must review, test, and publish them. Hermes receives execution-only access to explicitly exposed workflows and no n8n administration or credential access.</li>
             <li><span class="status accepted">D-063 Accepted</span> Use Gitea as the workflow-definition repository. Native n8n source control may connect to it over SSH or HTTPS when a qualifying n8n edition is selected; otherwise use a Task-owned JSON export/import flow. Credential values and the n8n encryption key never enter the repository.</li>
-            <li><span class="status accepted">D-072 Implemented</span> Start Hermes with its authenticated web dashboard but no model provider, no published agent API, and no Docker socket. Pin the official stable image by digest. Caddy terminates private HTTPS; only Caddy may reach the dashboard's plain-HTTP backend. Keep the bootstrap password only in an ignored controller file; place its scrypt hash and restart-stable signing secret in the access-controlled Hermes configuration. Use the existing VirtioFS dataset as <code>/opt/data</code> with SQLite DELETE journaling; container-restart persistence is verified, while VM recreation remains untested. Proxmox assigns 3 GiB without ballooning, but Ubuntu reports about 2.5 GiB usable and reserves 320 MiB for the crash kernel; retain the reservation until crash-dump needs are reviewed.</li>
+            <li><span class="status accepted">D-072 Amended</span> Start Hermes with a provider-neutral authenticated dashboard, no published agent API, and no Docker socket; the operator subsequently configured Codex and Telegram in its durable state. Build the reviewed security overlay on a digest-pinned official image. Caddy terminates private HTTPS; only Caddy may reach the dashboard's plain-HTTP backend. Keep the bootstrap password only in an ignored controller file; place its scrypt hash and restart-stable signing secret in the access-controlled Hermes configuration. Use the existing VirtioFS dataset as <code>/opt/data</code> with SQLite DELETE journaling; container recreation and host/guest restart persistence are verified, while VM recreation remains untested. Proxmox assigns 3 GiB without ballooning, but Ubuntu reports about 2.5 GiB usable and reserves 320 MiB for the crash kernel; retain the reservation until crash-dump needs are reviewed.</li>
+            <li><span class="status deferred">D-074 Superseded</span> The original <code>homelab-admin/agent-sandbox</code> collaboration and protected-branch policy was deployed and tested, then replaced by D-075 at the operator's request.</li>
+            <li><span class="status accepted">D-075 Implemented</span> Keep <code>lab-agent</code> restricted and non-admin, with a 10-repository limit in its own namespace. Gitea enables user-only SSH push-to-create, disables organization push-to-create, and forces new repositories private. Agent-owned <code>main</code> accepts normal Git SSH pushes without a web password. The retired administrator sandbox was deleted after its test-only history was checked. Before enabling Actions or deployment hooks, reassess unreviewed agent-owned <code>main</code> as a code-execution source.</li>
+            <li><span class="status accepted">D-076 Implemented</span> The private <code>colouring-book-v1</code> repository moved from <code>lab-agent</code> to the operator-created <code>lab-agents-org</code> with repository ID and Git history preserved. <code>homelab-admin</code> owns the organization; the restricted agent is in the existing <code>Agents</code> team, scoped to this repository with per-feature write but no Actions or organization-repository creation. Gitea organization, team, and repository changes are operator-managed; Ansible stops at agent identity and credential provisioning. The Hermes checkout uses the new remote, and fetch plus a dry-run new-branch push passed.</li>
+            <li><span class="status accepted">D-077 Implemented</span> Give Hermes a Gitea API token scoped only to <code>write:issue</code> and <code>write:repository</code> after closing direct LAN HTTP. Store it as a mode-<code>0600</code> file on the durable agents dataset, use private AdGuard DNS and Caddy HTTPS, and expose a small issue/PR helper plus Hermes skill. The token grants API routes across repositories the account can access, not a single-repository restriction; no Actions or administrator scope is granted. Do not silently recreate a lost token: revoke and rotate it deliberately.</li>
           </ul>
         </section>
         <section>

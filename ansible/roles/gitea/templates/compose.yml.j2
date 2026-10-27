@@ -16,16 +16,20 @@ services:
       GITEA__openid__ENABLE_OPENID_SIGNIN: "false"
       GITEA__openid__ENABLE_OPENID_SIGNUP: "false"
       GITEA__repository__DEFAULT_PRIVATE: private
+      GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE: "true"
+      GITEA__repository__ENABLE_PUSH_CREATE_ORG: "false"
+      GITEA__repository__ENABLE_PUSH_CREATE_USER: "true"
+      GITEA__repository__FORCE_PRIVATE: "true"
       GITEA__security__INSTALL_LOCK: "true"
-      GITEA__server__DOMAIN: "{{ gitea_http_address }}"
+      GITEA__server__DOMAIN: "{{ gitea_domain }}"
       GITEA__server__HTTP_PORT: "3000"
-      GITEA__server__ROOT_URL: "http://{{ gitea_http_address }}:{{ gitea_http_port }}/"
+      GITEA__server__ROOT_URL: "https://{{ gitea_domain }}/"
       GITEA__server__SSH_DOMAIN: "{{ gitea_http_address }}"
       GITEA__server__SSH_PORT: "{{ gitea_ssh_port }}"
       GITEA__service__DEFAULT_USER_VISIBILITY: private
       GITEA__service__DISABLE_REGISTRATION: "true"
     ports:
-      - "{{ gitea_http_address }}:{{ gitea_http_port }}:3000"
+      - "127.0.0.1:{{ gitea_http_port }}:3000"
       - "{{ gitea_http_address }}:{{ gitea_ssh_port }}:22"
     networks:
       - default

@@ -1,0 +1,7 @@
+---
+hermes_git_data_dir: /srv/homelab/hermes
+hermes_git_server: "{{ hostvars[groups['services'][0]].ansible_host }}"
+hermes_git_port: 2222
+hermes_git_name: lab-agent
+hermes_git_email: "lab-agent@home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+hermes_git_api_base_url: "https://gitea.home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}/api/v1"

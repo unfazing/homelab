@@ -5,6 +5,7 @@ gitea_image: "homelab/gitea:28.2.0-go1.27.3-security-20261025"
 gitea_compose_dir: /opt/homelab/gitea
 gitea_data_dir: /srv/homelab/gitea
 gitea_http_address: "{{ ansible_host }}"
+gitea_domain: "gitea.home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
 gitea_http_port: 3000
 gitea_ssh_port: 2222
 gitea_proxy_network: homelab-proxy

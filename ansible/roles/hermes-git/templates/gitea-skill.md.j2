@@ -1,0 +1,45 @@
+---
+name: homelab-gitea
+description: Create issues and pull requests in Gitea repositories accessible to lab-agent; push branches over Git SSH.
+version: 1.0.0
+platforms: [linux]
+metadata:
+  hermes:
+    tags: [gitea, git, issues, pull-requests]
+    category: software-development
+---
+
+# Homelab Gitea
+
+Use Git over the existing `gitea-homelab` SSH alias to fetch, branch, and push. Use
+`python3 /opt/data/tools/homelab-gitea.py` for Gitea's HTTP API. The helper
+reads its scoped token from `/opt/data/secrets/gitea-api-token`; never display,
+copy into a repository, or pass that token as a command argument.
+
+Check access before work:
+
+```sh
+python3 /opt/data/tools/homelab-gitea.py repo lab-agents-org/colouring-book-v1
+```
+
+To propose code, create a feature branch in the checkout, commit, and push it
+with `git push -u origin HEAD`. Then open a pull request:
+
+```sh
+python3 /opt/data/tools/homelab-gitea.py pr-create lab-agents-org/colouring-book-v1 \
+  --head feature/example --base main --title "Describe the change" \
+  --body-file /opt/data/workspaces/colouring-book-v1/pr-description.md
+```
+
+To open an issue:
+
+```sh
+python3 /opt/data/tools/homelab-gitea.py issue-create lab-agents-org/colouring-book-v1 \
+  --title "Describe the problem" \
+  --body-file /opt/data/workspaces/colouring-book-v1/issue-description.md
+```
+
+The repository name is an example; the agent may access only repositories
+granted to `lab-agent`. Do not merge a pull request or change repository
+settings without the operator's explicit instruction. No Actions, deployment,
+or infrastructure administration authority is granted.

@@ -1,0 +1,9 @@
+Host gitea-homelab
+  HostName {{ hermes_git_server }}
+  Port {{ hermes_git_port }}
+  User git
+  IdentityFile /opt/data/.ssh/id_ed25519
+  IdentitiesOnly yes
+  UserKnownHostsFile /opt/data/.ssh/known_hosts
+  StrictHostKeyChecking yes
+  BatchMode yes

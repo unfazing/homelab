@@ -1,0 +1,9 @@
+---
+gitea_agent_username: lab-agent
+gitea_agent_email: "lab-agent@home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+gitea_agent_admin_username: homelab-admin
+gitea_agent_repo_limit: 10
+gitea_agent_key_title: lab-agents-01
+gitea_agent_public_key: ''
+gitea_agent_compose_dir: /opt/homelab/gitea
+gitea_agent_api_address: 127.0.0.1

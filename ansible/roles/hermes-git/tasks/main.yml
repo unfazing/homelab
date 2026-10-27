@@ -1,0 +1,136 @@
+---
+- name: Install the fail-closed Telegram access check on the agents VM
+  ansible.builtin.copy:
+    src: verify-telegram-gate.py
+    dest: /opt/homelab/hermes/verify-telegram-gate.py
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Require exactly one Telegram user before granting Git write access
+  ansible.builtin.command:
+    argv: [python3, /opt/homelab/hermes/verify-telegram-gate.py]
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify Hermes state is on its durable VirtioFS mapping
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, "SOURCE,FSTYPE", --mountpoint, "{{ hermes_git_data_dir }}"]
+  register: hermes_git_mount
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Refuse to place an SSH identity on the disposable root disk
+  ansible.builtin.assert:
+    that:
+      - hermes_git_mount.stdout.split() == ['homelab-hermes', 'virtiofs']
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Create the private SSH and API credential directories and disposable workspaces directory
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: '10000'
+    group: '10000'
+    mode: '0700'
+  loop:
+    - { path: "{{ hermes_git_data_dir }}/.ssh" }
+    - { path: "{{ hermes_git_data_dir }}/secrets" }
+    - { path: "{{ hermes_git_data_dir }}/workspaces" }
+
+- name: Create the managed Gitea tool and skill directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: '10000'
+    group: '10000'
+    mode: '0755'
+  loop:
+    - "{{ hermes_git_data_dir }}/tools"
+    - "{{ hermes_git_data_dir }}/skills/software-development"
+    - "{{ hermes_git_data_dir }}/skills/software-development/homelab-gitea"
+
+- name: Install the Gitea issue and pull-request client
+  ansible.builtin.template:
+    src: homelab-gitea.py.j2
+    dest: "{{ hermes_git_data_dir }}/tools/homelab-gitea.py"
+    owner: '10000'
+    group: '10000'
+    mode: '0755'
+
+- name: Teach Hermes the scoped Gitea workflow
+  ansible.builtin.template:
+    src: gitea-skill.md.j2
+    dest: "{{ hermes_git_data_dir }}/skills/software-development/homelab-gitea/SKILL.md"
+    owner: '10000'
+    group: '10000'
+    mode: '0644'
+
+- name: Generate the agent's Ed25519 key once on its own VM
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -q
+      - -t
+      - ed25519
+      - -N
+      - ''
+      - -C
+      - "{{ hermes_git_name }}@lab-agents-01"
+      - -f
+      - "{{ hermes_git_data_dir }}/.ssh/id_ed25519"
+    creates: "{{ hermes_git_data_dir }}/.ssh/id_ed25519"
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Keep the private key readable only by Hermes
+  ansible.builtin.file:
+    path: "{{ hermes_git_data_dir }}/.ssh/id_ed25519"
+    owner: '10000'
+    group: '10000'
+    mode: '0600'
+  when: not ansible_check_mode
+
+- name: Keep the public key with the same runtime owner
+  ansible.builtin.file:
+    path: "{{ hermes_git_data_dir }}/.ssh/id_ed25519.pub"
+    owner: '10000'
+    group: '10000'
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Trust only the host key read from Gitea's durable state
+  ansible.builtin.copy:
+    content: "[{{ hermes_git_server }}]:{{ hermes_git_port }} {{ hostvars[groups['services'][0]].gitea_ssh_host_key }}\n"
+    dest: "{{ hermes_git_data_dir }}/.ssh/known_hosts"
+    owner: '10000'
+    group: '10000'
+    mode: '0600'
+
+- name: Configure a strict Gitea-only SSH alias
+  ansible.builtin.template:
+    src: ssh-config.j2
+    dest: "{{ hermes_git_data_dir }}/.ssh/config"
+    owner: '10000'
+    group: '10000'
+    mode: '0600'
+
+- name: Configure the agent's Git commit attribution
+  ansible.builtin.template:
+    src: gitconfig.j2
+    dest: "{{ hermes_git_data_dir }}/.gitconfig"
+    owner: '10000'
+    group: '10000'
+    mode: '0644'
+
+- name: Read only the public half for Gitea registration
+  ansible.builtin.slurp:
+    src: "{{ hermes_git_data_dir }}/.ssh/id_ed25519.pub"
+  register: hermes_git_public_key_file
+  when: not ansible_check_mode
+
+- name: Pass the public key to the Gitea play
+  ansible.builtin.set_fact:
+    hermes_git_public_key: "{{ hermes_git_public_key_file.content | b64decode | trim }}"
+  when: not ansible_check_mode

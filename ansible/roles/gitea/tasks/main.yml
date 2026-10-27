@@ -9,6 +9,7 @@
       - gitea_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
       - gitea_image is match('^homelab/gitea:')
       - gitea_http_address == ansible_host
+      - gitea_domain is match('^gitea\.home\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
       - gitea_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
       - "'homelab-gitea' in homelab_virtiofs_mappings"
     fail_msg: "Gitea requires the approved admin identity, local secret file, static bind address, and persistent dataset."
@@ -154,7 +155,7 @@
 
 - name: Verify Gitea's health endpoint
   ansible.builtin.uri:
-    url: "http://{{ gitea_http_address }}:{{ gitea_http_port }}/api/healthz"
+    url: "http://127.0.0.1:{{ gitea_http_port }}/api/healthz"
     return_content: true
     status_code: 200
   register: gitea_health

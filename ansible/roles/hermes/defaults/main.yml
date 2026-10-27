@@ -8,3 +8,4 @@ hermes_domain: ""
 hermes_dashboard_address: "{{ ansible_host }}"
 hermes_dashboard_port: 9119
 hermes_proxy_address: "{{ hostvars[groups['services'][0]].ansible_host }}"
+hermes_dns_address: "{{ hostvars[groups['access'][0]].ansible_host }}"
