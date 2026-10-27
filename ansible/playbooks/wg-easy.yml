@@ -1,0 +1,43 @@
+---
+- name: Apply common mounts and Docker prerequisites
+  ansible.builtin.import_playbook: common.yml
+- name: Install or converge the isolated wg-easy service
+  hosts: access
+  become: true
+  gather_facts: false
+  roles:
+    - docker-engine
+    - wg-easy
+
+- name: Publish only the private WireGuard dashboard DNS name after bootstrap
+  hosts: access
+  become: true
+  gather_facts: false
+  vars:
+    adguard_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+    adguard_admin_password_file: "{{ playbook_dir }}/../../.generated/secrets/adguard-admin-password"
+  roles:
+    - adguard
+
+- name: Converge Caddy HTTPS for the authenticated WireGuard dashboard
+  hosts: services
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  vars:
+    caddy_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+    caddy_acme_email: "{{ lookup('ansible.builtin.env', 'CADDY_ACME_EMAIL') }}"
+    caddy_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_ACME_API_TOKEN') }}"
+    caddy_acme_environment: production
+    caddy_acme_ca: https://acme-v02.api.letsencrypt.org/directory
+  roles:
+    - caddy
+
+- name: Verify service configuration, native firewall and private boundaries
+  hosts: access
+  become: true
+  gather_facts: false
+  tasks:
+    - ansible.builtin.include_role:
+        name: wg-easy
+        tasks_from: verify

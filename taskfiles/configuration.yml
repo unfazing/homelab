@@ -28,6 +28,8 @@ tasks:
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/common.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/site.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/cloudflare-ddns.yml
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/wg-easy.yml
+      - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/wg-easy-verify.yml
       - ansible-playbook --syntax-check -i "{{.INVENTORY}}" ansible/playbooks/caddy.yml
       - >-
         ansible-playbook --syntax-check -i "{{.INVENTORY}}"

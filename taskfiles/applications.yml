@@ -14,6 +14,42 @@ env:
   ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
 
 tasks:
+  wireguard:secrets:
+    internal: true
+    cmds:
+      - python3 taskfiles/scripts/app/wg-easy-secrets.py
+
+  wireguard:test-fresh:
+    desc: Test an isolated fresh install and real per-client firewall traffic with disposable state
+    cmds:
+      - python3 taskfiles/scripts/app/wg-easy-test-fresh.py
+
+  wireguard:check:
+    desc: Preview canonical wg-easy service configuration without router cutover
+    deps: [":config:inventory", "wireguard:secrets", "caddy:credentials", "homepage:secrets"]
+    cmds:
+      - ansible-playbook --check -i "{{.INVENTORY}}" ansible/playbooks/wg-easy.yml
+
+  wireguard:deploy:
+    desc: Install or converge wg-easy; existing clients remain runtime state
+    deps: [":config:inventory", "wireguard:secrets", "caddy:credentials", "homepage:secrets"]
+    cmds:
+      - ansible-playbook -i "{{.INVENTORY}}" ansible/playbooks/wg-easy.yml
+
+  wireguard:credentials:
+    desc: Show the private wg-easy administrator login in your terminal
+    preconditions:
+      - sh: test -s .generated/secrets/wg-easy-admin-password
+        msg: Deploy wg-easy first
+    cmds:
+      - python3 taskfiles/scripts/app/wg-easy-secrets.py credentials
+
+  wireguard:verify:
+    desc: Verify wg-easy health, native firewall and private administration boundaries
+    deps: [":config:inventory"]
+    cmds:
+      - ansible-playbook -i "{{.INVENTORY}}" ansible/playbooks/wg-easy-verify.yml
+
   homepage:secrets:
     internal: true
     cmds:

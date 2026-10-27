@@ -1,0 +1,13 @@
+---
+wg_easy_image: ghcr.io/wg-easy/wg-easy:15.5.0@sha256:071f79a639e9361123a5e57733107320207b844ddbbd92dfa6962f541fe8aac8
+wg_easy_compose_dir: /opt/homelab/wg-easy
+wg_easy_data_dir: /srv/homelab/wireguard
+wg_easy_secret_dir: /etc/homelab/wg-easy
+wg_easy_hostname: "wireguard.home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+wg_easy_password_file: "{{ playbook_dir }}/../../.generated/secrets/wg-easy-admin-password"
+wg_easy_endpoint: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+wg_easy_port: 27272
+wg_easy_cidr: 10.115.145.0/24
+wg_easy_dns: [192.168.1.100]
+wg_easy_publish: false
+wg_easy_proxy_address: "{{ hostvars[groups['services'][0]].ansible_host }}"

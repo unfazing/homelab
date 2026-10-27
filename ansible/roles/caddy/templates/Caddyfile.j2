@@ -36,6 +36,11 @@
 		reverse_proxy {{ caddy_inkling_upstream }}
 	}
 
+	@wireguard host wireguard.home.{{ caddy_domain }}
+	handle @wireguard {
+		reverse_proxy http://{{ hostvars[groups['access'][0]].ansible_host }}:51821
+	}
+
 {% if caddy_homepage_enabled %}
 	@homepage host {{ homepage_hostname }}
 	handle @homepage {

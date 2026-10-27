@@ -1,0 +1,145 @@
+---
+- name: Validate the fresh-install service contract
+  ansible.builtin.assert:
+    that:
+      - wg_easy_image is match('^ghcr.io/wg-easy/wg-easy:15\.5\.0@sha256:[a-f0-9]{64}$')
+      - "'homelab-wireguard' in homelab_virtiofs_mappings"
+      - wg_easy_endpoint | length > 0
+    fail_msg: Attach the WireGuard data mapping and set HOMELAB_DOMAIN before deployment
+    quiet: true
+- name: Install guest-owned WireGuard and firewall utilities
+  ansible.builtin.apt:
+    name: [wireguard-tools, nftables]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Load WireGuard and legacy netfilter modules in the guest instead of granting SYS_MODULE to Docker
+  ansible.builtin.command: "modprobe {{ item }}"
+  loop: [wireguard, ip_tables, iptable_filter, iptable_nat, xt_comment, xt_conntrack]
+  changed_when: false
+  when: not ansible_check_mode
+- name: Persist required modules before Docker starts after reboot
+  ansible.builtin.copy:
+    content: "wireguard\nip_tables\niptable_filter\niptable_nat\nxt_comment\nxt_conntrack\n"
+    dest: /etc/modules-load.d/homelab-wireguard.conf
+    owner: root
+    group: root
+    mode: '0644'
+- name: Keep the retired native service disabled on the destination VM only
+  ansible.builtin.systemd_service:
+    name: wg-quick@wg0
+    enabled: false
+    state: stopped
+  when: not ansible_check_mode
+- name: Create protected wg-easy directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0700'
+    state: directory
+  loop: ["{{ wg_easy_compose_dir }}", "{{ wg_easy_secret_dir }}", "{{ wg_easy_data_dir }}"]
+- name: Require a mounted durable WireGuard dataset
+  ansible.builtin.command: "findmnt -n -o SOURCE,FSTYPE --mountpoint {{ wg_easy_data_dir }}"
+  register: wg_easy_mount
+  changed_when: false
+  when: not ansible_check_mode
+- name: Refuse to put VPN identity on the disposable OS disk
+  ansible.builtin.assert:
+    that: wg_easy_mount.stdout.split() == ['homelab-wireguard', 'virtiofs']
+    quiet: true
+  when: not ansible_check_mode
+- name: Install the generic fail-closed guard and canonical service configurator
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ wg_easy_compose_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0700'
+  loop: [start.sh, configure.py]
+- name: Install the service administrator credential without logging contents
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ wg_easy_secret_dir }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - {source: "{{ wg_easy_password_file }}", name: admin-password}
+  no_log: true
+- name: Render canonical service settings without client identities
+  ansible.builtin.copy:
+    content: "{{ {'endpoint': wg_easy_endpoint, 'port': wg_easy_port, 'ipv4Cidr': wg_easy_cidr, 'dns': wg_easy_dns} | to_nice_json }}\n"
+    dest: "{{ wg_easy_secret_dir }}/settings.json"
+    mode: '0600'
+- name: Render the wg-easy backend guard before Docker DNAT
+  ansible.builtin.template:
+    src: admin-backend.nft.j2
+    dest: "{{ wg_easy_secret_dir }}/admin-backend.nft"
+    mode: '0600'
+  register: wg_easy_firewall
+- name: Validate only the dedicated backend firewall table
+  ansible.builtin.command: "nft --check -f {{ wg_easy_secret_dir }}/admin-backend.nft"
+  changed_when: false
+  when: not ansible_check_mode
+- name: Install the boot-persistent backend firewall service
+  ansible.builtin.template:
+    src: firewall.service.j2
+    dest: /etc/systemd/system/homelab-wg-easy-admin.service
+    mode: '0644'
+  register: wg_easy_firewall_unit
+- name: Require the backend policy before Docker on future boots
+  ansible.builtin.copy:
+    content: "[Unit]\nRequires=homelab-wg-easy-admin.service\nAfter=homelab-wg-easy-admin.service\n"
+    dest: /etc/systemd/system/docker.service.d/30-wg-easy-admin.conf
+    mode: '0644'
+  register: wg_easy_docker_guard
+- name: Enable and apply only the wg-easy backend guard
+  ansible.builtin.systemd_service:
+    name: homelab-wg-easy-admin.service
+    enabled: true
+    state: "{{ 'restarted' if wg_easy_firewall.changed else 'started' }}"
+    daemon_reload: "{{ wg_easy_firewall_unit.changed or wg_easy_docker_guard.changed }}"
+  when: not ansible_check_mode
+- name: Detect whether private service setup completed previously
+  ansible.builtin.stat:
+    path: "{{ wg_easy_data_dir }}/.homelab-ready.json"
+  register: wg_easy_ready_state
+- name: Preserve existing publication state on repeat convergence
+  ansible.builtin.set_fact:
+    wg_easy_publish: "{{ wg_easy_ready_state.stat.exists }}"
+- name: Render wg-easy privately until service setup succeeds
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ wg_easy_compose_dir }}/compose.yml"
+    mode: '0600'
+- name: Validate the wg-easy Compose model
+  ansible.builtin.command: "docker compose --project-directory {{ wg_easy_compose_dir }} config --quiet"
+  changed_when: false
+  when: not ansible_check_mode
+- name: Start wg-easy with its own namespace and no setup exposure
+  ansible.builtin.command: "docker compose --project-directory {{ wg_easy_compose_dir }} up -d --wait --wait-timeout 120"
+  register: wg_easy_up
+  changed_when: "'Created' in wg_easy_up.stderr or 'Started' in wg_easy_up.stderr or 'Recreated' in wg_easy_up.stderr"
+  when: not ansible_check_mode
+- name: Configure fresh setup and enforce native firewall without managing clients
+  ansible.builtin.command: "python3 {{ wg_easy_compose_dir }}/configure.py"
+  register: wg_easy_bootstrap
+  changed_when: (wg_easy_bootstrap.stdout | from_json).changed
+  no_log: true
+  when: not ansible_check_mode
+- name: Permit publication only after successful bootstrap
+  ansible.builtin.set_fact:
+    wg_easy_publish: true
+  when: not ansible_check_mode
+- name: Publish the ready private backend and LAN-test UDP listener
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ wg_easy_compose_dir }}/compose.yml"
+    mode: '0600'
+  when: not ansible_check_mode
+- name: Converge the verified wg-easy listener configuration
+  ansible.builtin.command: "docker compose --project-directory {{ wg_easy_compose_dir }} up -d --wait --wait-timeout 120"
+  register: wg_easy_ready
+  changed_when: "'Created' in wg_easy_ready.stderr or 'Started' in wg_easy_ready.stderr or 'Recreated' in wg_easy_ready.stderr"
+  when: not ansible_check_mode

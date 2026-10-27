@@ -155,6 +155,7 @@ done
 
 for dataset in \
   access/adguard \
+  access/wireguard \
   services/nextcloud-files \
   services/nextcloud-db \
   services/gitea \

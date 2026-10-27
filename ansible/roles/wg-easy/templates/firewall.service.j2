@@ -1,0 +1,12 @@
+[Unit]
+Description=Restrict wg-easy HTTP backend before Docker DNAT
+Before=docker.service
+After=nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/homelab/wg-easy/admin-backend.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

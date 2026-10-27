@@ -1,0 +1,12 @@
+---
+- name: Install the private WireGuard acceptance checks
+  ansible.builtin.copy:
+    src: verify.py
+    dest: "{{ wg_easy_compose_dir }}/verify.py"
+    mode: '0700'
+- name: Verify canonical service settings, native firewall and authenticated HTTPS
+  ansible.builtin.command:
+    argv: [python3, "{{ wg_easy_compose_dir }}/verify.py", "{{ wg_easy_hostname }}"]
+  register: wg_easy_verified
+  changed_when: false
+  when: not ansible_check_mode

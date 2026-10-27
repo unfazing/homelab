@@ -1,0 +1,49 @@
+name: wg-easy
+services:
+  wg-easy:
+    image: "{{ wg_easy_image }}"
+    container_name: wg-easy
+    entrypoint: [/bin/sh, /homelab-start.sh]
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "51821"
+      INSECURE: "false"
+      DISABLE_IPV6: "true"
+      DISABLE_VERSION_CHECK: "true"
+      TRUSTED_PROXIES: "{{ wg_easy_proxy_address }},172.30.91.1"
+      DEBUG: ""
+    volumes:
+      - "{{ wg_easy_data_dir }}:/etc/wireguard"
+      - "{{ wg_easy_compose_dir }}/start.sh:/homelab-start.sh:ro"
+    ports:
+      - 127.0.0.1:51821:51821/tcp
+{% if wg_easy_publish %}
+      - "{{ ansible_host }}:{{ wg_easy_port }}:{{ wg_easy_port }}/udp"
+      - "{{ ansible_host }}:51821:51821/tcp"
+{% endif %}
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+      - /run:mode=0755
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+      net.ipv6.conf.all.disable_ipv6: "1"
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 128
+    networks:
+      vpn:
+        ipv4_address: 172.30.91.2
+    labels:
+      io.homelab.policy-checksum: "{{ lookup('ansible.builtin.file', role_path ~ '/files/start.sh') | hash('sha256') }}"
+networks:
+  vpn:
+    name: homelab-wireguard
+    ipam:
+      config:
+        - subnet: 172.30.91.0/29

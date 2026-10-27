@@ -1,10 +1,3 @@
 ---
-- name: Apply the common guest baseline
-  ansible.builtin.import_playbook: common.yml
-
-- name: Configure the access boundary
-  hosts: access
-  become: true
-  gather_facts: true
-  roles:
-    - wireguard
+- name: Deploy the approved wg-easy access boundary
+  ansible.builtin.import_playbook: wg-easy.yml

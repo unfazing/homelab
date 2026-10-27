@@ -1,0 +1,9 @@
+---
+- name: Verify wg-easy service and native firewall without changing clients
+  hosts: access
+  become: true
+  gather_facts: false
+  tasks:
+    - ansible.builtin.include_role:
+        name: wg-easy
+        tasks_from: verify

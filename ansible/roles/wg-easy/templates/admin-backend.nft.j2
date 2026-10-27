@@ -1,0 +1,8 @@
+destroy table inet homelab_wireguard_admin
+table inet homelab_wireguard_admin {
+    chain prerouting {
+        type filter hook prerouting priority -150; policy accept;
+        ip daddr {{ ansible_host }} tcp dport 51821 ip saddr {{ wg_easy_proxy_address }} accept
+        ip daddr {{ ansible_host }} tcp dport 51821 drop
+    }
+}

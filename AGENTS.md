@@ -21,6 +21,7 @@
 - Terraform owns Proxmox VMs, rebuildable disks, NICs, VLAN tags, and machine-readable outputs. Do not configure applications or store application secrets in Terraform.
 - Ansible owns guest convergence and application configuration. Do not use it to own VM lifecycle or Terraform state.
 - Task is the public operator interface. Keep implementation logic in Packer, Terraform, Ansible, or focused scripts.
+- Canonical deployment tasks must support fresh service installs without legacy client exports or one-time migration prerequisites. Keep one-time migration utilities under `history/` without Taskfile hooks or active-role imports; existing clients, keys and per-client policies are runtime data, not install fixtures.
 - Keep controller-side Task helpers under `taskfiles/scripts/`. They are private implementation details invoked by Taskfiles, not a second public interface and not Ansible-managed guest scripts. Put scripts installed on a guest inside the owning Ansible role.
 
 ## Security and data safety

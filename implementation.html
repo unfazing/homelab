@@ -108,6 +108,7 @@
       <button id="ansible-tab" role="tab" aria-selected="false" aria-controls="ansible-panel" type="button">Ansible plan</button>
       <button id="gitea-tab" role="tab" aria-selected="false" aria-controls="gitea-panel" type="button">Gitea</button>
       <button id="adguard-tab" role="tab" aria-selected="false" aria-controls="adguard-panel" type="button">AdGuard</button>
+      <button id="wireguard-tab" role="tab" aria-selected="false" aria-controls="wireguard-panel" type="button">WireGuard migration</button>
       <button id="tls-tab" role="tab" aria-selected="false" aria-controls="tls-panel" type="button">Internal TLS</button>
       <button id="homepage-tab" role="tab" aria-selected="false" aria-controls="homepage-panel" type="button">Homepage</button>
       <button id="n8n-tab" role="tab" aria-selected="false" aria-controls="n8n-panel" type="button">n8n</button>
@@ -121,6 +122,7 @@
         <dt>Status</dt><dd><span class="status complete">Initial interface implemented</span></dd>
         <dt>Operator interface</dt><dd>Task using the root <code>Taskfile.yml</code></dd>
         <dt>Deployment runbook</dt><dd><span class="status complete">Complete</span> <a href="deployment-guide.html">Ordered command and code-trace tables</a>; conditional destructive and first-install actions are marked separately from routine convergence</dd>
+        <dt>Peer access runbook</dt><dd><span class="status complete">Documented</span> <a href="docs/wireguard-peer-access.md">Native wg-easy per-client firewall procedure</a>. Gareth's native allowlist is applied on <code>.100</code>; actual-device and guest-reboot acceptance remain open. The HTTPS Inkling name traverses shared Caddy at <code>.101:443</code> and is outside the current direct-HTTP grant.</dd>
         <dt>Execution host</dt><dd>Trusted administrator laptop or desktop</dd>
         <dt>Generated files</dt><dd>Written below ignored <code>.generated/</code></dd>
         <dt>Credentials</dt><dd>Preloaded from ignored root <code>.envrc</code>; committed names and placeholders live in <code>.envrc.example</code></dd>
@@ -131,6 +133,10 @@
 ├── AGENTS.md                  # repository working agreements and sync rules
 ├── architecture.html          # design intent and accepted decisions
 ├── implementation.html        # plans, acceptance criteria, and progress
+├── docs/
+│   └── wireguard-peer-access.md # native per-client firewall runbook
+├── history/                   # archived one-time utilities; no canonical Task hooks
+│   └── 2026-10-27-wireguard-migration/
 ├── .envrc.example             # non-secret credential variable contract
 ├── Taskfile.yml               # public operator interface
 ├── taskfiles/                 # included task groups as the interface grows
@@ -139,7 +145,7 @@
 │   ├── infrastructure.yml
 │   ├── configuration.yml      # inventory, connectivity, common convergence
 │   ├── data.yml
-│   ├── applications.yml       # Gitea check, deploy, and credential tasks
+│   ├── applications.yml       # application checks, deployment, credentials
 │   └── scripts/               # private controller helpers invoked by Taskfiles
 │       ├── packer-image.sh    # secure image validation and build wrapper
 │       ├── verify-image.sh    # clone assertions and guaranteed cleanup
@@ -180,13 +186,13 @@
         <table>
           <thead><tr><th>Work item</th><th>Status</th><th>Next action</th></tr></thead>
           <tbody>
-            <tr><td>Root architecture document</td><td><span class="status complete">Complete</span></td><td>Maintain as design decisions change</td></tr>
+            <tr><td>Root architecture document</td><td><span class="status complete">Live-state overview and diagrams updated</span></td><td>Keep the deployed service/access/data inventory and current-versus-target diagrams synchronized as workloads change</td></tr>
             <tr><td>Implementation document</td><td><span class="status complete">Complete</span></td><td>Extend one tab per implementation area</td></tr>
             <tr><td>Repository agent instructions</td><td><span class="status complete">Complete</span></td><td>Keep working agreements concise and synchronized with both source-of-truth documents</td></tr>
-            <tr><td>Task interface</td><td><span class="status complete">Infrastructure, configuration, data, and Gitea deployment complete</span></td><td>Add each later application through the same check/deploy pattern</td></tr>
+            <tr><td>Task interface</td><td><span class="status complete">Infrastructure, data, Gitea, AdGuard, Caddy, and Hermes tasks available</span></td><td>Add each later application through the same check/deploy pattern</td></tr>
             <tr><td>Packer build workflow</td><td><span class="status complete">Single-clone verification passed</span></td><td>Restore multi-clone verification after DHCP moves off the F620 or excluded static test addresses are assigned</td></tr>
-            <tr><td>Terraform deployment</td><td><span class="status complete">Three VMs and seven mappings applied</span></td><td>Add the isolated runner later</td></tr>
-            <tr><td>Ansible hand-off</td><td><span class="status complete">Gitea, AdGuard, Caddy, and Hermes converged</span></td><td>Choose a model provider and restricted Git identity; plan n8n on services; add the runner only after isolation review</td></tr>
+            <tr><td>Terraform deployment</td><td><span class="status complete">Three VMs and eight mappings applied</span></td><td>WireGuard mapping added; runner placement moves to the later red-node design</td></tr>
+            <tr><td>Ansible hand-off</td><td><span class="status complete">Gitea, AdGuard, Caddy, Hermes and Homepage converged; scoped agent Git and issue/PR API live</span></td><td>Operator-managed private repository visibility for Homepage; retain host metrics, model/budget, VM recovery, n8n and runner-isolation follow-ups</td></tr>
             <tr><td>AdGuard migration</td><td><span class="status open">Parallel resolver verified; cutover pending</span></td><td>DNS parity passed at .100; change client DNS only after a single-client trial and explicit router/VPN cutover</td></tr>
             <tr><td>Internal TLS</td><td><span class="status complete">Caddy production certificate and Gitea HTTPS URL live</span></td><td>Cut router/VPN clients over to private DNS and observe or rehearse renewal</td></tr>
             <tr><td>Repository hygiene</td><td><span class="status complete">Complete</span></td><td>Keep generated state, downloads, OS metadata, and secrets excluded</td></tr>
@@ -336,7 +342,7 @@
     <section id="terraform-panel" role="tabpanel" aria-labelledby="terraform-tab" hidden>
       <h2>Terraform plan</h2>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status complete">VM baseline applied</span> Three live VMs and seven production VirtioFS mappings are in BPG state. The reverse-proxy mapping is attached to VM 1001; a fourth CI-only VM remains planned.</dd>
+        <dt>Status</dt><dd><span class="status complete">VM baseline applied</span> Three live VMs and eight production VirtioFS mappings are in BPG state, including <code>homelab-wireguard</code> on VM 1000. Runner placement follows the later red-node design.</dd>
         <dt>Template</dt><dd>Clone <code>ubuntu-26.04-template</code> from VM <code>9000</code></dd>
         <dt>OS storage</dt><dd><code>local-lvm</code> on NVMe</dd>
         <dt>Temporary network</dt><dd>Untagged <code>vmbr0</code> with static <code>192.168.1.100–103</code>; <code>.103</code> is reserved for the planned runner</dd>
@@ -636,6 +642,28 @@
       </ol>
     </section>
 
+    <section id="wireguard-panel" role="tabpanel" aria-labelledby="wireguard-tab" hidden>
+      <h2>WireGuard service · fresh installation and client firewall</h2>
+      <p class="callout"><strong>Canonical cleanup complete · 27 October:</strong> the active role no longer reads legacy exports or creates existing clients. One-time migration scripts/tests moved to <a href="history/2026-10-27-wireguard-migration/README.md">history/2026-10-27-wireguard-migration</a>; their Task commands were removed. Native firewall and generic guards are deployed and verified. Current clients remain durable runtime data; no keys or profiles were recreated by this cleanup.</p>
+      <dl class="context-list">
+        <dt>Service</dt><dd>Pinned wg-easy <code>15.5.0</code>, Compose on <code>lab-access-01</code>, ZFS-backed <code>homelab-wireguard → /srv/homelab/wireguard</code>. The eighth production mapping is independent of ordinary compute destruction.</dd>
+        <dt>Fresh state</dt><dd>Native API setup creates server/admin, canonical <code>10.115.145.0/24</code> subnet, Endpoint <code>donk.live:27272</code> and DNS <code>.100</code>; it creates no clients. The configurator performs no database reads/edits. Repeat convergence enforces service defaults/global firewall and preserves all runtime client settings.</dd>
+        <dt>Operator interface</dt><dd><code>task apps:wireguard:check</code>, <code>deploy</code>, <code>verify</code> and <code>credentials</code>; <code>task apps:wireguard:test-fresh</code> tests an isolated empty install. No export, import or migration command is part of the canonical Task interface.</dd>
+        <dt>Native firewall</dt><dd>Global per-client filtering is enabled. Gareth's current native Firewall Allowed IPs were set imperatively to <code>.9:3000/tcp</code>, <code>.100:53/tcp</code> and <code>.100:53/udp</code>. There is no Gareth-specific install rule. The <a href="docs/wireguard-peer-access.md">runbook</a> explains native UI fields; an empty firewall list falls back to routing Allowed IPs and may be broad.</dd>
+        <dt>Guard boundary</dt><dd>Deployed identity-free namespace INPUT denial protects local services; fallback FORWARD drops sit below the native chain and above generic accepts. Incoming peer traffic hits its fallback drop before return allowances, preventing established cross-peer bypass during rebuild. Disabled/rebuilding filtering fails closed; established LAN replies return. Guest comment/conntrack modules persist for boot.</dd>
+        <dt>Private administration</dt><dd><code>https://wireguard.home.donk.live</code>, username <code>admin</code>; retrieve password only through the credential task. Host HTTP backend is Caddy-only. The administrator can export client private keys; keep its login and durable/recovery state away from agents and dashboard integrations.</dd>
+        <dt>Recovery boundary</dt><dd>Preserving client identities requires restoring durable application state separately. Ignored legacy exports and the protected pre-recreation copy remain recovery artifacts; none were moved into Git/history. Existing owner/full-tunnel, whole-LAN DNS-only and restricted Gareth profiles are runtime state, not fresh-install acceptance fixtures.</dd>
+      </dl>
+      <h3>Validation</h3>
+      <ul class="compact">
+        <li><span class="status complete">Fresh install / packet test</span> The pinned image initialized with zero clients and no legacy inputs. A disposable WireGuard client proved allowed TCP application + TCP/UDP DNS, denied other ports/protocols and local administration, fail-closed firewall disable, no-op configuration and restart persistence. The private test network published no ports and touched no production identities.</li>
+        <li><span class="status complete">Static checks</span> Five tests cover native jump/fallback ordering, broad-accept and established-return bypass rejection, and identity-free service code. Canonical runtime verification supports an empty client population.</li>
+        <li><span class="status complete">Live convergence</span> Native toggle, chain ordering, HTTPS/auth and isolation passed. All four existing identities, addresses and PSKs match protected pre-cleanup state; Gareth has exactly three port-specific allows followed by default deny. Obsolete guest importer is removed. Repeat deployment reported <code>changed=0</code> on all three VMs. Legacy VPN and router forwarding remain unchanged; actual-device/reboot acceptance is still pending.</li>
+      </ul>
+      <h3>Before public cutover</h3>
+      <p>Duplicate an owner profile on home Wi-Fi, disable the original and set the copy's Endpoint to <code>192.168.1.100:27272</code>. Test handshakes, full-tunnel internet/DNS, DNS-only and Gareth's exact allow/deny paths. Test IPv6 cannot bypass the VPN and repeat after guest reboot during a maintenance window. Then switch existing public UDP 27272 from <code>.9:51820</code> to <code>.100:27272</code>, test externally and retain rollback before retiring red. Do not reimage red yet.</p>
+    </section>
+
     <section id="tls-panel" role="tabpanel" aria-labelledby="tls-tab" hidden>
       <h2>Internal TLS plan</h2>
       <dl class="context-list">
@@ -910,6 +938,7 @@ python3 /opt/data/tools/homelab-gitea.py pr-create lab-agents-org/colouring-book
 
     <section id="cicd-panel" role="tabpanel" aria-labelledby="cicd-tab" hidden>
       <h2>Gitea CI/CD plan</h2>
+      <p class="callout"><strong>Reordered:</strong> migrate WireGuard from red <code>.9</code> to access <code>.100</code> before runner deployment or red reinstallation. The operator's longer-term target is a red Proxmox node for agents/CI/data/dev applications and more room for Nextcloud on blue; exact placement/cluster/storage changes are not yet designed. The automatic deployment proposal remains unimplemented; the existing manual release policy is unchanged.</p>
       <dl class="context-list">
         <dt>Status</dt><dd><span class="status planned">Accepted, not implemented</span></dd>
         <dt>Runner</dt><dd><code>lab-runner-01</code> · VM ID <code>1003</code> · <code>192.168.1.103</code> · 2 vCPU · 2 GiB RAM · 32 GiB OS disk</dd>

@@ -1,18 +1,7 @@
 ---
-wireguard_server_address: 10.73.100.1/24
-wireguard_listen_port: 51820
-wireguard_endpoint: vpn.example.com
-wireguard_clients:
-  - name: phone-travel
-    address: 10.73.100.2/32
-    allowed_ips:
-      - 0.0.0.0/0
-  - name: phone-dns
-    address: 10.73.100.3/32
-    allowed_ips:
-      - 10.73.100.1/32
-
-adguard_http_address: 0.0.0.0:3000
-adguard_upstream_dns:
-  - 1.1.1.1
-  - 1.0.0.1
+# Non-secret example only. Real inventory is generated from Terraform.
+# Fresh wg-easy installs generate a server identity and no clients.
+# Existing clients/allowlists are runtime data; never put key material here.
+wg_easy_endpoint: example.com
+wg_easy_hostname: wireguard.home.example.com
+adguard_domain: example.com

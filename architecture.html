@@ -204,6 +204,28 @@
       <p class="meta">Canonical design · Updated 27 October 2026</p>
     </header>
 
+    <section aria-labelledby="live-title">
+      <h2 id="live-title">Deployed today</h2>
+      <p>Three Proxmox VMs run on the current flat <code>192.168.1.0/24</code> LAN. wg-easy is staged on <code>.100</code> with the existing identity and four peers; the public router forward still serves native WireGuard on <code>.9</code>. VLANs and a fourth CI VM remain targets.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Service</th><th>State</th><th>Runs on</th><th>Private entry point</th><th>Durable state</th></tr></thead>
+          <tbody>
+            <tr><td>Legacy WireGuard + AdGuard host</td><td><span class="status migration">VPN active; DNS unresponsive</span></td><td><code>192.168.1.9</code></td><td>Existing public VPN; external client acceptance pending</td><td>Outside the new IaC deployment; protected identity exported</td></tr>
+            <tr><td>wg-easy</td><td><span class="status migration">Deployed · cutover pending</span></td><td><code>lab-access-01 · .100</code></td><td><code>https://wireguard.home.&lt;domain&gt;</code>; LAN-test UDP 27272</td><td><code>homelab-wireguard</code> ZFS dataset</td></tr>
+            <tr><td>AdGuard Home</td><td><span class="status migration">Parallel trial</span></td><td><code>lab-access-01 · .100</code></td><td>DNS TCP/UDP 53; <code>https://adguard.home.&lt;domain&gt;</code></td><td><code>homelab-adguard</code> ZFS dataset</td></tr>
+            <tr><td>Cloudflare DDNS</td><td><span class="status live">Live</span></td><td><code>lab-access-01 · .100</code></td><td>No client endpoint; updates the public VPN name</td><td>No application dataset; token on guest</td></tr>
+            <tr><td>Caddy</td><td><span class="status live">Live</span></td><td><code>lab-services-01 · .101</code></td><td>Private HTTPS on TCP 443</td><td><code>homelab-reverse-proxy</code> certificate state</td></tr>
+            <tr><td>Homepage</td><td><span class="status live">Live · verified</span></td><td><code>lab-services-01 · .101</code></td><td><code>https://dashboard.home.&lt;domain&gt;</code>; separate operator login</td><td>Git-managed configuration and separately recovered credentials; no new dataset</td></tr>
+            <tr><td>Inkling route (no app deployment)</td><td><span class="status live">Route and backend responding</span></td><td>Caddy <code>.101</code> → legacy host <code>.9:3000</code></td><td><code>https://inkling.home.&lt;domain&gt;</code></td><td>Backend outside this IaC deployment</td></tr>
+            <tr><td>Gitea</td><td><span class="status live">Live</span></td><td><code>lab-services-01 · .101</code></td><td><code>https://gitea.home.&lt;domain&gt;</code>; Git SSH on <code>.101:2222</code></td><td><code>homelab-gitea</code> ZFS dataset</td></tr>
+            <tr><td>Hermes dashboard</td><td><span class="status live">Live · Codex provider</span></td><td><code>lab-agents-01 · .102</code></td><td><code>https://hermes.home.&lt;domain&gt;</code> via Caddy</td><td><code>homelab-hermes</code> ZFS dataset</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">Homepage runs on <code>lab-services-01</code> with native password sessions behind Caddy HTTPS. Not deployed: <code>lab-runner-01</code>, Gitea Actions, n8n, Nextcloud, and Vaultwarden. Private names come from AdGuard at <code>.100</code>; VPN router cutover remains pending. Gitea HTTP is host-loopback-only; clients use Caddy HTTPS.</p>
+    </section>
+
     <nav class="tabs" role="tablist" aria-label="Architecture sections">
       <button id="hardware-tab" role="tab" aria-selected="true" aria-controls="hardware-panel" type="button">Hardware</button>
       <button id="network-tab" role="tab" aria-selected="false" aria-controls="network-panel" type="button">Network</button>
@@ -251,7 +273,7 @@
           <rect class="node storage" x="530" y="290" width="410" height="155" rx="10"></rect>
           <text class="eyebrow" x="555" y="320">ACTIVE · DURABLE / SINGLE DISK</text>
           <text class="label" x="555" y="353">1 TB Crucial MX500 SATA</text>
-          <text class="small" x="555" y="380">tank · 899 GiB available · single-disk ZFS</text>
+          <text class="small" x="555" y="380">tank · single-disk ZFS pool</text>
           <text class="small" x="555" y="407">Datasets + snapshots · no redundancy</text>
         </svg>
         </div>
@@ -282,7 +304,7 @@
             <dt>ISP handoff</dt><dd>Singtel ZTE ZXHN F620 ONR</dd>
             <dt>LAN</dt><dd><code>192.168.1.0/24</code> · gateway <code>192.168.1.254</code></dd>
             <dt>Proxmox</dt><dd><code>eno1 → vmbr0</code> · host <code>192.168.1.10</code></dd>
-            <dt>Current access services</dt><dd>AdGuard and WireGuard run at <code>192.168.1.9</code>; they remain active while replacements are tested on <code>lab-access-01</code> at <code>192.168.1.100</code></dd>
+            <dt>Current access services</dt><dd>AdGuard, DDNS and staged wg-easy run on <code>lab-access-01</code> at <code>192.168.1.100</code>. Native WireGuard remains active on <code>.9</code> behind the unchanged public router forward. Its old DNS service did not answer the previous check.</dd>
             <dt>Switching</dt><dd>Old Wi-Fi router; VLAN support not assumed</dd>
             <dt>DHCP limitation</dt><dd>The F620 misaddresses concurrent VM offers at Layer 2; do not use it for multi-clone acceptance</dd>
             <dt>Temporary VMs</dt><dd>Three Terraform-managed guests run at static <code>192.168.1.100–102</code>; planned runner address <code>192.168.1.103</code> is also outside the F620 pool ending at <code>.99</code></dd>
@@ -599,7 +621,7 @@
           <text class="small" x="475" y="579">Approved zones → WAN egress</text>
           <line class="divider" x1="475" y1="604" x2="725" y2="604"></line>
           <text class="eyebrow" x="475" y="634">WIREGUARD RETURN ROUTE</text>
-          <text class="small" x="475" y="661">10.73.100.0/24 via 10.73.20.10</text>
+          <text class="small" x="475" y="661">10.115.145.0/24 via 10.73.20.10</text>
 
           <rect class="node control" x="40" y="185" width="330" height="85" rx="10"></rect>
           <text class="eyebrow" x="60" y="214">VLAN 10 · 10.73.10.0/24</text>
@@ -644,7 +666,7 @@
           <path class="rail" d="M750 437 H830"></path>
 
           <rect class="boundary" x="830" y="500" width="330" height="85" rx="10"></rect>
-          <text class="eyebrow" x="850" y="529">ROUTED · 10.73.100.0/24 · NOT A VLAN</text>
+          <text class="eyebrow" x="850" y="529">ROUTED · 10.115.145.0/24 · NOT A VLAN</text>
           <text class="label" x="850" y="559">WireGuard peers</text>
           <text class="small" x="997" y="559">Per-device /32 policy</text>
           <path class="rail" d="M750 542 H830"></path>
@@ -666,11 +688,12 @@
             <tr><td>CI runners</td><td>50</td><td><code>10.73.50.0/24</code></td><td>Future <code>lab-runner-01</code></td><td>Isolated from agents, management, and application data</td></tr>
             <tr><td>Trusted clients</td><td>60</td><td><code>10.73.60.0/24</code></td><td>Home laptops and phones</td><td>DNS and selected private applications</td></tr>
             <tr><td>IoT</td><td>70</td><td><code>10.73.70.0/24</code></td><td>Two Xiaomi cameras</td><td>DNS/NTP and explicitly approved internet destinations; no internal zones</td></tr>
-            <tr><td>VPN clients</td><td>Not a VLAN</td><td><code>10.73.100.0/24</code></td><td>WireGuard peers</td><td>Per-peer policy and selected tunnel profile</td></tr>
+            <tr><td>VPN clients</td><td>Not a VLAN</td><td><code>10.115.145.0/24</code></td><td>Existing WireGuard peers; retained across migration</td><td>Per-peer policy and selected tunnel profile</td></tr>
           </tbody>
         </table>
       </div>
       <p class="muted">The <code>10.73.0.0/16</code> plan does not overlap the current <code>192.168.1.0/24</code> LAN. Application container networks must also remain outside it.</p>
+      <p class="muted">Address-plan rationale: the former <code>10.73.100.0/24</code> VPN proposal grouped peers with the future zone numbering. D-021 now retains existing <code>10.115.145.0/24</code>, including alongside future VLANs: renumbering adds no security boundary and is unnecessary for moving WireGuard. Reserve <code>10.73.0.0/16</code> for the planned LAN zones; keep container networks disjoint from both ranges.</p>
 
       <h3>How zones are implemented</h3>
       <div class="table-wrap">
@@ -697,19 +720,33 @@
           </tbody>
         </table>
       </div>
+      <p>Give each person a separate WireGuard peer address; apply default-deny destinations when that peer needs limited access. The <a href="docs/wireguard-peer-access.md">peer access runbook</a> covers native wg-easy policy, routing versus firewall entries, shared Caddy paths and verification. The legacy <code>.9</code> host procedure is archived separately; the router still uses that endpoint until cutover.</p>
 
-      <h3>WireGuard ingress</h3>
+      <h3>WireGuard · installation, client policy and cutover</h3>
+      <p class="callout"><strong>D-084 Amended · canonical installation:</strong> pinned wg-easy <code>15.5.0</code> runs in its own Docker namespace on <code>lab-access-01</code>. Empty durable storage gets a new server/admin and <strong>zero clients</strong>. Task/Ansible own repeatable service installation, defaults and global firewall enablement. Client identities, keys and allowlists belong to durable runtime state; installing fresh does not reconstruct them. One-time migration helpers are archived in <a href="history/2026-10-27-wireguard-migration/README.md">history</a>, without Task hooks or active-role dependencies.</p>
+      <dl class="context-list">
+        <dt>Native per-client firewall</dt><dd>Enabled and verified in <strong>Admin Panel → Interface → Traffic Filtering</strong>. <strong>Firewall Allowed IPs</strong> enforce destination IP/CIDR plus optional port/protocol in FORWARD. Empty lists fall back to client Allowed IPs, then default routes; full-tunnel defaults therefore mean broad access unless an explicit firewall list is set. Native filtering is experimental upstream; isolated real-WireGuard allow/deny, fail-closed disable and restart tests passed. Repeat live deployment changed nothing; actual-device/reboot acceptance remains open.</dd>
+        <dt>Generic fail-closed guard</dt><dd>Container-only rules deny tunnel INPUT and place fallback FORWARD drops behind <code>WG_CLIENTS_wg0</code>, ahead of wg-quick's broad accepts. Established responses return. Disabled/rebuilding native filtering fails closed. This protects container-local administration, which native forwarding policy alone does not cover. No client names, addresses or keys are embedded in the guard.</dd>
+        <dt>Gareth · runtime example</dt><dd>Peer <code>10.115.145.7</code> currently has <code>192.168.1.9:3000/tcp</code>, <code>192.168.1.100:53/tcp</code> and <code>192.168.1.100:53/udp</code> in Firewall Allowed IPs. Its client routing list stays <code>.9/32, .100/32</code>. Other forwarded destinations/ports are denied, including Caddy <code>.101:443</code>. These settings are saved in wg-easy, not provisioned by Ansible. Follow the <a href="docs/wireguard-peer-access.md">native per-client runbook</a> for UI steps and future people.</dd>
+        <dt>Administration and isolation</dt><dd><code>https://wireguard.home.&lt;domain&gt;</code> uses native login behind Caddy. Host TCP 51821 admits only Caddy <code>.101</code> and guest-local bootstrap. Container caps are NET_ADMIN/NET_RAW; no host network/socket, module mount or SYS_MODULE. Guest-loaded WireGuard/netfilter modules persist for boot.</dd>
+        <dt>Defaults and data</dt><dd>Tunnel <code>10.115.145.0/24</code>, external Endpoint <code>donk.live:27272</code>, DNS <code>.100</code>. Existing four clients retain original identities and saved routes; they are current runtime state, not an install fixture. Native administrators can export/impersonate client identities. Recover keys/policies through a separate durable-state restore; protected old exports remain outside Git and are not installation inputs.</dd>
+        <dt>Routing and IPv6</dt><dd>Scoped container/bridge NAT avoids LAN return routes but hides peer addresses from LAN/AdGuard services. Enforce client policy before translation in the VPN namespace. The later VLAN/router design can restore routed visibility. Server IPv6 transport is disabled; full-tunnel clients must capture or disable IPv6 to prevent bypass.</dd>
+        <dt>Router cutover · pending</dt><dd>Public UDP <code>27272</code> still targets native red <code>.9:51820</code>. Trial a copied profile on home Wi-Fi with Endpoint <code>.100:27272</code>; then change only that existing router forward to <code>.100:27272</code> during a maintenance window. Client public Endpoint stays <code>donk.live:27272</code>. Retain red for rollback and test externally before retiring it.</dd>
+      </dl>
+      <p class="muted">Apex and compatibility DDNS are live. Device acceptance still includes full-tunnel internet/DNS, DNS-only, restricted-peer allow/deny, home Wi-Fi/hairpin behaviour and guest reboot. Moving red to Proxmox for agents/CI/data/dev, freeing blue for Nextcloud, remains a later design; do not reimage red before VPN acceptance.</p>
+
+      <h3>Target WireGuard ingress · router cutover pending</h3>
       <figure>
         <div class="diagram-scroll">
         <svg viewBox="0 0 1000 465" role="img" aria-labelledby="network-title network-desc">
-          <title id="network-title">WireGuard ingress through dynamic DNS</title>
-          <desc id="network-desc">A remote client resolves a dedicated Cloudflare DNS-only hostname to the firewall router's changing public IPv4 address. The router forwards one UDP port to the WireGuard service on lab-access-01. That VM also runs AdGuard and the Cloudflare DDNS updater, and routes authenticated VPN clients to private application zones.</desc>
+          <title id="network-title">Target WireGuard ingress through dynamic DNS</title>
+          <desc id="network-desc">After cutover, the router will forward the existing public UDP port to staged wg-easy on lab-access-01. DDNS maintains the apex public address. Today the public endpoint still forwards to legacy WireGuard at 192.168.1.9. VLAN routing in this target diagram is also pending.</desc>
           <defs>
             <marker id="network-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
             </marker>
           </defs>
-          <text class="title" x="40" y="42">WireGuard ingress · IPv4</text>
+          <text class="title" x="40" y="42">Target WireGuard ingress · IPv4</text>
 
           <rect class="node" x="35" y="120" width="175" height="115" rx="10"></rect>
           <text class="eyebrow" x="55" y="150">INTERNET</text>
@@ -748,7 +785,7 @@
           <text class="eyebrow" x="653" y="291">AUTHENTICATED VPN ROUTES</text>
         </svg>
         </div>
-        <figcaption>The public DNS record reveals only the changing router address. Application services remain reachable only after WireGuard authentication.</figcaption>
+        <figcaption>Target path for existing <code>donk.live:27272</code> profiles. DDNS and wg-easy are deployed; router cutover and VLAN routing are pending. The new router destination must be <code>.100:27272</code>, replacing legacy <code>.9:51820</code>. External acceptance is still required. Public DNS reveals only the router address; applications remain private.</figcaption>
       </figure>
 
       <template data-flyout data-title="Network">
@@ -760,7 +797,7 @@
             <li><span class="status accepted">Accepted</span> WAN IPv4 matches the externally observed address; the port-forward design has worked previously.</li>
             <li><span class="status deferred">Superseded</span> The existing Namecheap DDNS script will be retired when Cloudflare becomes authoritative DNS.</li>
             <li><span class="status accepted">D-020 Accepted</span> Maintain separate full-tunnel travel and DNS-only WireGuard client profiles.</li>
-            <li><span class="status accepted">D-021 Accepted</span> Reserve <code>10.73.0.0/16</code> for the target network and <code>10.73.100.0/24</code> for WireGuard peers.</li>
+            <li><span class="status accepted">D-021 Amended · 27 October</span> Reserve <code>10.73.0.0/16</code> for target LAN zones and retain <code>10.115.145.0/24</code> for WireGuard peers. The former <code>10.73.100.0/24</code> VPN proposal is superseded; host migration and future VLANs do not require VPN renumbering.</li>
             <li><span class="status accepted">D-022 Accepted</span> Bridge the F620 and make a new VLAN-capable firewall router the public-IP endpoint and policy authority.</li>
             <li><span class="status accepted">D-023 Accepted</span> Segment management, edge, services, agents, runners, trusted clients, and IoT with default-deny inter-zone rules.</li>
             <li><span class="status accepted">D-024 Accepted</span> Make AdGuard the DNS resolver advertised to every home VLAN and WireGuard peer.</li>
@@ -769,7 +806,8 @@
             <li><span class="status accepted">D-070 Implemented</span> Serve AdGuard administration at <code>https://adguard.home.&lt;domain&gt;</code> through the existing Caddy on <code>192.168.1.101</code>. No client certificate or client-IP allowlist is required now; AdGuard login remains mandatory, and the future management-client policy stays open. The access VM firewall admits the plain-HTTP backend on <code>192.168.1.100:3000</code> only from Caddy's address and guest-local traffic. This source-IP boundary is not cryptographic isolation on the current flat LAN; future VLAN enforcement will strengthen it. Publish no application endpoint to the WAN.</li>
             <li><span class="status accepted">D-071 Implemented</span> Rotate the AdGuard administrator password through a confirmed Task workflow, not a dashboard-only or manual YAML edit. The operator may enter and confirm a password of at least 9 characters at a hidden terminal prompt, or press Enter to generate a random 16-character password; neither is passed as an argument or environment variable. Normal policy convergence accepts the same minimum. Ansible changes the durable bcrypt hash while AdGuard is stopped, verifies the new login and private DNS, and restores the prior configuration on failure. The ignored controller secret is replaced only after guest verification; expect a brief DNS interruption. The workflow has been exercised against the live service.</li>
             <li><span class="status accepted">D-078 Implemented</span> Publish <code>inkling.home.&lt;domain&gt;</code> only in private AdGuard DNS as Caddy's <code>192.168.1.101</code>; Caddy forwards HTTP to the legacy <code>192.168.1.9:3000</code> backend. Reuse the production wildcard certificate and open no WAN port. The backend currently responds, but is outside this IaC deployment; Caddy adds no app login or client allowlist. Application authentication remains unverified, and LAN HTTP plus non-IaC placement are transitional risks.</li>
-            <li><span class="status proposed">D-025 Proposed</span> Route <code>10.73.100.0/24</code> through <code>lab-access-01</code> without internal NAT; NAT only full-tunnel internet egress at the firewall router.</li>
+            <li><span class="status accepted">D-079 Accepted</span> Scope temporary legacy WireGuard grants per peer and client-facing destination, deny all other destinations for restricted peers, and preserve the shared NAT used by unrestricted peers. DNS permission does not imply HTTPS permission; allowing shared Caddy <code>.101:443</code> is broader than allowing only Inkling. Use the <a href="docs/wireguard-peer-access.md">peer access runbook</a> until the replacement VPN and router policies are implemented.</li>
+            <li><span class="status proposed">D-025 Proposed</span> After the router/VLAN transition, route retained <code>10.115.145.0/24</code> through <code>lab-access-01</code> without internal NAT; NAT only full-tunnel internet egress at the firewall router. The current flat-LAN migration uses scoped NAT until those return routes exist.</li>
             <li><span class="status accepted">D-026 Accepted</span> Limit management access to three named devices: the owner's phone, laptop, and desktop; give each its own WireGuard key and stable peer address.</li>
             <li><span class="status accepted">D-027 Accepted</span> Use the Proxmox laptop's physical console as the break-glass management path.</li>
             <li><span class="status deferred">D-028 Superseded</span> Gitea and planned n8n share the services VLAN with future applications. Agents remain on VLAN 40 and may reach only Gitea plus explicitly approved n8n execution endpoints; this is port-level isolation, not a separate application VM boundary.</li>
@@ -819,7 +857,7 @@
           <ul class="compact">
             <li><span class="status accepted">D-002 Accepted</span> Packer owns the generic image, Terraform owns VM infrastructure, and Ansible owns applications.</li>
             <li><span class="status accepted">D-012 Accepted</span> VM operating systems are disposable and recreated from the generic template.</li>
-            <li><span class="status accepted">D-029 Amended</span> Use Task and a root <code>Taskfile.yml</code> as the sole operator interface. Keep controller-side helper scripts private under <code>taskfiles/scripts/</code>; Ansible must not call them, and guest runtime scripts belong to the owning Ansible role.</li>
+            <li><span class="status accepted">D-029 Amended</span> Use Task and a root <code>Taskfile.yml</code> for canonical installation and its checks; keep one-time migrations under <code>history/</code> without active hooks. Keep controller-side helper scripts private under <code>taskfiles/scripts/</code>; Ansible must not call them, and guest runtime scripts belong to the owning Ansible role.</li>
             <li><span class="status accepted">D-030 Accepted</span> Keep repository working agreements in root <code>AGENTS.md</code>; every change must synchronize design impact in this document and progress in <code>implementation.html</code>.</li>
             <li><span class="status accepted">D-031 Accepted</span> Root Task commands orchestrate non-mutating checks and namespaced tool tasks; credentials must be preloaded from an ignored environment file and must never be printed.</li>
             <li><span class="status accepted">D-032 Accepted</span> Standardize guests on Ubuntu Server 26.04 LTS; pin the exact point-release ISO and SHA-256 used for each template build.</li>
@@ -842,49 +880,50 @@
       <figure>
         <div class="diagram-scroll">
         <svg viewBox="0 0 1100 760" role="img" aria-labelledby="vm-title vm-desc">
-          <title id="vm-title">Four virtual machines organized by capability</title>
-          <desc id="vm-desc">Four role-named virtual machines separate access, shared applications, agent execution, and untrusted continuous integration jobs. Agents reach Gitea through Git SSH first. The runner later reaches Gitea Actions, Git, and the registry over internal TLS. Every VM has a rebuildable NVMe operating system disk; only stateful applications receive SATA ZFS datasets.</desc>
+          <title id="vm-title">Three live virtual machines and one planned CI runner</title>
+          <desc id="vm-desc">Three role-named VMs currently run access, shared services, and Hermes. A dashed fourth box shows the future isolated CI runner. A solid arrow shows live Hermes-to-Gitea Git SSH and private HTTPS API access; the dashed runner arrow shows future Gitea Actions. Live VM operating system disks are rebuildable on NVMe, while application data resides on SATA ZFS datasets.</desc>
           <defs>
             <marker id="vm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M0 0 10 5 0 10z" fill="var(--muted)"></path>
             </marker>
           </defs>
           <rect class="boundary" x="25" y="25" width="1050" height="690" rx="16"></rect>
-          <text class="title" x="55" y="65">Proxmox node blue · four capability domains</text>
+          <text class="title" x="55" y="65">Proxmox blue · three live VMs + one planned runner</text>
 
           <rect class="node network" x="70" y="105" width="430" height="130" rx="10"></rect>
           <text class="eyebrow" x="95" y="133">ACCESS BOUNDARY</text>
           <text class="label" x="95" y="166">lab-access-01</text>
-          <text class="small" x="95" y="197">WireGuard · AdGuard · 1 vCPU · 1.5 GB</text>
+          <text class="small" x="95" y="192">AdGuard + DDNS live · 1 vCPU · 1.5 GB</text>
+          <text class="small" x="95" y="216">wg-easy staged · public VPN still on red</text>
 
           <rect class="node storage" x="600" y="105" width="430" height="130" rx="10"></rect>
           <text class="eyebrow" x="625" y="133">SHARED APPLICATIONS</text>
           <text class="label" x="625" y="166">lab-services-01</text>
-          <text class="small" x="625" y="197">Gitea · planned n8n · 2 vCPU · 4 GB</text>
+          <text class="small" x="625" y="192">Gitea + Caddy + Homepage · 2 vCPU · 4 GB</text>
+          <text class="small" x="625" y="216">n8n and Nextcloud planned</text>
 
           <rect class="node" x="70" y="300" width="430" height="130" rx="10"></rect>
           <text class="eyebrow" x="95" y="328">AGENT RUNTIME</text>
           <text class="label" x="95" y="361">lab-agents-01</text>
-          <text class="small" x="95" y="392">Hermes · future agents · 2 vCPU · 3 GB</text>
+          <text class="small" x="95" y="387">Hermes dashboard live · 2 vCPU · 3 GB</text>
+          <text class="small" x="95" y="411">Codex + Telegram · scoped Gitea access</text>
 
-          <rect class="node control" x="600" y="300" width="430" height="130" rx="10"></rect>
-          <text class="eyebrow" x="625" y="328">UNTRUSTED CI EXECUTION</text>
+          <rect class="node control planned-node" x="600" y="300" width="430" height="130" rx="10"></rect>
+          <text class="eyebrow" x="625" y="328">FUTURE · UNTRUSTED CI EXECUTION</text>
           <text class="label" x="625" y="361">lab-runner-01</text>
-          <text class="small" x="625" y="392">Gitea Runner · 2 vCPU · 2 GB · no data mounts</text>
+          <text class="small" x="625" y="387">Not created · 2 vCPU · 2 GB</text>
+          <text class="small" x="625" y="411">No application data mounts</text>
 
-          <path d="M500 350 C550 350 550 205 600 205" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
-          <text class="eyebrow" x="495" y="285">GIT · APPROVED MCP</text>
-          <path d="M815 300 V235" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
-          <text class="eyebrow" x="835" y="272">ACTIONS · TLS</text>
+          <path d="M500 350 C550 350 550 205 600 205" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
+          <text class="eyebrow" x="495" y="285">GIT + HTTPS API</text>
+          <path class="planned-link" d="M815 300 V235" fill="none" stroke="var(--blue)" stroke-width="2" marker-end="url(#vm-arrow)"></path>
+          <text class="eyebrow" x="835" y="272">FUTURE ACTIONS</text>
 
-          <path class="rail" d="M285 430 V480 M815 430 V480 M285 480 H815"></path>
-          <text class="eyebrow" x="390" y="510">TERRAFORM-MANAGED ROOT DISKS AND APPLICATION MAPPINGS</text>
-          <path class="line" d="M550 480 V550 H290 V575"></path>
-          <path class="data-line" d="M550 550 H810 V575"></path>
+          <text class="eyebrow" x="70" y="530">STORAGE MODEL FOR THE THREE LIVE VMS</text>
 
           <rect class="node os-storage" x="70" y="575" width="440" height="105" rx="10"></rect>
           <text class="eyebrow" x="95" y="605">OS TIER · NVME / LVM-THIN</text>
-          <text class="label" x="95" y="640">Four disposable root disks</text>
+          <text class="label" x="95" y="640">Three disposable root disks</text>
           <text class="small" x="95" y="665">Packer → Terraform → Ansible</text>
 
           <rect class="node storage" x="590" y="575" width="440" height="105" rx="10"></rect>
@@ -893,17 +932,17 @@
           <text class="small" x="615" y="665">The CI runner receives no durable mapping</text>
         </svg>
         </div>
-        <figcaption>The runner is the fourth VM because workflow-controlled code must not share a host with Gitea or Hermes credentials. It receives no application dataset or deployment authority.</figcaption>
+        <figcaption>Solid boxes and the Hermes-to-Gitea arrow are deployed; the dashed runner and Actions arrow are planned. The future CI runner needs a separate trust boundary and will receive no application dataset or deployment authority. wg-easy is staged on access; the legacy public WireGuard endpoint remains <code>.9</code> until client acceptance and router cutover.</figcaption>
       </figure>
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>VM</th><th>VM ID</th><th>Temporary IP</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
+          <thead><tr><th>VM</th><th>State</th><th>VM ID</th><th>Temporary IP</th><th>vCPU</th><th>RAM</th><th>OS disk</th><th>Trust boundary</th></tr></thead>
           <tbody>
-            <tr><td><code>lab-access-01</code></td><td>1000</td><td><code>192.168.1.100</code></td><td>1</td><td>1.5 GB</td><td>16 GB</td><td>Remote access and DNS</td></tr>
-            <tr><td><code>lab-services-01</code></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>4 GB</td><td>32 GB</td><td>Gitea, planned n8n, future Nextcloud, and deferred Vaultwarden allocation</td></tr>
-            <tr><td><code>lab-agents-01</code></td><td>1002</td><td><code>192.168.1.102</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Agent execution and external credentials</td></tr>
-            <tr><td><code>lab-runner-01</code> <span class="status proposed">Planned</span></td><td>1003</td><td><code>192.168.1.103</code></td><td>2</td><td>2 GB</td><td>32 GB</td><td>CI jobs; no application datasets or deployment credentials</td></tr>
+            <tr><td><code>lab-access-01</code></td><td><span class="status live">Live</span></td><td>1000</td><td><code>192.168.1.100</code></td><td>1</td><td>1.5 GB</td><td>16 GB</td><td>DNS and DDNS; WireGuard replacement planned</td></tr>
+            <tr><td><code>lab-services-01</code></td><td><span class="status live">Live</span></td><td>1001</td><td><code>192.168.1.101</code></td><td>2</td><td>4 GB</td><td>32 GB</td><td>Gitea, Caddy and Homepage; n8n and Nextcloud planned</td></tr>
+            <tr><td><code>lab-agents-01</code></td><td><span class="status live">Live</span></td><td>1002</td><td><code>192.168.1.102</code></td><td>2</td><td>3 GB</td><td>32 GB</td><td>Hermes, Codex, Telegram, and Git SSH identity</td></tr>
+            <tr><td><code>lab-runner-01</code></td><td><span class="status planned">Planned</span></td><td>1003</td><td><code>192.168.1.103</code></td><td>2</td><td>2 GB</td><td>32 GB</td><td>CI jobs; no application datasets or deployment credentials</td></tr>
           </tbody>
         </table>
       </div>
@@ -937,7 +976,7 @@
             <li><span class="status deferred">D-040 Superseded</span> Telmate-specific disk ordering and normalization rules ended with the provider migration.</li>
             <li><span class="status deferred">D-041 Superseded</span> The three-VM consolidation remains the implemented baseline but no longer covers the CI execution boundary; D-056 adds a fourth VM.</li>
             <li><span class="status accepted">D-042 Amended</span> Gitea, planned n8n, and future Nextcloud share <code>lab-services-01</code>; Vaultwarden's empty allocation remains but its deployment is deferred. Accept the shared VM failure and compromise boundary and isolate every deployed workload with separate Compose projects, container networks, secrets, and ZFS datasets.</li>
-            <li><span class="status accepted">D-043 Amended</span> Keep WireGuard native for simple host networking. Deploy current application priorities with Ansible-managed Docker Compose and pinned images; Vaultwarden is no longer part of the near-term sequence.</li>
+            <li><span class="status accepted">D-043 Amended</span> Use Ansible-managed Docker Compose and pinned images for application priorities, including wg-easy under D-084. The former native WireGuard starter is retired; Vaultwarden remains deferred.</li>
             <li><span class="status accepted">D-044 Accepted</span> Generate ignored Ansible inventory from Terraform outputs, keep SSH host-key verification enabled, and expose separate connectivity, check-mode, and common-baseline Task commands. The common command must not invoke workload roles.</li>
             <li><span class="status accepted">D-045 Accepted</span> Use <code>bpg/proxmox</code> <code>0.112.0</code>. Import the three live VM IDs without recreation, pin their existing MAC addresses, ignore create-time clone provenance and manual power state, and require an empty post-migration plan. This provider is the planned Terraform interface for Proxmox VirtioFS mappings.</li>
             <li><span class="status accepted">D-048 Accepted</span> Grant the Terraform API token only <code>Mapping.Audit</code>, <code>Mapping.Modify</code>, and <code>Mapping.Use</code> at <code>/mapping/dir</code> through a separate <code>TerraformMapping</code> role; do not expand its general VM role at the cluster root.</li>
@@ -967,10 +1006,11 @@
 
       <section id="network-app-panel" role="tabpanel" aria-labelledby="network-app-tab">
         <h3>WireGuard + AdGuard + Cloudflare DDNS</h3>
-        <p>WireGuard is the sole remote ingress. The old AdGuard and WireGuard services remain active at <code>192.168.1.9</code> during migration. The parallel resolver at <code>192.168.1.100</code> uses a reviewed DNS policy: <code>adguard.home.net</code> points to the new DNS address, while the HTTPS administration name <code>adguard.home.&lt;domain&gt;</code> and Gitea resolve privately to Caddy at <code>192.168.1.101</code>. Router and VPN client DNS still point to the old service. A systemd timer on the new access VM already reconciles the DNS-only <code>vpn.&lt;domain&gt;</code> A record with the current public IPv4 every five minutes.</p>
+        <p>WireGuard is the sole inbound home router port. Telegram is a separate, outbound cloud-mediated command path to Hermes, restricted to the owner's user ID; it does not expose a home application port. The legacy access host remains at <code>192.168.1.9</code>; its WireGuard service is active, external validation is pending, and its old DNS did not answer the previous check. AdGuard <code>.100</code> serves private application names pointing to Caddy <code>.101</code>. Router and VPN client DNS cutover is not recorded. The access VM's systemd DDNS timer reconciles DNS-only apex and <code>vpn.&lt;domain&gt;</code> A records every five minutes.</p>
         <p>No application is exposed directly to the public internet.</p>
-        <p><strong>Durable:</strong> VPN identities, peer assignments, AdGuard configuration, and query data. The updater itself has no durable application state. <strong>Deployment:</strong> native WireGuard, a digest-pinned Ansible-managed AdGuard Compose project, and an Ansible-managed unprivileged DDNS service.</p>
+        <p><strong>Durable:</strong> wg-easy database/identities on <code>homelab-wireguard</code>, AdGuard policy/query data on its own dataset, and protected external recovery copies. The DDNS updater has no application dataset. <strong>Deployment:</strong> live wg-easy and AdGuard Compose projects plus unprivileged DDNS service; the native destination starter is retired. wg-easy has imported the four existing peers; public cutover is pending.</p>
         <dl class="context-list">
+          <dt>wg-easy administration</dt><dd>Pinned container <code>15.5.0</code>, managed through <code>task apps:wireguard:deploy</code>. Caddy serves <code>https://wireguard.home.&lt;domain&gt;</code> with wg-easy's native <code>admin</code> login; retrieve the separate password through <code>task apps:wireguard:credentials</code>. Compose lives at <code>/opt/homelab/wg-easy</code>; the durable bind mount is <code>/srv/homelab/wireguard → /etc/wireguard</code>. The four recreated peers retain original private keys and support verified downloads/QR exports. This administrator can impersonate those client identities; keys also exist in root-only recovery files on presently unencrypted storage.</dd>
           <dt>AdGuard DNS and UI</dt><dd>Host networking preserves DNS client addresses; plain DNS binds only to <code>192.168.1.100:53</code>. Caddy terminates HTTPS for <code>adguard.home.&lt;domain&gt;</code> on the services VM and proxies to <code>192.168.1.100:3000</code>. A dedicated nftables rule admits that HTTP backend only from Caddy's address and guest-local traffic; Docker requires the firewall unit on boot. No client certificate or IP allowlist is configured at Caddy. Explicit container config and work paths point to the ZFS-backed mount.</dd>
           <dt>AdGuard policy</dt><dd>Two DNS-over-HTTPS upstreams in load-balancing mode, four bootstrap resolvers, five subscribed filters (three active), private HTTPS rewrites for AdGuard, Gitea, Hermes, and Inkling, and the existing 90-day query-log retention on unencrypted ZFS. The old <code>adguard.home.net</code> and <code>router.home.net</code> aliases are not part of the new resolver's desired policy. Broader rewrite planning is deferred. Initial setup and idempotent reconciliation use the local API; the running YAML is not edited directly. Source-controlled policy supersedes dashboard edits on the next deployment. Existing OISD Big and Small overlap and can be rationalized only after parity testing.</dd>
           <dt>AdGuard secret</dt><dd>A new administrator password is generated outside Git, copied to a root-only file on the VM, and not stored on the persistent dataset.</dd>
@@ -1189,7 +1229,7 @@
                 <tr><td>Inkling</td><td>HTTPS link and frontend availability; future explicit application health JSON</td><td>No built-in integration required. Current frontend checks do not verify the generation pipeline or backend secrets; any custom health endpoint must export only approved status fields.</td></tr>
                 <tr><td><a href="https://gethomepage.dev/widgets/services/caddy/">Caddy</a></td><td>Live upstream count, current requests and failure state</td><td>Only <code>GET /reverse_proxy/upstreams</code> through private <code>172.30.90.2:2020</code>. Full admin API stays on container loopback <code>127.0.0.1:2019</code>; no host-published management ports, configuration access or writes from Homepage.</td></tr>
                 <tr><td><a href="https://gethomepage.dev/configs/docker/">Docker containers</a></td><td>Container state and CPU/RAM/network statistics</td><td>Defer direct integration. A read-only socket mount does not make the Docker API safe. Later consider a tightly filtered GET-only socket proxy per host with authenticated private transport; even read APIs may expose environment secrets. No open TCP 2375 or dashboard socket mount.</td></tr>
-                <tr><td>WireGuard + DDNS</td><td>Future wg-easy handshake/peer totals and updater's last successful run</td><td>WireGuard deployment and a separate read-only integration remain planned. Dedicated widget statistics remain deferred pending v15 API/authentication review. Do not reuse its full VPN administrator login or Cloudflare token in Homepage; sanitized exports must omit keys and profiles.</td></tr>
+                <tr><td>WireGuard + DDNS</td><td>Future wg-easy handshake/peer totals and updater's last successful run</td><td>wg-easy is staged; Caddy inventory discovers its hostname automatically. Dedicated widget statistics remain deferred pending v15 API/authentication review. Do not reuse its full VPN administrator login or Cloudflare token in Homepage; sanitized exports must omit keys and profiles.</td></tr>
                 <tr><td>Host storage, patches and backups</td><td>Blue/red/guest filesystems, sensors; ZFS health, snapshot age, pending reboot, dated remediation status</td><td>Later choose a host metrics agent such as <a href="https://gethomepage.dev/widgets/services/glances/">Glances</a> or a narrow status exporter. Homepage's <a href="https://gethomepage.dev/widgets/info/resources/">Resources widget</a> describes its container, not all hosts. Status exports need timestamps and must become stale/unknown rather than show a permanent green check.</td></tr>
                 <tr><td><a href="https://gethomepage.dev/widgets/services/whatsupdocker/">What's Up Docker</a></td><td>Watched images and available updates</td><td>Optional later update-awareness service after reviewing its Docker discovery permissions. Report candidates for human-reviewed image/pin upgrades; do not enable automatic replacement of our custom security builds. An available image update is not a vulnerability assessment.</td></tr>
                 <tr><td><a href="https://gethomepage.dev/widgets/services/beszel/">Beszel</a></td><td>Alternative host overview and per-system CPU/RAM/disk/network</td><td>Alternative to a Glances approach, not another required monitoring stack. Current Homepage documentation requires a Beszel superuser for its widget; defer that credential grant and reassess least-privilege support before selecting it.</td></tr>
@@ -1328,7 +1368,7 @@
           <ul class="compact">
             <li><span class="status accepted">D-006 Accepted</span> Ordinary compute destruction must preserve ZFS application datasets. Data destruction requires a separate explicit action.</li>
             <li><span class="status deferred">D-007 Deferred</span> Off-host backup target, retention, and restore objectives are postponed. Until resolved, the single SATA disk is a known single point of permanent data loss and ZFS snapshots are not backups.</li>
-            <li><span class="status accepted">D-017 Accepted</span> Use Ansible-managed Docker Compose for applications. Keep WireGuard as a native host service; give the AdGuard container host networking only to preserve original DNS client addresses, with tightly scoped listeners.</li>
+            <li><span class="status accepted">D-017 Amended</span> Use Ansible-managed Compose for applications. D-084 replaces native WireGuard with wg-easy in a dedicated Docker namespace. AdGuard retains host networking and tightly scoped listeners; VPN bridge NAT means its queries do not retain original peer addresses.</li>
             <li><span class="status deferred">D-018 Deferred</span> Centralized infrastructure secret management is currently disproportionate to the small secret set. Revisit it before unattended deployment or material secret growth; Terraform must never receive application secret plaintext.</li>
             <li><span class="status deferred">D-019 Deferred</span> Vaultwarden remains a candidate password manager, not a current implementation commitment.</li>
             <li><span class="status deferred">Deferred</span> Define Vaultwarden emergency recovery only when the service returns to the roadmap.</li>
