@@ -207,6 +207,7 @@
     <section aria-labelledby="live-title">
       <h2 id="live-title">Deployed today</h2>
       <p>Three Proxmox VMs run on the current flat <code>192.168.1.0/24</code> LAN. wg-easy is staged on <code>.100</code> with the existing identity and four peers; the public router forward still serves native WireGuard on <code>.9</code>. VLANs and a fourth CI VM remain targets.</p>
+      <p><strong>Infrastructure source:</strong> private <a href="https://gitea.home.donk.live/homelab-admin/homelab">homelab-admin/homelab</a> on Gitea, separate from agent-owned application repositories and the organization runner's scope. Git publishes code/design/history only; credentials, generated state and application data stay outside it. The existing GitHub <code>origin</code> is retained; publishing here does not mirror or deploy automatically.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Service</th><th>State</th><th>Runs on</th><th>Private entry point</th><th>Durable state</th></tr></thead>
