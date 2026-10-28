@@ -12,3 +12,4 @@ gitea_proxy_network: homelab-proxy
 gitea_admin_username: homelab-admin
 gitea_admin_email: admin@gmail.com
 gitea_admin_password_file: ""
+gitea_actions_enabled: true

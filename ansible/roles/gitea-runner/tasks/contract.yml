@@ -1,0 +1,50 @@
+---
+- name: Validate the admitted application's identity and image contract
+  ansible.builtin.assert:
+    that:
+      - app.name is match('^[a-z][a-z0-9-]{0,39}$')
+      - app.images | length > 0
+      - app.authorized_keys | length > 0
+      - app.authorized_keys | select('match', '^ssh-ed25519 [A-Za-z0-9+/=]+(?: .*)?$') | list | length == app.authorized_keys | length
+    quiet: true
+
+- name: Validate image repositories and Compose variable names
+  ansible.builtin.assert:
+    that:
+      - item.value.repository is match('^gitea\.home\.[a-z0-9.-]+/lab-agents-org/[a-z0-9][a-z0-9._/-]*$')
+      - item.value.variable is match('^[A-Z][A-Z0-9_]*_IMAGE$')
+    quiet: true
+  loop: "{{ app.images | dict2items }}"
+
+- name: Create the root-owned contract directory
+  ansible.builtin.file:
+    path: "/etc/homelab-deploy/{{ app.name }}"
+    state: directory
+    owner: root
+    group: "{{ gitea_deploy_user }}"
+    mode: '0750'
+
+- name: Install reviewed Compose configuration outside the workflow workspace
+  ansible.builtin.copy:
+    src: "{{ app.compose_file }}"
+    dest: "/etc/homelab-deploy/{{ app.name }}/compose.yaml"
+    owner: root
+    group: "{{ gitea_deploy_user }}"
+    mode: '0640'
+
+- name: Install protected operator runtime settings without exposing values
+  ansible.builtin.copy:
+    src: "{{ app.runtime_env_file }}"
+    dest: "/etc/homelab-deploy/{{ app.name }}/runtime.env"
+    owner: root
+    group: "{{ gitea_deploy_user }}"
+    mode: '0640'
+  no_log: true
+
+- name: Install the admitted image mapping
+  ansible.builtin.copy:
+    content: "{{ {'images': app.images} | to_nice_json }}\n"
+    dest: "/etc/homelab-deploy/{{ app.name }}/contract.json"
+    owner: root
+    group: "{{ gitea_deploy_user }}"
+    mode: '0640'

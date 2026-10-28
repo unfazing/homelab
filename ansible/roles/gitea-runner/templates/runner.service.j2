@@ -1,0 +1,18 @@
+[Unit]
+Description=Organization Gitea Docker runner
+Requires=docker.service
+After=docker.service
+ConditionPathExists={{ gitea_runner_home }}/state/.runner
+
+[Service]
+Environment=HOME={{ gitea_runner_home }}
+Environment=DOCKER_HOST=unix:///run/user/{{ gitea_runner_ci_uid }}/docker.sock
+WorkingDirectory={{ gitea_runner_home }}/state
+ExecStart=/usr/local/bin/gitea-runner -c /etc/homelab-runner/config.yml daemon
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=90
+UMask=0077
+
+[Install]
+WantedBy=default.target

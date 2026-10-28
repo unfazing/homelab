@@ -1,0 +1,5 @@
+{% for app in gitea_runner_app_contracts %}
+{% for key in app.authorized_keys %}
+restrict,command="/usr/local/libexec/homelab-deploy {{ app.name }}" {{ key }}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,27 @@
+table inet homelab_ci_egress {
+  chain output {
+    type filter hook output priority -10; policy accept;
+    meta skuid {{ gitea_runner_ci_uid }} jump ci
+    meta skuid {{ gitea_runner_deploy_uid }} jump apps
+  }
+  chain ci {
+    ct state established,related accept
+    ip daddr 192.168.1.9 tcp dport 22 accept
+    jump shared
+  }
+  chain apps {
+    ct state established,related accept
+    jump shared
+  }
+  chain shared {
+    ip daddr { 127.0.0.53, 192.168.1.100 } udp dport 53 accept
+    ip daddr { 127.0.0.53, 192.168.1.100 } tcp dport 53 accept
+    # Caddy hosts Gitea/registry here. This also permits other HTTPS routes
+    # on that shared listener; it is not an HTTP hostname authorization rule.
+    ip daddr 192.168.1.101 tcp dport 443 accept
+    meta nfproto ipv6 reject
+    ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } reject
+    tcp dport { 80, 443 } accept
+    reject
+  }
+}

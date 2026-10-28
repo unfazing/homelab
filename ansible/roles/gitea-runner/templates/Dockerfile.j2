@@ -1,0 +1,5 @@
+FROM {{ gitea_runner_cli_image }}
+USER root
+RUN apk add --no-cache bash git openssh-client curl ca-certificates python3 \
+    && docker buildx version && docker compose version
+# No credentials or application sources are baked into this tool image.

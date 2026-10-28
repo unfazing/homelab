@@ -1,0 +1,73 @@
+---
+- name: Create the rootless runtime account
+  ansible.builtin.user:
+    name: "{{ runtime.user }}"
+    home: "{{ runtime.home }}"
+    shell: /bin/bash
+    password_lock: true
+    create_home: true
+
+- name: Read the runtime UID
+  ansible.builtin.command:
+    argv: [id, -u, "{{ runtime.user }}"]
+  register: runtime_uid
+  changed_when: false
+
+- name: Remember the runtime identity
+  ansible.builtin.set_fact:
+    "gitea_runner_{{ runtime.key }}_uid": "{{ runtime_uid.stdout | int }}"
+
+- name: Require a subordinate ID allocation for rootless Docker
+  ansible.builtin.shell: |
+    set -eu
+    for file in /etc/subuid /etc/subgid; do
+      awk -F: -v name="$RUNTIME_USER" '$1 == name && $3 >= 65536 {found=1} END {exit !found}' "$file"
+    done
+  environment:
+    RUNTIME_USER: "{{ runtime.user }}"
+  changed_when: false
+
+- name: Protect the top-level home from SSH command-policy replacement
+  ansible.builtin.file:
+    path: "{{ runtime.home }}"
+    owner: root
+    group: "{{ runtime.user }}"
+    mode: '0750'
+
+- name: Create writable rootless state below the protected home
+  ansible.builtin.file:
+    path: "{{ runtime.home }}/{{ item }}"
+    state: directory
+    owner: "{{ runtime.user }}"
+    group: "{{ runtime.user }}"
+    mode: '0700'
+  loop: [.config, .config/systemd, .config/systemd/user, .config/docker, .local, .cache, .docker, state, releases]
+
+- name: Limit rootless daemon logs and use the approved resolver
+  ansible.builtin.copy:
+    content: '{"dns":["192.168.1.100"],"log-driver":"local","log-opts":{"max-size":"10m","max-file":"3"}}'
+    dest: "{{ runtime.home }}/.config/docker/daemon.json"
+    owner: root
+    group: "{{ runtime.user }}"
+    mode: '0640'
+
+- name: Create root-owned system manager overrides
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "/etc/systemd/system/user@{{ runtime_uid.stdout }}.service.d"
+    - "/etc/systemd/system/user-{{ runtime_uid.stdout }}.slice.d"
+
+- name: Require egress policy before starting a rootless user manager
+  ansible.builtin.template:
+    src: user-dependency.conf.j2
+    dest: "/etc/systemd/system/user@{{ runtime_uid.stdout }}.service.d/homelab-egress.conf"
+    mode: '0644'
+
+- name: Limit the whole runtime user including nested containers and builds
+  ansible.builtin.template:
+    src: user-limits.conf.j2
+    dest: "/etc/systemd/system/user-{{ runtime_uid.stdout }}.slice.d/homelab-limits.conf"
+    mode: '0644'

@@ -1,0 +1,51 @@
+---
+- name: Prove the CI account cannot read either privileged runtime socket
+  ansible.builtin.shell: |
+    test ! -r /var/run/docker.sock
+    test ! -r "/run/user/$DEPLOY_UID/docker.sock"
+  become_user: "{{ gitea_runner_user }}"
+  environment:
+    DEPLOY_UID: "{{ gitea_runner_deploy_uid }}"
+  changed_when: false
+
+- name: Prove the CI account cannot reach Proxmox or a neighboring server management port
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import socket
+        for host, port in [('192.168.1.10', 8006), ('192.168.1.101', 22)]:
+            try:
+                connection = socket.create_connection((host, port), timeout=3)
+            except OSError:
+                continue
+            connection.close()
+            raise SystemExit('CI management egress is not blocked')
+  become_user: "{{ gitea_runner_user }}"
+  changed_when: false
+
+- name: Prove private Gitea HTTPS remains reachable with certificate validation
+  ansible.builtin.uri:
+    url: "{{ gitea_runner_url }}/api/healthz"
+    validate_certs: true
+    return_content: false
+  become_user: "{{ gitea_runner_user }}"
+
+- name: Prove Docker CLI Buildx and Compose v2 work in the job tool image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --mount
+      - "type=bind,src=/run/user/{{ gitea_runner_ci_uid }}/docker.sock,dst=/var/run/docker.sock"
+      - "{{ gitea_runner_job_image }}"
+      - sh
+      - -ec
+      - docker info >/dev/null; docker buildx version; docker compose version; git --version
+  become_user: "{{ gitea_runner_user }}"
+  environment:
+    HOME: "{{ gitea_runner_home }}"
+    DOCKER_HOST: "unix:///run/user/{{ gitea_runner_ci_uid }}/docker.sock"
+  changed_when: false

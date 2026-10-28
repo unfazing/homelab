@@ -1,0 +1,4 @@
+---
+# No application or durable data is created by installing the runner.
+# Admit each application explicitly using the contract described in the role README.
+gitea_runner_app_contracts: []

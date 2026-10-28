@@ -1,0 +1,14 @@
+[Unit]
+Description=Egress boundary for CI and application runtime users
+Before=user@{{ gitea_runner_ci_uid }}.service user@{{ gitea_runner_deploy_uid }}.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/homelab-runner-egress
+ExecReload=/usr/local/libexec/homelab-runner-egress
+RemainAfterExit=yes
+# Keep rules on stop; no global nftables flush and no WireGuard/Docker changes.
+
+[Install]
+WantedBy=multi-user.target

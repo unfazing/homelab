@@ -1,0 +1,28 @@
+name: Docker worker smoke test
+on:
+  workflow_dispatch:
+jobs:
+  docker:
+    runs-on: homelab-docker
+    steps:
+      - name: Build and test a disposable image with Compose
+        run: |
+          set -eu
+          docker info
+          docker buildx version
+          docker compose version
+          work=$(mktemp -d)
+          cd "$work"
+          cat > Dockerfile <<'DOCKERFILE'
+          FROM docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
+          RUN echo smoke-ok > /smoke-result
+          DOCKERFILE
+          docker buildx build --load --tag homelab-ci-smoke:test .
+          cat > compose.yaml <<'COMPOSE'
+          services:
+            test:
+              image: homelab-ci-smoke:test
+              command: [sh, -ec, 'test "$(cat /smoke-result)" = smoke-ok']
+          COMPOSE
+          docker compose -p "smoke-${{ gitea.run_id }}" up --abort-on-container-exit --exit-code-from test
+          # The runner proxy sweeps these disposable resources when the job ends.

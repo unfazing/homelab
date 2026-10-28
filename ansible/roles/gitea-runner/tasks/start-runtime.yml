@@ -1,0 +1,65 @@
+---
+- name: Keep the rootless user manager running at boot
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ runtime.user }}"]
+    creates: "/var/lib/systemd/linger/{{ runtime.user }}"
+
+- name: Start the guarded user manager
+  ansible.builtin.systemd_service:
+    name: "user@{{ runtime.uid }}"
+    state: started
+
+- name: Inspect the rootless service installation
+  ansible.builtin.stat:
+    path: "{{ runtime.home }}/.config/systemd/user/docker.service"
+  register: rootless_service
+
+- name: Install rootless Docker before protecting the top-level home
+  when: not rootless_service.stat.exists
+  block:
+    - name: Permit the official installer to write its home
+      ansible.builtin.file:
+        path: "{{ runtime.home }}"
+        owner: "{{ runtime.user }}"
+
+    - name: Install the user service without changing existing rootful Docker
+      ansible.builtin.command:
+        argv: [dockerd-rootless-setuptool.sh, install, --force]
+      become_user: "{{ runtime.user }}"
+      environment:
+        HOME: "{{ runtime.home }}"
+        XDG_RUNTIME_DIR: "/run/user/{{ runtime.uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ runtime.uid }}/bus"
+      changed_when: true
+  always:
+    - name: Protect the home from SSH policy replacement even if installation fails
+      ansible.builtin.file:
+        path: "{{ runtime.home }}"
+        owner: root
+        group: "{{ runtime.user }}"
+        mode: '0750'
+
+- name: Enable the rootless daemon
+  ansible.builtin.systemd_service:
+    name: docker
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  become_user: "{{ runtime.user }}"
+  environment:
+    HOME: "{{ runtime.home }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ runtime.uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ runtime.uid }}/bus"
+
+- name: Verify rootless Docker and cgroup support
+  ansible.builtin.command:
+    argv: [docker, info, --format, "{% raw %}{{json .SecurityOptions}} {{.CgroupVersion}}{% endraw %}"]
+  become_user: "{{ runtime.user }}"
+  environment:
+    HOME: "{{ runtime.home }}"
+    DOCKER_HOST: "unix:///run/user/{{ runtime.uid }}/docker.sock"
+    XDG_RUNTIME_DIR: "/run/user/{{ runtime.uid }}"
+  register: rootless_info
+  changed_when: false
+  failed_when: rootless_info.rc != 0 or 'rootless' not in rootless_info.stdout or not rootless_info.stdout.endswith(' 2')

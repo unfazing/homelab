@@ -1,0 +1,108 @@
+---
+- name: Install and verify the external Docker worker before accepting jobs
+  hosts: runners
+  any_errors_fatal: true
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../vars/runner-apps.yml
+  roles:
+    - gitea-runner
+
+- name: Enable Gitea Actions after the worker foundation passes
+  hosts: services
+  any_errors_fatal: true
+  become: true
+  gather_facts: true
+  vars:
+    gitea_actions_enabled: true
+  roles:
+    - gitea
+
+- name: Enroll and start the organization worker
+  hosts: runners
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check for an existing persistent registration
+      ansible.builtin.stat:
+        path: /var/lib/homelab-ci/state/.runner
+      register: runner_registration
+
+    - name: Generate an organization registration token only for a fresh registration
+      ansible.builtin.command:
+        argv: [docker, exec, --user, git, gitea, gitea, actions, generate-runner-token, --scope, lab-agents-org]
+      delegate_to: "{{ groups['services'][0] }}"
+      register: runner_enrollment
+      no_log: true
+      changed_when: true
+      when: not runner_registration.stat.exists
+
+    - name: Require a token-only enrollment response
+      ansible.builtin.assert:
+        that:
+          - runner_enrollment.stdout | trim is match('^[A-Za-z0-9_-]{20,}$')
+        quiet: true
+      no_log: true
+      when: not runner_registration.stat.exists
+
+    - name: Register using a temporary token file and always remove it
+      when: not runner_registration.stat.exists
+      block:
+        - name: Place the enrollment token in a private file
+          ansible.builtin.copy:
+            content: "{{ runner_enrollment.stdout | trim }}\n"
+            dest: /var/lib/homelab-ci/state/enrollment-token
+            owner: homelab-ci
+            group: homelab-ci
+            mode: '0600'
+          no_log: true
+
+        - name: Enroll the runner without putting the token in arguments or environment
+          ansible.builtin.command:
+            argv:
+              - /usr/local/bin/gitea-runner
+              - -c
+              - /etc/homelab-runner/config.yml
+              - register
+              - --no-interactive
+              - --instance
+              - "https://gitea.home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+              - --token-file
+              - /var/lib/homelab-ci/state/enrollment-token
+              - --name
+              - red-docker-01
+              - --labels
+              - homelab-docker:docker://homelab/ci-docker:29.9.2
+            chdir: /var/lib/homelab-ci/state
+          become_user: homelab-ci
+          environment:
+            HOME: /var/lib/homelab-ci
+          no_log: true
+          changed_when: true
+      always:
+        - name: Remove the temporary enrollment token
+          ansible.builtin.file:
+            path: /var/lib/homelab-ci/state/enrollment-token
+            state: absent
+          no_log: true
+
+    - name: Restrict the persistent machine credential
+      ansible.builtin.file:
+        path: /var/lib/homelab-ci/state/.runner
+        owner: homelab-ci
+        group: homelab-ci
+        mode: '0600'
+
+    - name: Enable the runner after registration and boundary verification
+      ansible.builtin.systemd_service:
+        name: gitea-runner
+        scope: user
+        enabled: true
+        state: "{{ 'restarted' if runner_binary.changed or runner_configuration.changed or runner_unit.changed else 'started' }}"
+        daemon_reload: true
+      become_user: homelab-ci
+      environment:
+        HOME: /var/lib/homelab-ci
+        XDG_RUNTIME_DIR: "/run/user/{{ gitea_runner_ci_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ gitea_runner_ci_uid }}/bus"

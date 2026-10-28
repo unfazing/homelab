@@ -384,7 +384,7 @@
         <li><span class="status complete">Passed</span> A refreshed Terraform plan reports no infrastructure changes after consolidation.</li>
         <li><span class="status complete">Passed</span> Replacement SSH host keys for <code>192.168.1.101</code> and <code>192.168.1.102</code> were verified and trusted before Ansible convergence.</li>
         <li><span class="status complete">Passed</span> State migrated from Telmate to BPG by importing VM IDs <code>1000–1002</code>; the guarded apply allowed no create or destroy actions and the final plan is empty.</li>
-        <li><span class="status planned">Runner gate</span> VM <code>1003</code> must boot with its planned static address, unique identity, key-only SSH, and no application dataset before runner configuration begins.</li>
+        <li><span class="status planned">Future runner VM</span> VM <code>1003</code> remains a later isolation target; the interim CI/CD installer uses external red <code>.9</code> and does not create a fourth VM.</li>
       </ul>
     </section>
 
@@ -602,7 +602,7 @@
         <ul class="compact">
           <li><span class="status complete">Passed</span> The services VM hosts Gitea and Caddy Compose projects, the access VM hosts AdGuard, and the agents VM hosts Hermes; each project is separately managed.</li>
           <li><span class="status complete">Passed</span> The image is digest-pinned and Docker packages are exact-version pinned and held.</li>
-          <li><span class="status complete">Passed</span> Gitea is healthy, registration and Actions are disabled, and a second convergence reported zero changes.</li>
+          <li><span class="status complete">Passed</span> Initial Gitea acceptance passed: healthy, registration/Actions disabled, second convergence unchanged. Actions was subsequently enabled for the external organization runner on 28 October; public registration remains disabled.</li>
           <li><span class="status complete">Passed</span> Gitea data is owned by UID/GID 1000 on the <code>homelab-gitea</code> VirtioFS mount, never the root disk.</li>
           <li><span class="status complete">Passed</span> Direct HTTP listens only on <code>127.0.0.1:3000</code>; a LAN connection to <code>192.168.1.101:3000</code> failed, while Caddy HTTPS and local health returned 200. Git SSH remains at <code>192.168.1.101:2222</code>.</li>
         </ul>
@@ -868,7 +868,7 @@
         <dt>Dashboard</dt><dd>Built-in password gate behind Caddy at <code>https://hermes.home.&lt;domain&gt;</code>; Caddy-only backend firewall, private DNS rewrite, and generated ignored bootstrap login</dd>
         <dt>Gitea access</dt><dd>Restricted non-administrator <code>lab-agent</code> (<code>lab-agent@home.&lt;domain&gt;</code>) uses a durable SSH key for Git and a scoped API token for issues and pull requests; it can create up to 10 private personal repos and has manually granted team access to <code>lab-agents-org/colouring-book-v1</code></dd>
         <dt>Telegram gate</dt><dd>Explicit VPN-only remote-control exception: one owner Telegram ID via outbound gateway traffic, with no allow-all, group grants, or other paired identities before Git provisioning</dd>
-        <dt>Deployment authority</dt><dd>None; direct <code>main</code> push is accepted for agent-owned repos, but Hermes cannot publish n8n workflows, alter Actions secrets, or invoke homelab deployment</dd>
+        <dt>Deployment authority</dt><dd>The org runner is registered; no application contract is admitted or pipeline tested yet. Hermes-authored workflows can exercise credentials admitted to their repository and deploy approved applications. No host administration or infrastructure deployment is granted; n8n publication remains human-reviewed.</dd>
       </dl>
 
       <h3>Effective Gitea permissions and provisioning</h3>
@@ -927,7 +927,7 @@ python3 /opt/data/tools/homelab-gitea.py pr-create lab-agents-org/colouring-book
       <ul class="compact">
         <li>The container receives no host Docker socket, Proxmox credential, router credential, infrastructure-repository write, or protected-branch bypass.</li>
         <li>The provider credential is absent from Git, Terraform state, Compose output, process arguments, and Ansible logs.</li>
-        <li>Hermes can own at most 10 private repositories under <code>lab-agent/</code>, push their <code>main</code> branches, and write the explicitly shared organization repository; it cannot own the organization, create its repositories, administer Gitea, access the homelab infrastructure repository, publish n8n workflows, or read Actions secrets.</li>
+        <li>Hermes can own at most 10 private repositories under <code>lab-agent/</code>, push their <code>main</code> branches, and write the explicitly shared organization repository. It cannot own the organization, create its repositories, administer Gitea, access the infrastructure repository or publish n8n workflows. It lacks Actions-secret administration, but authored workflows can use/exfiltrate job-injected secrets: admit application credentials with that authority in mind.</li>
         <li>The Telegram preflight rejects extra allowed users, global/group allowlists, allow-all modes, and paired identities before granting Git access; one numeric ID alone does not prove ownership, so confirm it in Telegram.</li>
         <li>Push-to-create works over SSH; issues and pull requests use the separate scoped token over Caddy HTTPS. Gitea globally forces private visibility, organization push-to-create stays off, and the temporary administrator token used for account reconciliation is revoked.</li>
         <li>State, skills, and sessions survive container and VM recreation; cloned code is recoverable from Gitea.</li>
@@ -937,51 +937,27 @@ python3 /opt/data/tools/homelab-gitea.py pr-create lab-agents-org/colouring-book
     </section>
 
     <section id="cicd-panel" role="tabpanel" aria-labelledby="cicd-tab" hidden>
-      <h2>Gitea CI/CD plan</h2>
-      <p class="callout"><strong>Reordered:</strong> migrate WireGuard from red <code>.9</code> to access <code>.100</code> before runner deployment or red reinstallation. The operator's longer-term target is a red Proxmox node for agents/CI/data/dev applications and more room for Nextcloud on blue; exact placement/cluster/storage changes are not yet designed. The automatic deployment proposal remains unimplemented; the existing manual release policy is unchanged.</p>
+      <h2>Gitea CI/CD · interim red worker</h2>
+      <p class="callout"><strong>Registered and polling · verified 28 October:</strong> the operator completed <code>task apps:runner:deploy</code>. Gitea Actions is enabled and runner <code>red-docker-01</code> (ID <code>1</code>, version <code>v5.2.3</code>) belongs to <code>lab-agents-org</code>, with label <code>homelab-docker</code>. Its heartbeat advanced between checks and was three seconds old at the final observation. The runner service and both rootless daemons are running; actual workflow execution and application deployment remain untested.</p>
       <dl class="context-list">
-        <dt>Status</dt><dd><span class="status planned">Accepted, not implemented</span></dd>
-        <dt>Runner</dt><dd><code>lab-runner-01</code> · VM ID <code>1003</code> · <code>192.168.1.103</code> · 2 vCPU · 2 GiB RAM · 32 GiB OS disk</dd>
-        <dt>Isolation</dt><dd>Dedicated VM, isolated disposable job containers, no application dataset, no host application Docker socket</dd>
-        <dt>Initial authority</dt><dd>CI only: clone, test, lint, and build; deployment credentials are explicitly excluded</dd>
-        <dt>Current blocker</dt><dd>Internal TLS for Gitea before runner registration, Actions tokens, API access, or OCI registry authentication</dd>
-        <dt>Deployment</dt><dd>Human reviews and merges; the trusted administrator Mac runs Task/Ansible manually</dd>
+        <dt>Observed host</dt><dd>Red: Ubuntu 24.04.5, Docker 29.9.2, 4 CPU threads, 7.7 GiB RAM; the earlier capacity observation showed 64 GiB free on root. WireGuard and the dedicated egress service are active. Package repair is verified: Docker CE and rootless extras both <code>5:29.9.2-1~ubuntu.24.04~noble</code>; conflicting Ubuntu <code>rootlesskit</code> is absent.</dd>
+        <dt>Prepared CI boundary</dt><dd>Gitea Runner <code>5.2.3</code>, official Linux-amd64 binary checksum and configuration/token-file support verified in temporary files on red. Native service, separate non-root user/rootless Docker daemon; digest-pinned Docker CLI image supplies Buildx, Compose v2 and Git. Runner proxy sweeps CI containers; application daemon is separate. One job, total per-user cap 2 CPU / 3 GiB / no swap. Dedicated UID-based nftables table blocks other private/link-local destinations and IPv6, permits DNS and shared Caddy HTTPS, public HTTP(S), plus CI → red SSH. Never flush the host ruleset.</dd>
+        <dt>Proposed deployment boundary</dt><dd>Separate non-root application runtime/identity with approved app/image/port/data contracts. Build immutable images, publish to Gitea registry, promote through a restricted deploy operation and verify health. Do not give jobs general sudo, administrator SSH, Proxmox/Terraform credentials or rootful Docker control. App data must survive job/cache cleanup.</dd>
+        <dt>Enrollment · verified</dt><dd>Gitea database metadata confirms organization owner <code>lab-agents-org</code> and repository ID <code>0</code> (organization-wide). The native process runs inside <code>user-1001.slice/user@1001.service/app.slice/gitea-runner.service</code>. Both CI UID <code>1001</code> and deployment UID <code>1002</code> slices show CPU quota 2 seconds/second, memory max 3 GiB and swap max 0. No credentials were printed during inspection.</dd>
+        <dt>Application packaging · found</dt><dd>Remote <code>feat/container-deployment</code> at <code>70a14a7</code> contains <code>Dockerfile.backend</code>, <code>Dockerfile.frontend</code>, <code>compose.yaml</code> and <code>run-local.sh</code> (up, stop, status, logs, rollback). Compose requires pinned frontend/backend images and external application data, with health checks and graceful drain. Its build context excludes secrets/data. Fetch only completed; the current checkout and its three local changes are untouched. No Gitea workflow exists on that branch yet.</dd>
+        <dt>Deployment decision · accepted</dt><dd>Operator-managed contracts fix app ports, mounts and permissions; workflows submit image digests through app-specific forced SSH commands. No apps/keys are admitted by default. Reviewed contract snapshots, runtime secrets/data paths, registry credentials and app-specific deployment keys must be supplied separately; installing the runner does not deploy colouring-book.</dd>
+        <dt>Operator entry points</dt><dd><code>task apps:runner:validate</code> runs admission tests and Ansible syntax checks. <code>task apps:runner:deploy</code> requests red's sudo password at a hidden prompt, installs/verifies the foundation, enables Actions and enrolls once. <a href="ansible/roles/gitea-runner/README.md">Installation, trust boundary and application contract guide</a>; <a href="docs/examples/gitea-docker-smoke.yml">manual Docker smoke workflow</a>. Existing Gitea deploys now retain Actions enabled through the canonical flag; no online worker is created outside the runner installer.</dd>
+        <dt>Verification limits</dt><dd>12 admission/promotion/rollback tests, Ansible syntax, YAML/Jinja and smoke-shell syntax, HTML links/SVG and nftables dry-run passed before deployment. Post-deployment checks confirm registration, advancing heartbeat, Actions flags, runtime processes and live resource limits. Actual Actions Docker/proxy execution, app promotion/rollback, restart persistence and repeat Ansible convergence remain pending. No app contract is installed.</dd>
       </dl>
-
-      <h3>Trust split</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Actor</th><th>May do</th><th>Must not do</th></tr></thead>
-          <tbody>
-            <tr><td>Hermes</td><td>Create private personal repositories and push their <code>main</code>; propose changes to separately protected deployment repositories</td><td>Modify pipeline secrets or deploy</td></tr>
-            <tr><td>Gitea Runner</td><td>Execute repository-controlled test, lint, and build jobs</td><td>Reach Proxmox/router management, mount application data, or hold administrator SSH keys</td></tr>
-            <tr><td>Human operator</td><td>Review, merge, and invoke Task/Ansible deployment</td><td>Delegate final approval to agent-authored workflow code during the initial phase</td></tr>
-          </tbody>
-        </table>
-      </div>
-
       <h3>Implementation sequence</h3>
       <ol class="compact">
-        <li><span class="status planned">TLS gate</span> Implement and trust the internal Gitea HTTPS endpoint; keep Actions disabled until this passes from the future runner.</li>
-        <li><span class="status planned">Infrastructure</span> Add Terraform VM <code>1003</code> with no VirtioFS mapping and verify the existing three VMs remain unchanged.</li>
-        <li><span class="status planned">Baseline</span> Regenerate inventory and converge the common role on all four VMs.</li>
-        <li><span class="status planned">Runner</span> Deploy a digest-pinned Gitea Runner using the strongest practical Docker-in-Docker isolation, with disposable registration state and no host application socket.</li>
-        <li><span class="status planned">Actions</span> Enable Gitea Actions and register the runner through an ignored, narrowly handled registration token.</li>
-        <li><span class="status planned">Proof</span> Run a sandbox workflow that checks out code, tests, lints, writes only to its job workspace, and leaves no container or credential behind.</li>
-        <li><span class="status planned">Guardrail</span> Protect the default branch and require human review before merging agent-authored changes.</li>
-        <li><span class="status planned">Artifacts</span> After TLS and CI are stable, build immutable OCI images and publish them to Gitea's registry with a package-scoped credential.</li>
-        <li><span class="status deferred">CD</span> Keep deployment manual until a separate, narrowly scoped deployment identity and approval mechanism are designed and tested.</li>
+        <li><span class="status accepted">Document boundaries</span> Contract-based deployment selected. Workflow authors gain admitted-app execution authority; lack of an Actions API scope does not remove that consequence. Reuse the container branch; application trigger/protection policy remains open, so start with manual smoke jobs.</li>
+        <li><span class="status complete">Host foundation · deployed</span> External-host inventory, repaired rootless packages, service accounts, guarded daemons and whole-user resource limits are installed on red. No Terraform lifecycle ownership of this physical Ubuntu host.</li>
+        <li><span class="status in-progress">Runner · registered</span> Actions enabled and organization worker polling with <code>homelab-docker</code>. Next, enable Actions on the chosen pilot repository and run the manual Docker smoke workflow; verify service restart and repeat convergence.</li>
+        <li><span class="status planned">Artifacts and deployment</span> Provision package-scoped registry and selected deployment credentials, then exercise both Dockerfile builds → tests/temporary Compose services → registry digests → separate app deployment → health check/rollback. Keep runtime secrets and data outside images and CI fixtures; verify rootless UID mapping before attaching existing files. Repository/workflow changes belong in the application repository.</li>
+        <li><span class="status planned">Proof</span> Verify Docker CLI/Buildx/Compose work inside an actual Actions job, healthy apps survive CI cleanup and service restart, and failed deployments retain a known-good release. Verify jobs cannot access rootful Docker, management endpoints, unrelated data or credentials; enforce total resource limits and own-cache cleanup. Reapply fresh-install Tasks with no duplicate enrollment or client/repository fixtures.</li>
       </ol>
-
-      <h3>Acceptance criteria</h3>
-      <ul class="compact">
-        <li>Runner jobs execute only on <code>lab-runner-01</code>; neither Gitea nor Hermes hosts accept a runner label.</li>
-        <li>The runner VM has no ZFS application mapping and cannot reach Proxmox, router management, or unrelated application ports.</li>
-        <li>A workflow cannot inspect other jobs, Gitea data, Hermes state, or an application host's Docker daemon.</li>
-        <li>Repository-controlled jobs receive no deployment, administrator SSH, Terraform, or Proxmox credentials.</li>
-        <li>Agent-owned repositories can receive direct <code>main</code> pushes. Reviewed deployment repositories and any future runner execution remain separately gated; no agent-authored change deploys without human action.</li>
-        <li>Recreating the runner VM requires re-registration but loses no authoritative application data.</li>
-      </ul>
+      <p class="muted">Moving WireGuard to <code>.100</code> remains preferable before trusting CI on red, but the operator requested this interim co-location. Red's later Proxmox conversion requires separate runner/application/data migration planning; do not reimage it as part of this install.</p>
     </section>
 
     <footer>

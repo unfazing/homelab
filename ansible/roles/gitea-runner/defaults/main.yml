@@ -1,0 +1,16 @@
+---
+gitea_runner_version: "5.2.3"
+gitea_runner_sha256: a59771ec177280ebf8203da4aa9d6f8e1f72d19c2f47e9237de34fe44888faa9
+gitea_runner_url: "https://gitea.home.{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+gitea_runner_scope: lab-agents-org
+gitea_runner_name: red-docker-01
+gitea_runner_user: homelab-ci
+gitea_runner_home: /var/lib/homelab-ci
+gitea_runner_job_image: homelab/ci-docker:29.9.2
+gitea_runner_cli_image: "docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb"
+gitea_runner_cpu_quota: "200%"
+gitea_runner_memory_max: 3G
+gitea_deploy_user: homelab-deploy
+gitea_deploy_home: /var/lib/homelab-deploy
+# Operator-approved contracts, not files supplied by a workflow. See role README.
+gitea_runner_app_contracts: []

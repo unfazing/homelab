@@ -1,0 +1,21 @@
+log:
+  level: info
+runner:
+  file: {{ gitea_runner_home }}/state/.runner
+  capacity: 1
+  timeout: 1h
+  shutdown_timeout: 1m
+  insecure: false
+  labels:
+    - "homelab-docker:docker://{{ gitea_runner_job_image }}"
+cache:
+  enabled: false
+container:
+  privileged: false
+  valid_volumes: []
+  docker_host: "unix:///run/user/{{ gitea_runner_ci_uid }}/docker.sock"
+  require_docker: true
+  sweep: true
+health_check:
+  enabled: true
+  min_free_disk_space_mb: 10240

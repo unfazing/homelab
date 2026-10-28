@@ -14,6 +14,29 @@ env:
   ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
 
 tasks:
+  runner:validate:
+    desc: Validate the Docker runner installer and deployment admission tests
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - python3 -m unittest discover -s ansible/roles/gitea-runner/tests -v
+      - >-
+        ansible-playbook --syntax-check
+        -i ansible/inventories/homelab/hosts.example.yml
+        -i ansible/inventories/external/hosts.yml
+        -e "gitea_admin_password_file=/tmp/gitea-syntax-placeholder"
+        ansible/playbooks/gitea-runner.yml
+
+  runner:deploy:
+    desc: Install the org Docker runner on red with a hidden sudo password prompt
+    deps: [":config:inventory", "adguard:domain", "gitea:secret"]
+    cmds:
+      - task: runner:validate
+      - >-
+        ansible-playbook --ask-become-pass
+        -i "{{.INVENTORY}}" -i ansible/inventories/external/hosts.yml
+        -e "gitea_admin_password_file=$PWD/{{.GITEA_SECRET_FILE}}"
+        ansible/playbooks/gitea-runner.yml
+
   wireguard:secrets:
     internal: true
     cmds:
