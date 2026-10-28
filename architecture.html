@@ -201,7 +201,7 @@
         <a href="deployment-guide.html">Deployment guide</a>
       </nav>
       <h1>Homelab Architecture</h1>
-      <p class="meta">Canonical design · Updated 27 October 2026</p>
+      <p class="meta">Canonical design · Updated 28 October 2026</p>
     </header>
 
     <section aria-labelledby="live-title">
@@ -724,6 +724,23 @@
 
       <h3>WireGuard · installation, client policy and cutover</h3>
       <p class="callout"><strong>D-084 Amended · canonical installation:</strong> pinned wg-easy <code>15.5.0</code> runs in its own Docker namespace on <code>lab-access-01</code>. Empty durable storage gets a new server/admin and <strong>zero clients</strong>. Task/Ansible own repeatable service installation, defaults and global firewall enablement. Client identities, keys and allowlists belong to durable runtime state; installing fresh does not reconstruct them. One-time migration helpers are archived in <a href="history/2026-10-27-wireguard-migration/README.md">history</a>, without Task hooks or active-role dependencies.</p>
+      <h4 id="vpn-platform-choice">Why wg-easy · decision reaffirmed 28 October</h4>
+      <ul class="compact">
+        <li><strong>Small footprint:</strong> a single VPN/UI container fits the access VM's budget without another identity/database stack. Configured ceiling: 384 MiB RAM and 0.5 CPU; this is a deployment limit, not a comparative usage benchmark.</li>
+        <li><strong>Per-client firewall:</strong> destination/port rules are enforced locally on the VPN server, separately from client routing. They are not firewall rules installed on phones or laptops.</li>
+        <li><strong>Management portal:</strong> the private web UI manages peers, profiles/QR codes and access policy; no separate UI service is needed.</li>
+        <li><strong>Hub and spoke:</strong> clients tunnel to the home gateway, which forwards approved LAN, DNS or full-tunnel internet traffic. No direct peer-to-peer mesh is required; the home gateway remains a single availability and traffic bottleneck.</li>
+      </ul>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Alternative considered</th><th>Assessment for this homelab</th><th>Decision</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://headscale.net/stable/ref/integration/web-ui/">Headscale</a></td><td>No built-in management UI; community UIs exist but add another maintained component. Mesh coordination is beyond the current hub-and-spoke need.</td><td>Not selected</td></tr>
+          <tr><td><a href="https://github.com/DefGuard/defguard/blob/stable/2.x/README.md">Defguard</a></td><td>Richer identity/MFA and policy capabilities, but a multi-component stack plus PostgreSQL. Judged heavier to operate for this small deployment; no comparative RAM benchmark was performed.</td><td>Defer</td></tr>
+          <tr><td><a href="https://www.firezone.dev/kb/architecture/critical-sequences">Firezone</a></td><td>Identity-oriented access adds authentication/control-plane dependencies. OIDC requires an IdP, but email OTP is also supported, so an external IdP is not universally required.</td><td>Not needed now</td></tr>
+          <tr><td><a href="https://docs.netbird.io/selfhosted/selfhosted-quickstart">NetBird</a></td><td>Preferred next candidate if resources and mesh/identity-policy needs grow. Its standard self-hosted quickstart calls for 1 CPU, 2 GB RAM and public TCP 80/443 plus UDP 3478; review footprint and ingress design before adopting it.</td><td>Next-best option; deferred</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Keep wg-easy for now. A future platform change must preserve the only-WireGuard-public-ingress constraint or explicitly revisit that decision. Product facts above were checked against linked upstream documentation; resource/maintenance preferences are this homelab's assessment.</p>
       <dl class="context-list">
         <dt>Native per-client firewall</dt><dd>Enabled and verified in <strong>Admin Panel → Interface → Traffic Filtering</strong>. <strong>Firewall Allowed IPs</strong> enforce destination IP/CIDR plus optional port/protocol in FORWARD. Empty lists fall back to client Allowed IPs, then default routes; full-tunnel defaults therefore mean broad access unless an explicit firewall list is set. Native filtering is experimental upstream; isolated real-WireGuard allow/deny, fail-closed disable and restart tests passed. Repeat live deployment changed nothing; actual-device/reboot acceptance remains open.</dd>
         <dt>Generic fail-closed guard</dt><dd>Container-only rules deny tunnel INPUT and place fallback FORWARD drops behind <code>WG_CLIENTS_wg0</code>, ahead of wg-quick's broad accepts. Established responses return. Disabled/rebuilding native filtering fails closed. This protects container-local administration, which native forwarding policy alone does not cover. No client names, addresses or keys are embedded in the guard.</dd>
