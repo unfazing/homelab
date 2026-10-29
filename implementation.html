@@ -96,7 +96,7 @@
         <a href="deployment-guide.html">Deployment guide</a>
       </nav>
       <h1>Homelab Implementation</h1>
-      <p class="meta">Executable specification · Updated 27 October 2026</p>
+      <p class="meta">Executable specification · Updated 29 October 2026</p>
       <p class="sync-note"><strong>Synchronization contract:</strong> <code>architecture.html</code> owns design intent and decisions. This document owns implementation sequence, acceptance criteria, and progress. Resolve conflicts by amending the architecture decision first.</p>
     </header>
 
@@ -126,7 +126,7 @@
         <dt>Execution host</dt><dd>Trusted administrator laptop or desktop</dd>
         <dt>Generated files</dt><dd>Written below ignored <code>.generated/</code></dd>
         <dt>Credentials</dt><dd>Preloaded from ignored root <code>.envrc</code>; committed names and placeholders live in <code>.envrc.example</code></dd>
-        <dt>Gitea publication · 28 October</dt><dd>Private <a href="https://gitea.home.donk.live/homelab-admin/homelab">homelab-admin/homelab</a> published with <code>main</code> and its history; remote commit verified against local HEAD. A second <code>gitea</code> remote retains GitHub <code>origin</code>, which was not pushed. History and pending files passed checks against known local secrets and private-key patterns. Publication uses a temporary scoped HTTPS credential, revoked after the final push. Future pushes need the operator's Gitea credentials; no permanent administrator credential is installed. The controller's local Git DNS override maps this private hostname to <code>.101</code> with normal TLS verification; no persistent account credential is configured.</dd>
+        <dt>Gitea publication / transfer · 29 October</dt><dd>Private <a href="https://gitea.home.donk.live/lab-agents-org/homelab">lab-agents-org/homelab</a> retains repository ID <code>4</code>, <code>main</code> and its history after a manual Gitea API transfer from <code>homelab-admin</code>. Only <code>Owners</code> is assigned; no <code>Agents</code> team or <code>lab-agent</code> grant. Repository Actions was disabled before transfer. The local <code>gitea</code> remote now uses the organization URL; GitHub <code>origin</code> was not pushed. Documentation changes are committed/published and the remote commit verified. Temporary scoped HTTPS credentials are revoked after use; no permanent administrator credential is installed. The controller's local Git DNS override maps the private hostname to <code>.101</code> with normal TLS verification.</dd>
       </dl>
 
       <h3>Target tree</h3>
