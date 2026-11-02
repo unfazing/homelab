@@ -38,6 +38,30 @@
         name: homepage
         tasks_from: proxmox
 
+- name: Prepare separate root-only host telemetry identities on the collector
+  hosts: services
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  tasks:
+    - ansible.builtin.include_role:
+        name: homepage
+        tasks_from: metrics-client
+      when: not ansible_check_mode
+
+- name: Install the unprivileged fixed report on observed physical hosts
+  hosts: observed_hosts
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  vars:
+    homepage_metric_target: "{{ homepage_observer_hosts | selectattr('inventory_host', 'equalto', inventory_hostname) | first }}"
+  tasks:
+    - ansible.builtin.include_role:
+        name: homepage
+        tasks_from: metrics-host
+      when: not ansible_check_mode
+
 - name: Deploy Homepage and its protected private HTTPS route
   hosts: services
   become: true
@@ -49,6 +73,11 @@
     caddy_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_ACME_API_TOKEN') }}"
     caddy_acme_environment: production
     caddy_acme_ca: https://acme-v02.api.letsencrypt.org/directory
+  pre_tasks:
+    - name: Pin verified host identities before collecting metadata
+      ansible.builtin.include_role:
+        name: homepage
+        tasks_from: metrics-trust
   roles:
     - homepage
     - caddy

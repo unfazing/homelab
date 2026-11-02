@@ -111,3 +111,106 @@ stale/unknown, retaining the old route inventory for diagnosis.
 Tests: `python3 -m unittest discover -s ansible/roles/homepage/tests` and
 `node --test ansible/roles/homepage/tests/test-observer.cjs`. Live verification
 tests native CSRF login/logout, secure sessions, secret redaction and isolation.
+
+## Physical host statistics
+
+The Infrastructure group includes red's physical-host CPU/load, RAM/swap,
+uptime, filesystem usage and sampled LAN/disk rates. This complements Proxmox's
+VM allocation/accounting statistics. Sources are explicit in
+`ansible/vars/homepage.yml`: `eno1`, whole disk `sda`, root, PostgreSQL and Garage
+mounts. It does not report process arguments, environment variables, application
+files, Docker containers, SMART health or historical trends.
+
+`task apps:homepage:deploy` now also provisions the observed external host and
+asks for red-server's sudo password at a hidden terminal prompt. It reuses the
+same deployment from `task apps:storage:deploy VERIFY_RESTART=true`; no second
+Homepage rollout is needed when running that combined command.
+`task apps:homepage:validate` runs local regression/syntax checks;
+`:check` previews dashboard configuration without enrolling host identities;
+`:verify` checks the deployed dashboard and forced SSH command.
+
+The trusted root collector on services holds a separate key per host in
+`/etc/homelab/homepage-observer`, root-only and **not mounted into Homepage**.
+Red has a password-locked `homepage-monitor` account with no supplemental groups,
+no sudo/Docker grant, and root-owned home, authorization policy, reporter and
+configuration. Its key accepts connections only from `.101` and forces the
+isolated Python reporter; `restrict` denies PTY, forwarding and user rc files.
+The collector pins red's Ed25519 host key obtained over the controller's already
+verified Ansible connection. There is no new daemon, listening port or API token.
+
+The reporter runs briefly on each SSH request. Existing collection runs every
+minute; the dashboard refreshes its snapshot every 15 seconds. CPU and I/O rates
+need two successful samples and restart after reboot/counter reset or a gap over
+180 seconds. RAM is total minus Linux `MemAvailable`, excluding reclaimable
+cache. Disk figures show used/total and user-available space, not SMART status.
+Missing data mounts are marked missing rather than showing the root filesystem.
+Recent collection errors retain the last good sample with a visible error;
+after 180 seconds every display value becomes stale/unknown.
+
+A services-VM rebuild generates a new monitoring key and redeploys its public key
+to red through the same sudo-prompted Task. An intentional red host-key change
+must first be verified in the controller's SSH trust store; deployment never
+uses `ssh-keyscan` or disables host-key checking. No application secrets or
+persistent data are changed by monitor enrollment.
+
+## Infrastructure layout and blue metrics
+
+Infrastructure contains two equal host cards, three compact VM cards and a
+collapsed Storage & activity group. Shared Jinja widget macros render matching
+labels and refresh behavior. VM RAM remains Proxmox accounting/allocation, not
+in-guest Linux application usage. Detailed per-VM I/O remains available in the
+snapshot and Proxmox; the overview retains four primary fields per VM.
+
+The existing audit token reads node status, one-hour RRD samples, storage usage
+and the configured ZFS pool's metadata. No new SSH access or PVE permission is
+added for blue. CPU, network, I/O wait and ARC use the latest complete one-minute
+RRD average; preserve its source timestamp and reject old/future samples. Node
+status and storage have independent timestamps. ZFS exports capacity, health and
+an allowlisted scrub summary; raw error paths, actions and suggested commands are
+never passed to Homepage. Blue's physical disk throughput is not supplied by
+these endpoints. Red continues using its unchanged fixed SSH report.
+
+After initial enrollment, `task apps:homepage:refresh` updates configuration and
+the collector using installed credentials, host keys and native session state.
+It reuses the same `configuration.yml` role entry point as full deployment, and
+requires existing credentials/root-only telemetry trust instead of generating or
+replacing identities. It runs only on services and requires no red sudo prompt.
+Fresh installation/recovery still uses `task apps:homepage:deploy`.
+
+## Storage service statistics
+
+Storage is directly below Virtual machines. Both cards put **disk used / capacity**
+first, using red's mounted-filesystem counters (including metadata/WAL). Garage's
+64 GiB advertised capacity is distinct from its 80 GiB LV and formatted capacity.
+
+The remaining Garage rows show buckets, objects, logical object bytes, S3 requests
+and errors per minute, and cluster health. PostgreSQL shows manifest application
+databases, logical user tables (partition parents counted once), total database
+bytes, active/total/maximum client connections, transactions/sec and blocked
+connections. Database sizes include indexes; connection counts are instance-wide,
+excluding the reporter session. Transactions include monitoring, not queries/sec.
+
+`storage-observer` runs a 96 MiB collector in red's rootless storage daemon on an
+internal-only Docker bridge. Its Garage token has only `GetClusterStatistics`,
+`GetClusterHealth` and `Metrics`. The `homelab_monitor` SQL login has no role
+memberships or application-table grants; it can call zero-argument, postgres-owned
+aggregate functions in the maintenance and manifest databases. No SQL text,
+records, keys or raw API responses are exported.
+
+The collector writes a bounded, allowlisted JSON cache under
+`/var/lib/homelab/storage-observer/`, owner homelab-storage, reader group
+homepage-monitor. The existing fixed SSH reporter reads only that cache; it gains
+neither Docker nor service credentials. Homepage still receives sanitized JSON
+only. Disk and service timestamps are independent; missing/stale metrics become
+unknown after 180 seconds. Rates need two valid samples; resets warm up again.
+
+Fresh installs use `task apps:storage:deploy`. Existing installations use
+`task apps:storage:monitoring:deploy` (red's hidden sudo prompt), which adds the
+internal bridge/HBA and briefly recreates PostgreSQL/Garage without deleting data.
+The same task is repeatable; this is configuration convergence, not migration.
+`task apps:homepage:refresh` only refreshes the installed dashboard and cannot
+provision the red-side collector or credentials.
+
+Network also includes a wg-easy portal link and HTTP availability. It does not
+receive the VPN administrator login or infer peer/tunnel health; router ingress
+remains on red until the separately planned cutover.

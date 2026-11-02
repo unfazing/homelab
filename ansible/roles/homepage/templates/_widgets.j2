@@ -1,0 +1,25 @@
+{% macro snapshot(path, fields) -%}
+widget:
+  type: customapi
+  url: http://172.30.90.4:8080/snapshot
+  refreshInterval: 15000
+  display: list
+  mappings:
+{% for field, label in fields %}
+    - field: {{ path }}.{{ field }}
+      label: {{ label }}
+      format: text
+{% endfor %}
+{%- endmacro %}
+
+{% macro details(path) -%}
+widget:
+  type: customapi
+  url: http://172.30.90.4:8080/snapshot
+  refreshInterval: 15000
+  display: dynamic-list
+  mappings:
+    items: {{ path }}
+    name: name
+    label: summary
+{%- endmacro %}

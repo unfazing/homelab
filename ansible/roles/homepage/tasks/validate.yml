@@ -1,0 +1,9 @@
+---
+- name: Validate the private Homepage deployment contract
+  ansible.builtin.assert:
+    that:
+      - homepage_domain is match('^[a-z0-9.-]+$')
+      - homepage_image is match('^ghcr.io/gethomepage/homepage:v[0-9.]+@sha256:[a-f0-9]{64}$')
+      - homepage_proxy_subnet == '172.30.90.0/29'
+      - homepage_uid == '10001'
+    quiet: true

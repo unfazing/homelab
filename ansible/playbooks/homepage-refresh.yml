@@ -1,0 +1,15 @@
+---
+- name: Refresh dashboard configuration with existing credentials and observer trust
+  hosts: services
+  become: true
+  gather_facts: false
+  vars_files: [../vars/homepage.yml]
+  tasks:
+    - name: Converge the shared Homepage configuration entry point
+      ansible.builtin.include_role:
+        name: homepage
+        tasks_from: configuration
+    - name: Verify native login data sources and denied control paths
+      ansible.builtin.include_role:
+        name: homepage
+        tasks_from: verify

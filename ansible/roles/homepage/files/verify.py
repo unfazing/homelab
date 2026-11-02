@@ -48,7 +48,26 @@ def main():
     assert json.loads(call('/api/auth/session')).get('user'), 'Native session not established'
     assert any(c.secure and c.name.startswith('__Secure-') for c in cookies), 'Secure session cookie missing'
     call('/')
-    call('/api/services')
+    services = call('/api/services')
+    assert b'wg-easy' in services and ('https://wireguard.home.' + domain).encode() in services, 'wg-easy portal tile missing'
+    if config.get('storage_enabled'):
+        for label in ['Garage S3', 'PostgreSQL']:
+            assert label.encode() in services, 'Storage dashboard tile missing: ' + label
+        for prefix in ['https://garage.home.', 'https://s3.home.']:
+            assert (prefix + domain).encode() in services, 'Private storage dashboard URL missing'
+    if config.get('hosts'):
+        assert b'red-server' in services, 'Red infrastructure card missing'
+        # The provisioned key must return only the fixed JSON report, even for
+        # an attempted shell command. No extra remote command is executed.
+        sys_path = str(Path(__file__).parent)
+        sys.path.insert(0, sys_path)
+        import collect
+        targets = json.loads((Path(sys_path) / 'observer.json').read_text())['hosts']
+        for target in targets:
+            forced = subprocess.run(collect.host_ssh_command(target, 'id -u'),
+                                    text=True, capture_output=True, timeout=8, check=True)
+            report = json.loads(forced.stdout)
+            assert isinstance(report, dict) and report.get('version') == 1, 'Telemetry key allowed an arbitrary command'
     # Test the application's raw Host handling directly; the edge proxy normalizes
     # forwarded headers. Pass the temporary bearer cookie on stdin, never argv.
     host_probe = r"""
@@ -63,15 +82,13 @@ def main():
                                   input='; '.join(c.name + '=' + c.value for c in cookies), capture_output=True,text=True)
     assert host_checked.returncode == 0, 'Authenticated raw Host validation failed: ' + host_checked.stdout.strip()
     call('/api/mcp', expected=(404,405))
-    probes = [('Infrastructure', 'Proxmox blue', 'cluster/resources'),
-              ('Network', 'AdGuard', 'stats'), ('Network', 'Caddy', 'upstreams')]
+    probes = [('Network', 'AdGuard', 'stats'), ('Network', 'Caddy', 'upstreams')]
     probes += [('Development & AI', 'Gitea', e) for e in ['repositories', 'notifications', 'issues', 'pulls']]
     for group, service, endpoint in probes:
         query = parse.urlencode({'group': group, 'service': service, 'index': 0, 'endpoint': endpoint})
         value = json.loads(call('/api/services/proxy?' + query))
         assert not isinstance(value, dict) or not value.get('error'), 'Widget failed: ' + service + ' / ' + endpoint
         if service == 'AdGuard': assert 'num_dns_queries' in value, 'AdGuard statistics schema missing'
-        if service == 'Proxmox blue': assert isinstance(value.get('data'), list), 'Proxmox resources missing'
         if service == 'Caddy': assert isinstance(value, list), 'Caddy upstream statistics missing'
         if service == 'Gitea': assert isinstance(value.get('count'), int), 'Gitea count missing: ' + endpoint
     # Optional destructive-to-process restart check, only when explicitly requested.
@@ -108,6 +125,29 @@ def main():
         const snapshot = await (await fetch('http://172.30.90.4:8080/snapshot')).json();
         if(snapshot.age_seconds>180 || snapshot.collector_status!=='ok') throw Error('Collector is stale or failed');
         if(Object.keys(snapshot.vms).length!==3) throw Error('VM snapshots missing');
+        for(const id of ['blue',...JSON.parse(process.argv[1])]) {
+          const host=snapshot.hosts?.[id];
+          if(!host || host.error || Date.now()/1000-host.checked_at>180 || !host.status.startsWith('online'))
+            throw Error('Host snapshot missing, stale or failed: '+id);
+          if(!host.memory || host.memory==='unknown' || !host.root_disk || host.root_disk.includes('unknown'))
+            throw Error('Host RAM/root filesystem metrics missing: '+id);
+        }
+        for(const id of ['garage','postgresql']) {
+          const storage=snapshot.storage?.[id];
+          if(!storage || !storage.used_total.includes(' / ') || !storage.status.startsWith('disk sampled'))
+            throw Error('Storage disk use missing or stale: '+id);
+        }
+        for(const id of ['garage','postgresql']) {
+          const service=snapshot.hosts.red.services?.[id];
+          if(service?.checked_at && (service.error || Date.now()/1000-service.checked_at>180))
+            throw Error('Installed storage service metrics failed/stale: '+id);
+        }
+        const blue=snapshot.hosts.blue;
+        if(blue.activity_error || blue.storage_error || Date.now()/1000-blue.storage_checked_at>180 ||
+           Date.now()/1000-blue.activity_checked_at>180 || !blue.storage_rows?.some(r=>r.name.endsWith(' health')))
+          throw Error('Blue storage/activity snapshot missing or stale');
+        if(!snapshot.host_details?.blue?.length || !snapshot.host_details?.red?.length)
+          throw Error('Infrastructure details missing');
         if(!snapshot.routes.some(r=>r.hostname==='dashboard.home.'+process.env.HOMEPAGE_ALLOWED_HOSTS.split('.').slice(2).join('.'))) throw Error('Dashboard route was not discovered');
         if(snapshot.routes.some(r=>r.kind==='exact hostname' && r.tls_status!=='valid')) throw Error('TLS probe failed');
         const invalid = await new Promise((resolve, reject) => require('http').get('http://127.0.0.1:3000/api/services',
@@ -119,7 +159,7 @@ def main():
         if (require('next/package.json').version !== '16.4.1') throw Error('Unexpected Next runtime');
       })().catch((e) => { console.error(e.message); process.exit(1); });
     '''
-    result = subprocess.run(['docker', 'exec', 'homepage', 'node', '-e', node], capture_output=True, text=True)
+    result = subprocess.run(['docker', 'exec', 'homepage', 'node', '-e', node, json.dumps(config.get('hosts', []))], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr.strip()
     # Inspect the active route rather than issuing potentially destructive writes.
     running = json.loads(subprocess.check_output(['docker', 'exec', 'caddy', 'wget', '-qO-',
@@ -144,6 +184,7 @@ def main():
     assert inspected['Config']['User'] == '10001:10001', 'Homepage is not using its dedicated UID'
     assert not inspected['HostConfig']['Privileged'] and not inspected['HostConfig']['PortBindings'], 'Unexpected privilege or published port'
     assert not any(m['Destination'] == '/var/run/docker.sock' or m['Source'].startswith('/srv/homelab/') for m in inspected['Mounts']), 'Unexpected host/application mount'
+    assert not any(m['Source'].startswith('/etc/homelab/homepage-observer') for m in inspected['Mounts']), 'Collector SSH identities mounted into Homepage'
     reader = json.loads(subprocess.check_output(['docker', 'inspect', 'homepage-observer']))[0]
     assert not reader['HostConfig']['PortBindings'] and len(reader['NetworkSettings']['Networks']) == 1, 'Snapshot server exposed beyond internal bridge'
     assert not any(m['Source'].startswith('/etc/homelab') or 'docker.sock' in m['Source'] for m in reader['Mounts']), 'Reader has credentials or Docker access'

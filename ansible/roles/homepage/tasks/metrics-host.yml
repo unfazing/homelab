@@ -1,0 +1,81 @@
+---
+- name: Validate the fixed read-only host telemetry contract
+  ansible.builtin.assert:
+    that:
+      - homepage_metric_target.address == ansible_host
+      - homepage_metric_target.ssh_user == 'homepage-monitor'
+      - groups['services'] | length == 1
+      - hostvars[groups['services'][0]].ansible_host == '192.168.1.101'
+      - hostvars[groups['services'][0]].homepage_metrics_public_keys[homepage_metric_target.id] is match('^ssh-ed25519 ')
+    quiet: true
+
+- name: Create a dedicated unprivileged primary group
+  ansible.builtin.group:
+    name: "{{ homepage_metric_target.ssh_user }}"
+    system: true
+
+- name: Create the locked unprivileged report identity
+  ansible.builtin.user:
+    name: "{{ homepage_metric_target.ssh_user }}"
+    group: "{{ homepage_metric_target.ssh_user }}"
+    home: /var/lib/homepage-monitor
+    create_home: false
+    shell: /bin/sh
+    system: true
+    password_lock: true
+    groups: ''
+    append: false
+  register: homepage_metrics_account
+
+- name: Require an unprivileged account and primary group
+  ansible.builtin.assert:
+    that:
+      - homepage_metrics_account.uid | int > 0
+      - homepage_metrics_account.group | int > 0
+    quiet: true
+
+- name: Keep the report identity home and SSH policy root-owned
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: [/var/lib/homepage-monitor, /var/lib/homepage-monitor/.ssh, /usr/local/libexec, /etc/homelab]
+
+- name: Install the fixed unprivileged Linux reporter
+  ansible.builtin.copy:
+    src: host-metrics.py
+    dest: /usr/local/libexec/homelab-host-metrics.py
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure only approved interface disk and filesystem sources
+  ansible.builtin.copy:
+    content: "{{ {'network_interfaces': homepage_metric_target.network_interfaces, 'disks': homepage_metric_target.disks, 'mounts': homepage_metric_target.mounts} | to_nice_json }}\n"
+    dest: /etc/homelab/homepage-host-metrics.json
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Authorize only a source-bound forced report without shell or forwarding
+  ansible.builtin.copy:
+    content: >-
+      restrict,from="{{ hostvars[groups['services'][0]].ansible_host }}",command="/usr/bin/python3 -I /usr/local/libexec/homelab-host-metrics.py" {{ hostvars[groups['services'][0]].homepage_metrics_public_keys[homepage_metric_target.id] }}
+    dest: /var/lib/homepage-monitor/.ssh/authorized_keys
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Read the host's public SSH key over the existing verified Ansible connection
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  register: homepage_metrics_host_key
+  become: false
+
+- name: Require the unprivileged reporter to work without sudo or Docker
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, -I, /usr/local/libexec/homelab-host-metrics.py]
+  become_user: "{{ homepage_metric_target.ssh_user }}"
+  changed_when: false

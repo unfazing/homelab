@@ -14,9 +14,9 @@
     group: root
     mode: '0644'
   loop: [collect.py, observer.cjs]
-- name: Render the non-secret collection targets for the three managed VMs
+- name: Render the non-secret VM and host collection targets
   ansible.builtin.copy:
-    content: "{{ {'domain': homepage_domain, 'caddy_address': ansible_host, 'vms': homepage_observer_vms} | to_nice_json }}\n"
+    content: "{{ {'domain': homepage_domain, 'caddy_address': ansible_host, 'vms': homepage_observer_vms, 'hosts': homepage_observer_hosts, 'blue_zfs_pool': homepage_blue_zfs_pool} | to_nice_json }}\n"
     dest: "{{ homepage_compose_dir }}/observer.json"
     owner: root
     group: root

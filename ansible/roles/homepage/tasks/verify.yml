@@ -9,7 +9,7 @@
 - name: Verify authenticated widgets and denied control paths without logging credentials
   ansible.builtin.command:
     argv: [python3, "{{ homepage_compose_dir }}/verify.py"]
-    stdin: "{{ {'domain': homepage_domain, 'password': lookup('ansible.builtin.file', homepage_password_file) | trim} | to_json }}"
+    stdin: "{{ {'domain': homepage_domain, 'storage_enabled': homepage_storage_enabled | bool, 'hosts': homepage_observer_hosts | map(attribute='id') | list, 'password': lookup('ansible.builtin.file', homepage_password_file) | trim} | to_json }}"
   register: homepage_verified
   no_log: true
   changed_when: false

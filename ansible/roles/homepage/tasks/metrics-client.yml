@@ -1,0 +1,53 @@
+---
+- name: Ensure the collector has the standard OpenSSH client
+  ansible.builtin.apt:
+    name: openssh-client
+    state: present
+    fail_on_autoremove: true
+
+- name: Prepare the protected metrics identity directory
+  ansible.builtin.file:
+    path: "{{ homepage_observer_secret_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Validate each observed host identity
+  ansible.builtin.assert:
+    that:
+      - item.id is match('^[a-z][a-z0-9_-]{0,31}$')
+      - item.ssh_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+      - item.address is match('^[0-9.]+$')
+      - item.inventory_host in groups['observed_hosts']
+    quiet: true
+  loop: "{{ homepage_observer_hosts }}"
+
+- name: Create a separate root-only telemetry key for each host
+  ansible.builtin.command:
+    argv: [ssh-keygen, -q, -t, ed25519, -N, '', -C, homepage-host-metrics, -f, "{{ homepage_observer_secret_dir }}/host-{{ item.id }}-key"]
+    creates: "{{ homepage_observer_secret_dir }}/host-{{ item.id }}-key"
+  loop: "{{ homepage_observer_hosts }}"
+  no_log: true
+
+- name: Keep private telemetry keys inaccessible to Homepage
+  ansible.builtin.file:
+    path: "{{ homepage_observer_secret_dir }}/host-{{ item.id }}-key"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ homepage_observer_hosts }}"
+
+- name: Read the matching public keys from their private identities
+  ansible.builtin.command:
+    argv: [ssh-keygen, -y, -f, "{{ homepage_observer_secret_dir }}/host-{{ item.id }}-key"]
+  loop: "{{ homepage_observer_hosts }}"
+  register: homepage_metrics_keys
+  changed_when: false
+
+- name: Publish only public keys for the host enrollment plays
+  ansible.builtin.set_fact:
+    homepage_metrics_public_keys: "{{ homepage_metrics_public_keys | default({}) | combine({item.item.id: item.stdout}) }}"
+  loop: "{{ homepage_metrics_keys.results }}"
+  loop_control:
+    label: "{{ item.item.id }}"

@@ -1,34 +1,60 @@
+{% from '_widgets.j2' import snapshot, details %}
+{% set host_fields = [('status','Sample'),('cpu','CPU'),('load','Load 1 / 5 / 15 min'),('memory','RAM used / total'),('swap','Swap used / total'),('uptime','Uptime')] %}
+{% set garage_fields = [('used_total','Disk used / capacity'),('buckets','Buckets'),('objects','Objects'),('object_bytes','Logical object bytes'),('requests_per_min','S3 requests / min'),('errors_per_min','S3 errors / min'),('health','Cluster health'),('status','Sample')] %}
+{% set postgres_fields = [('used_total','Disk used / capacity'),('databases','Application databases'),('tables','User tables'),('database_bytes','Database bytes'),('connections','Connections active / total / limit'),('transactions_per_sec','Transactions / sec'),('blocked','Blocked connections'),('status','Sample')] %}
+{% set vm_fields = [('status','Status'),('cpu','CPU'),('memory','PVE RAM / allocation'),('uptime','Uptime')] %}
 - Infrastructure:
-    - Proxmox blue:
-        icon: proxmox
-        href: https://192.168.1.10:8006
-        description: Read-only cluster metrics; templates excluded from VM count
-        widget:
-          type: proxmox
-          url: https://192.168.1.10:8006
-          username: "{{ homepage_proxmox_token_id }}"
-          password: "{{ '{{HOMEPAGE_FILE_PROXMOX_TOKEN}}' }}"
-          node: blue
-          fields: [vms, resources.cpu, resources.mem]
-{% for vm in homepage_observer_vms %}
-    - {{ vm.name }}:
-        href: https://192.168.1.10:8006/#v1:0:=qemu%2F{{ vm.id }}
-        description: VM {{ vm.id }} · sampled every minute · I/O rates need two samples
-        proxmoxNode: blue
-        proxmoxVMID: {{ vm.id }}
-        widget:
-          type: customapi
-          url: http://172.30.90.4:8080/snapshot
-          refreshInterval: 15000
-          display: list
-          mappings:
-{% for field, label in [('status','Status'),('cpu','CPU / allocation'),('memory','Host RAM / VM allocation'),('uptime','Uptime'),('network_in','Network in'),('network_out','Network out'),('disk_read','Disk reads'),('disk_write','Disk writes')] %}
-            - field: vms.{{ vm.id }}.{{ field }}
-              label: {{ label }}
-              format: text
+    - Physical hosts:
+        - blue:
+            icon: proxmox
+            href: https://192.168.1.10:8006
+            description: Proxmox · 192.168.1.10
+{{ snapshot('hosts.blue', host_fields) | indent(12, true) }}
+{% for host in homepage_observer_hosts %}
+        - {{ host.name }}:
+            icon: mdi-server
+            description: Ubuntu · {{ host.address }}
+{{ snapshot('hosts.' ~ host.id, host_fields) | indent(12, true) }}
 {% endfor %}
+    - Virtual machines:
+{% for vm in homepage_observer_vms %}
+        - {{ vm.name }}:
+            href: https://192.168.1.10:8006/#v1:0:=qemu%2F{{ vm.id }}
+            description: VM {{ vm.id }} · blue
+            proxmoxNode: blue
+            proxmoxVMID: {{ vm.id }}
+{{ snapshot('vms.' ~ vm.id, vm_fields) | indent(12, true) }}
+{% endfor %}
+{% if homepage_storage_enabled %}
+    - Storage:
+        - Garage S3:
+            icon: mdi-cloud-upload
+            href: https://garage.home.{{ homepage_domain }}
+            siteMonitor: https://garage.home.{{ homepage_domain }}/login
+            description: "S3 API https://s3.home.{{ homepage_domain }} · dedicated filesystem"
+{{ snapshot('storage.garage', garage_fields) | indent(12, true) }}
+        - PostgreSQL:
+            icon: postgres
+            description: "192.168.1.9:5432 · application inventory and activity"
+{{ snapshot('storage.postgresql', postgres_fields) | indent(12, true) }}
+{% endif %}
+    - Storage & activity:
+        - Blue storage & activity:
+            icon: mdi-harddisk
+            description: Capacity · ZFS · one-minute activity averages
+{{ details('host_details.blue') | indent(12, true) }}
+{% for host in homepage_observer_hosts %}
+        - {{ host.name }} storage & activity:
+            icon: mdi-harddisk
+            description: Capacity · physical LAN and disk rates
+{{ details('host_details.' ~ host.id) | indent(12, true) }}
 {% endfor %}
 - Network:
+    - wg-easy:
+        icon: wireguard
+        href: https://wireguard.home.{{ homepage_domain }}
+        siteMonitor: https://wireguard.home.{{ homepage_domain }}/login
+        description: Management portal availability · VPN cutover from red pending
     - AdGuard:
         icon: adguard-home
         href: https://adguard.home.{{ homepage_domain }}

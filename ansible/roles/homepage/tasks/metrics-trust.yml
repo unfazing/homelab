@@ -1,0 +1,10 @@
+---
+- name: Pin host SSH keys read through the verified provisioning connections
+  ansible.builtin.copy:
+    content: "{{ item.address }} {{ hostvars[item.inventory_host].homepage_metrics_host_key.content | b64decode | trim }}\n"
+    dest: "{{ homepage_observer_secret_dir }}/host-{{ item.id }}-known_hosts"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ homepage_observer_hosts }}"
+  when: not ansible_check_mode

@@ -11,3 +11,19 @@ homepage_password_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-da
 homepage_session_secret_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-session-secret"
 homepage_adguard_password_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-adguard-password"
 homepage_gitea_token_file: "{{ playbook_dir }}/../../.generated/secrets/homepage-gitea-token"
+
+homepage_blue_zfs_pool: tank
+
+# Read-only host telemetry; this is independent of Proxmox VM metrics.
+homepage_observer_hosts:
+  - id: red
+    name: red-server
+    inventory_host: red-server
+    address: 192.168.1.9
+    ssh_user: homepage-monitor
+    network_interfaces: [eno1]
+    disks: [sda]
+    mounts:
+      root: /
+      postgresql: /srv/homelab/postgresql
+      garage: /srv/homelab/garage

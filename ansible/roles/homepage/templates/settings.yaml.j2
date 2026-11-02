@@ -7,8 +7,26 @@ statusStyle: dot
 hideVersion: false
 layout:
   Infrastructure:
-    style: row
-    columns: 4
+    style: column
+    Physical hosts:
+      style: row
+      columns: 2
+      useEqualHeights: true
+    Virtual machines:
+      style: row
+      columns: 3
+      useEqualHeights: true
+{% if homepage_storage_enabled %}
+    Storage:
+      style: row
+      columns: 2
+      useEqualHeights: true
+{% endif %}
+    Storage & activity:
+      style: row
+      columns: 2
+      useEqualHeights: true
+      initiallyCollapsed: true
   Network:
     style: row
     columns: 1
