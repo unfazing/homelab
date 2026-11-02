@@ -1,0 +1,6 @@
+[Unit]
+{% if rootless_required_units | length %}
+Requires={{ rootless_required_units | join(' ') }}
+After={{ rootless_required_units | join(' ') }}
+BindsTo={{ rootless_required_units | join(' ') }}
+{% endif %}

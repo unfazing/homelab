@@ -1,0 +1,65 @@
+---
+- name: Keep the rootless user manager running at boot
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ rootless_user }}"]
+    creates: "/var/lib/systemd/linger/{{ rootless_user }}"
+
+- name: Start the guarded user manager
+  ansible.builtin.systemd_service:
+    name: "user@{{ rootless_uid }}"
+    state: started
+
+- name: Inspect the rootless service installation
+  ansible.builtin.stat:
+    path: "{{ rootless_home }}/.config/systemd/user/docker.service"
+  register: rootless_service
+
+- name: Install rootless Docker before protecting the top-level home
+  when: not rootless_service.stat.exists
+  block:
+    - name: Permit the official installer to write its home
+      ansible.builtin.file:
+        path: "{{ rootless_home }}"
+        owner: "{{ rootless_user }}"
+
+    - name: Install the user service without changing existing rootful Docker
+      ansible.builtin.command:
+        argv: [dockerd-rootless-setuptool.sh, install, --force]
+      become_user: "{{ rootless_user }}"
+      environment:
+        HOME: "{{ rootless_home }}"
+        XDG_RUNTIME_DIR: "/run/user/{{ rootless_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ rootless_uid }}/bus"
+      changed_when: true
+  always:
+    - name: Protect the home from SSH policy replacement even if installation fails
+      ansible.builtin.file:
+        path: "{{ rootless_home }}"
+        owner: root
+        group: "{{ rootless_user }}"
+        mode: '0750'
+
+- name: Enable the rootless daemon
+  ansible.builtin.systemd_service:
+    name: docker
+    scope: user
+    enabled: true
+    state: "{{ 'restarted' if rootless_service.stat.exists and (rootless_daemon_changes | default({})).get(rootless_user, false) else 'started' }}"
+    daemon_reload: true
+  become_user: "{{ rootless_user }}"
+  environment:
+    HOME: "{{ rootless_home }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ rootless_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ rootless_uid }}/bus"
+
+- name: Verify rootless Docker and cgroup support
+  ansible.builtin.command:
+    argv: [docker, info, --format, "{% raw %}{{json .SecurityOptions}} {{.CgroupVersion}}{% endraw %}"]
+  become_user: "{{ rootless_user }}"
+  environment:
+    HOME: "{{ rootless_home }}"
+    DOCKER_HOST: "unix:///run/user/{{ rootless_uid }}/docker.sock"
+    XDG_RUNTIME_DIR: "/run/user/{{ rootless_uid }}"
+  register: rootless_info
+  changed_when: false
+  failed_when: rootless_info.rc != 0 or 'rootless' not in rootless_info.stdout or not rootless_info.stdout.endswith(' 2')

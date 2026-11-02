@@ -1,0 +1,69 @@
+---
+- name: Validate systemd resource limit syntax
+  ansible.builtin.assert:
+    that:
+      - rootless_memory_max is match('^[1-9][0-9]*[MG]$')
+      - rootless_cpu_quota is match('^[1-9][0-9]*%$')
+    quiet: true
+
+- name: Read the target runtime UID
+  ansible.builtin.command:
+    argv: [id, -u, "{{ rootless_user }}"]
+  register: rootless_limit_uid
+  changed_when: false
+
+- name: Read current memory use before changing the runtime budget
+  ansible.builtin.command:
+    argv: [systemctl, show, "user-{{ rootless_limit_uid.stdout }}.slice", --property=MemoryCurrent, --value]
+  register: rootless_memory_current
+  changed_when: false
+
+- name: Refuse to lower the memory budget below current usage
+  ansible.builtin.assert:
+    that:
+      - (rootless_memory_current.stdout | int(0)) < (rootless_memory_max | human_to_bytes)
+    fail_msg: Runtime memory is above the requested budget; finish active jobs before retrying.
+    quiet: true
+
+- name: Create the persistent whole-user resource override directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/user-{{ rootless_limit_uid.stdout }}.slice.d"
+    state: directory
+    mode: '0755'
+
+- name: Persist the whole-user resource budget
+  ansible.builtin.template:
+    src: user-limits.conf.j2
+    dest: "/etc/systemd/system/user-{{ rootless_limit_uid.stdout }}.slice.d/homelab-limits.conf"
+    mode: '0644'
+  register: rootless_limits_file
+
+- name: Read the effective runtime limits
+  ansible.builtin.command:
+    argv: [systemctl, show, "user-{{ rootless_limit_uid.stdout }}.slice", --property=MemoryMax, --property=MemorySwapMax, --property=TasksMax, --property=CPUQuotaPerSecUSec]
+  register: rootless_live_limits
+  changed_when: false
+
+- name: Read the effective per-second CPU quota
+  ansible.builtin.set_fact:
+    rootless_live_cpu: "{{ (rootless_live_limits.stdout_lines | select('match', '^CPUQuotaPerSecUSec=') | first | default('CPUQuotaPerSecUSec=infinity')).split('=', 1)[1] }}"
+
+- name: Apply the budget to the running slice as well as future boots
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - set-property
+      - --runtime
+      - "user-{{ rootless_limit_uid.stdout }}.slice"
+      - "MemoryMax={{ rootless_memory_max }}"
+      - MemorySwapMax=0
+      - "CPUQuota={{ rootless_cpu_quota }}"
+      - TasksMax=2048
+  when: >-
+    rootless_limits_file.changed
+    or ('MemoryMax=' ~ (rootless_memory_max | human_to_bytes | string)) not in rootless_live_limits.stdout_lines
+    or 'MemorySwapMax=0' not in rootless_live_limits.stdout_lines
+    or 'TasksMax=2048' not in rootless_live_limits.stdout_lines
+    or rootless_live_cpu == 'infinity'
+    or (rootless_live_cpu | community.general.to_time_unit('seconds')) != ((rootless_cpu_quota | replace('%', '') | float) / 100)
+  changed_when: true

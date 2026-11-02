@@ -1,0 +1,39 @@
+---
+- name: Create the scoped egress policy directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop: [/usr/local/libexec, /etc/homelab-runner]
+
+- name: Install only the scoped egress table loader
+  ansible.builtin.copy:
+    src: load-egress.py
+    dest: /usr/local/libexec/homelab-runner-egress
+    mode: '0755'
+
+- name: Render the worker egress boundary
+  ansible.builtin.template:
+    src: egress.nft.j2
+    dest: /etc/homelab-runner/egress.nft
+    mode: '0644'
+  register: runner_egress_rules
+
+- name: Install the egress service
+  ansible.builtin.template:
+    src: egress.service.j2
+    dest: /etc/systemd/system/homelab-runner-egress.service
+    mode: '0644'
+
+- name: Enable and start policy before either runtime
+  ansible.builtin.systemd_service:
+    name: homelab-runner-egress
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Assert live policy even if a manual firewall reload removed the table
+  ansible.builtin.command:
+    argv: [/usr/local/libexec/homelab-runner-egress]
+  # Atomic replace converges the same table without duplicate rules.
+  changed_when: runner_egress_rules.changed

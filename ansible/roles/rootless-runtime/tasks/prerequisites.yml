@@ -1,0 +1,40 @@
+---
+- name: Read the installed Docker CE version before changing its rootless tools
+  ansible.builtin.command:
+    argv: [dpkg-query, --show, '--showformat=${Version}', docker-ce]
+  register: runner_docker_ce_version
+  changed_when: false
+
+- name: Require an installed official Docker CE package
+  ansible.builtin.assert:
+    that:
+      - runner_docker_ce_version.stdout is match('^[0-9]+:[0-9][A-Za-z0-9.+:~_-]+$')
+    fail_msg: Install official Docker CE before provisioning this external worker.
+    quiet: true
+
+- name: Remove the conflicting Ubuntu rootlesskit package only
+  ansible.builtin.apt:
+    name: rootlesskit
+    state: absent
+    autoremove: false
+
+- name: Install rootless prerequisites and Docker-matched rootless tools
+  ansible.builtin.apt:
+    name:
+      - "docker-ce-rootless-extras={{ runner_docker_ce_version.stdout }}"
+      - uidmap
+      - dbus-user-session
+      - slirp4netns
+      - nftables
+      - git
+      - openssh-client
+      - acl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    fail_on_autoremove: true
+
+- name: Require the existing Docker rootless setup helper
+  ansible.builtin.command:
+    argv: [test, -x, /usr/bin/dockerd-rootless-setuptool.sh]
+  changed_when: false

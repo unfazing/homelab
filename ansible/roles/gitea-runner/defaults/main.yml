@@ -9,7 +9,7 @@ gitea_runner_home: /var/lib/homelab-ci
 gitea_runner_job_image: homelab/ci-docker:29.9.2
 gitea_runner_cli_image: "docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb"
 gitea_runner_cpu_quota: "200%"
-gitea_runner_memory_max: 3G
+gitea_runner_memory_max: 2G
 gitea_deploy_user: homelab-deploy
 gitea_deploy_home: /var/lib/homelab-deploy
 # Operator-approved contracts, not files supplied by a workflow. See role README.

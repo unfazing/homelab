@@ -1,0 +1,4 @@
+---
+rootless_memory_max: 2G
+rootless_cpu_quota: "200%"
+rootless_required_units: []

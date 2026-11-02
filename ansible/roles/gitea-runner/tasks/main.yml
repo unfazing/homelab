@@ -10,45 +10,10 @@
       - gitea_runner_sha256 is match('^[a-f0-9]{64}$')
     quiet: true
 
-- name: Read the installed Docker CE version before changing its rootless tools
-  ansible.builtin.command:
-    argv: [dpkg-query, --show, '--showformat=${Version}', docker-ce]
-  register: runner_docker_ce_version
-  changed_when: false
-
-- name: Require an installed official Docker CE package
-  ansible.builtin.assert:
-    that:
-      - runner_docker_ce_version.stdout is match('^[0-9]+:[0-9][A-Za-z0-9.+:~_-]+$')
-    fail_msg: Install official Docker CE before provisioning this external worker.
-    quiet: true
-
-- name: Remove the conflicting Ubuntu rootlesskit package only
-  ansible.builtin.apt:
-    name: rootlesskit
-    state: absent
-    autoremove: false
-
-- name: Install rootless prerequisites and Docker-matched rootless tools
-  ansible.builtin.apt:
-    name:
-      - "docker-ce-rootless-extras={{ runner_docker_ce_version.stdout }}"
-      - uidmap
-      - dbus-user-session
-      - slirp4netns
-      - nftables
-      - git
-      - openssh-client
-      - acl
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
-    fail_on_autoremove: true
-
-- name: Require the existing Docker rootless setup helper
-  ansible.builtin.command:
-    argv: [test, -x, /usr/bin/dockerd-rootless-setuptool.sh]
-  changed_when: false
+- name: Install Docker-matched rootless prerequisites
+  ansible.builtin.include_role:
+    name: rootless-runtime
+    tasks_from: prerequisites
 
 - name: Prepare separate runtime users and their limits
   ansible.builtin.include_tasks: runtime.yml
@@ -65,37 +30,8 @@
     mode: '0755'
   loop: [/etc/homelab-runner, /etc/homelab-deploy, /usr/local/libexec, /opt/homelab/runner-tools]
 
-- name: Install only the scoped egress table loader
-  ansible.builtin.copy:
-    src: load-egress.py
-    dest: /usr/local/libexec/homelab-runner-egress
-    mode: '0755'
-
-- name: Render the worker egress boundary
-  ansible.builtin.template:
-    src: egress.nft.j2
-    dest: /etc/homelab-runner/egress.nft
-    mode: '0644'
-  register: runner_egress_rules
-
-- name: Install the egress service
-  ansible.builtin.template:
-    src: egress.service.j2
-    dest: /etc/systemd/system/homelab-runner-egress.service
-    mode: '0644'
-
-- name: Enable and start policy before either runtime
-  ansible.builtin.systemd_service:
-    name: homelab-runner-egress
-    daemon_reload: true
-    enabled: true
-    state: started
-
-- name: Assert live policy even if a manual firewall reload removed the table
-  ansible.builtin.command:
-    argv: [/usr/local/libexec/homelab-runner-egress]
-  # Atomic replace converges the same table without duplicate rules.
-  changed_when: runner_egress_rules.changed
+- name: Reconcile the shared runner egress policy
+  ansible.builtin.include_tasks: network.yml
 
 - name: Start each isolated rootless daemon
   ansible.builtin.include_tasks: start-runtime.yml
@@ -179,6 +115,14 @@
   loop: "{{ gitea_runner_app_contracts }}"
   loop_control:
     loop_var: app
+
+- name: Validate admitted app-specific SSH launchers
+  ansible.builtin.assert:
+    that:
+      - item.command is match('^/usr/local/libexec/[a-z0-9-]+$')
+      - "item.public_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+(?: [A-Za-z0-9_-]+)?$')"
+    quiet: true
+  loop: "{{ gitea_runner_app_launchers | default([]) }}"
 
 - name: Allow only admitted per-application SSH keys and forced commands
   ansible.builtin.template:
