@@ -1,0 +1,222 @@
+---
+- name: Require the approved durable storage and rootless runtime contract
+  ansible.builtin.assert:
+    that:
+      - storage_mounts_verified | default(false) | bool
+      - storage_runtime_user == 'homelab-storage'
+      - storage_host_address == '192.168.1.9'
+      - storage_garage_mount == '/srv/homelab/garage'
+      - storage_runtime_environment.DOCKER_HOST == 'unix:///run/user/' ~ (storage_runtime_uid | string) ~ '/docker.sock'
+      - garage_image is match('^dxflrs/garage:v2\.5\.0@sha256:[a-f0-9]{64}$')
+      - garage_capacity_gib | int > 0
+    quiet: true
+
+- name: Validate mounted Garage storage without allowing a root-filesystem fallback
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, FSTYPE, --mountpoint, "{{ storage_garage_mount }}"]
+  register: garage_mount_type
+  changed_when: false
+  failed_when: garage_mount_type.rc != 0 or garage_mount_type.stdout | trim != 'ext4'
+  check_mode: false
+
+- name: Validate the protected Garage credential shape
+  ansible.builtin.assert:
+    that:
+      - storage_secrets.garage.rpc_secret is match('^[a-f0-9]{64}$')
+      - storage_secrets.garage.admin_token is match('^[a-f0-9]{64}$')
+      - storage_secrets.garage.metrics_token is match('^[a-f0-9]{64}$')
+      - storage_secrets.garage.s3_key_id is match('^GK[a-f0-9]{24}$')
+      - storage_secrets.garage.s3_secret_key is match('^[a-f0-9]{64}$')
+    quiet: true
+  no_log: true
+
+- name: Create root-owned Garage configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+  loop: ["{{ garage_compose_dir }}", "{{ garage_secret_dir }}"]
+
+- name: Inspect the dedicated data directories before initial creation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: ["{{ garage_metadata_dir }}", "{{ garage_objects_dir }}"]
+  register: garage_data_paths
+
+- name: Reject existing non-directory or linked Garage state paths
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or (item.stat.isdir | default(false) and not item.stat.islnk | default(false))
+    quiet: true
+  loop: "{{ garage_data_paths.results }}"
+
+- name: Create missing data directories without changing ownership of existing state
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: directory
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    mode: '0700'
+  loop: "{{ garage_data_paths.results }}"
+  when: not item.stat.exists
+
+- name: Install Garage's file-based secrets
+  ansible.builtin.copy:
+    content: "{{ storage_secrets.garage[item] }}\n"
+    dest: "{{ garage_secret_dir }}/{{ item }}"
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    mode: '0600'
+  loop: [rpc_secret, admin_token, metrics_token]
+  no_log: true
+
+- name: Render protected Garage settings
+  ansible.builtin.template:
+    src: garage.toml.j2
+    dest: "{{ garage_compose_dir }}/garage.toml"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+
+- name: Render the isolated Garage Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ garage_compose_dir }}/compose.yml"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  no_log: true
+
+- name: Install the native-API Garage configurator
+  ansible.builtin.copy:
+    src: reconcile.py
+    dest: "{{ garage_compose_dir }}/reconcile.py"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Validate the Garage Compose project
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ garage_compose_dir }}", config, --quiet]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Start Garage in the rootless storage daemon
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ garage_compose_dir }}", up, --detach, --wait]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_compose_up
+  changed_when: "'Created' in (garage_compose_up.stdout ~ garage_compose_up.stderr) or 'Started' in (garage_compose_up.stdout ~ garage_compose_up.stderr) or 'Recreated' in (garage_compose_up.stdout ~ garage_compose_up.stderr)"
+  when: not ansible_check_mode
+
+- name: Initialize only empty layout and converge the application bucket/key
+  ansible.builtin.command:
+    argv: [python3, "{{ garage_compose_dir }}/reconcile.py"]
+    stdin: "{{ {'container': garage_container_name, 'zone': garage_zone, 'capacity_gib': garage_capacity_gib | int, 'bucket': garage_bucket_name, 'key_id': storage_secrets.garage.s3_key_id, 'key_secret': storage_secrets.garage.s3_secret_key} | to_json }}"
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_reconcile
+  changed_when: (garage_reconcile.stdout | from_json).changed
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Require a healthy single-node Garage layout after bootstrap
+  ansible.builtin.command:
+    argv: [docker, exec, "{{ garage_container_name }}", /garage, -c, /etc/garage.toml, json-api, GetClusterHealth]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_cluster_health
+  changed_when: false
+  until: garage_cluster_health.rc == 0 and (garage_cluster_health.stdout | from_json).status == 'healthy'
+  retries: 12
+  delay: 3
+  when: not ansible_check_mode
+
+- name: Prepare the protected scoped token file without replacing an existing secret
+  ansible.builtin.copy:
+    content: ''
+    force: false
+    dest: /etc/homelab/storage/garage-monitor-token
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    mode: '0600'
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Inspect the ignored controller copy of the monitoring token
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../../.generated/secrets/garage-monitor-token"
+  delegate_to: localhost
+  become: false
+  register: garage_monitor_recovery
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Read the guest monitoring token without logging it
+  ansible.builtin.slurp:
+    src: /etc/homelab/storage/garage-monitor-token
+  register: garage_monitor_saved
+  no_log: true
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Refuse conflicting monitor recovery credentials
+  ansible.builtin.assert:
+    that:
+      - (garage_monitor_saved.content | b64decode | trim) in ['', lookup('ansible.builtin.file', playbook_dir ~ '/../../.generated/secrets/garage-monitor-token') | trim]
+    quiet: true
+  no_log: true
+  when:
+    - storage_monitoring_enabled | default(false) | bool
+    - garage_monitor_recovery.stat.exists
+
+- name: Recover a missing guest token from the protected controller copy
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../.generated/secrets/garage-monitor-token"
+    dest: /etc/homelab/storage/garage-monitor-token
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    mode: '0600'
+  no_log: true
+  when:
+    - storage_monitoring_enabled | default(false) | bool
+    - garage_monitor_recovery.stat.exists
+    - garage_monitor_saved.content | b64decode | trim == ''
+
+- name: Install the scoped token reconciler
+  ansible.builtin.copy:
+    src: monitor-token.py
+    dest: "{{ garage_compose_dir }}/monitor-token.py"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Converge only the aggregate monitoring endpoint scope
+  ansible.builtin.command:
+    argv: [python3, "{{ garage_compose_dir }}/monitor-token.py"]
+    stdin: "{{ {'container': garage_container_name, 'path': '/etc/homelab/storage/garage-monitor-token'} | to_json }}"
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_monitor_token
+  changed_when: (garage_monitor_token.stdout | from_json).changed
+  no_log: true
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Preserve the scoped token for ordinary OS reconstruction without duplicate issuance
+  ansible.builtin.fetch:
+    src: /etc/homelab/storage/garage-monitor-token
+    dest: "{{ playbook_dir }}/../../.generated/secrets/garage-monitor-token"
+    flat: true
+  no_log: true
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Protect the ignored controller recovery file
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../../.generated/secrets/garage-monitor-token"
+    mode: '0600'
+  delegate_to: localhost
+  become: false
+  when: storage_monitoring_enabled | default(false) | bool

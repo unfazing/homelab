@@ -1,0 +1,20 @@
+FROM {{ garage_ui_go_image }} AS build
+ENV GOTOOLCHAIN=local GOMAXPROCS=2 GOMEMLIMIT=512MiB GOFLAGS=-p=1
+WORKDIR /src
+COPY source.tar.gz /tmp/source.tar.gz
+RUN tar -xzf /tmp/source.tar.gz --strip-components=1 \
+    && cd backend \
+    && GOMAXPROCS=2 GOMEMLIMIT=512MiB go install github.com/swaggo/swag/cmd/swag@v1.16.6 \
+    && /go/bin/swag init \
+    && CGO_ENABLED=0 GOMAXPROCS=2 GOMEMLIMIT=512MiB go build -p 1 -trimpath \
+      -ldflags "-X main.version={{ garage_ui_version }}-homelab" -o /out/garage-ui . \
+    && go version -m /out/garage-ui | grep 'go1.27.3'
+
+# Reuse the exact release's built static frontend, replacing its older Go binary.
+FROM {{ garage_ui_base_image }}
+USER root
+RUN apk upgrade --no-cache && update-ca-certificates
+COPY --from=build /out/garage-ui /app/garage-ui
+LABEL io.homelab.source-revision="{{ garage_ui_source_revision }}" \
+      io.homelab.go-version="go1.27.3"
+USER 1000:1000

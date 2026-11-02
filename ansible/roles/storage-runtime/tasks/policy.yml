@@ -1,0 +1,16 @@
+---
+- name: Define separately managed storage filesystems
+  ansible.builtin.set_fact:
+    storage_volume_policy:
+      volume_group: "{{ storage_volume_group }}"
+      volumes:
+        - lv: "{{ storage_postgresql_lv }}"
+          size_gib: "{{ storage_postgresql_size_gib }}"
+          mount: "{{ storage_postgresql_mount }}"
+          label: homelab-pg
+          tag: homelab-managed-postgresql
+        - lv: "{{ storage_garage_lv }}"
+          size_gib: "{{ storage_garage_size_gib }}"
+          mount: "{{ storage_garage_mount }}"
+          label: homelab-garage
+          tag: homelab-managed-garage

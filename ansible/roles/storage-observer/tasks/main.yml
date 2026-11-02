@@ -1,0 +1,113 @@
+---
+- name: Create the report reader group without granting Docker or sudo
+  ansible.builtin.group:
+    name: homepage-monitor
+    system: true
+
+- name: Create rebuildable aggregate output with inherited read-only reporter access
+  ansible.builtin.file:
+    path: "{{ storage_observer_cache }}"
+    state: directory
+    owner: "{{ storage_runtime_user }}"
+    group: homepage-monitor
+    mode: '2750'
+
+- name: Create the protected build directory
+  ansible.builtin.file:
+    path: "{{ storage_observer_dir }}"
+    state: directory
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Install the dependency-free aggregate collector source
+  ansible.builtin.copy:
+    src: collect.go
+    dest: "{{ storage_observer_dir }}/collect.go"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0644'
+  register: storage_observer_source
+
+- name: Install the pinned multi-stage build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ storage_observer_dir }}/Dockerfile"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0644'
+  register: storage_observer_dockerfile
+
+- name: Define a content-addressed local build tag
+  ansible.builtin.set_fact:
+    storage_observer_build_hash: "{{ (storage_observer_source.checksum ~ storage_observer_dockerfile.checksum) | hash('sha256') }}"
+
+- name: Inspect the collector image
+  ansible.builtin.command:
+    argv: [docker, image, inspect, "homelab/storage-observer:{{ storage_observer_build_hash }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: storage_observer_image
+  changed_when: false
+  failed_when: storage_observer_image.rc not in [0, 1]
+  no_log: true
+
+- name: Build the pinned aggregate collector when absent
+  ansible.builtin.command:
+    argv: [docker, build, --tag, "homelab/storage-observer:{{ storage_observer_build_hash }}", "{{ storage_observer_dir }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  when: storage_observer_image.rc != 0
+  changed_when: true
+
+- name: Install only a monitor pgpass file without exporting it in environment or arguments
+  ansible.builtin.copy:
+    content: "postgresql:5432:*:homelab_monitor:{{ storage_secrets.postgresql.monitor_password }}\n"
+    dest: /etc/homelab/storage/postgresql-monitor-pgpass
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    mode: '0600'
+  no_log: true
+
+- name: Install the non-secret database target allowlist
+  ansible.builtin.copy:
+    content: "{{ {'databases': postgresql_applications | map(attribute='database') | list} | to_nice_json }}\n"
+    dest: "{{ storage_observer_dir }}/config.json"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0644'
+
+- name: Render the isolated collector project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ storage_observer_dir }}/compose.yml"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+
+- name: Validate the collector configuration
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ storage_observer_dir }}", config, --quiet]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+
+- name: Converge the aggregate-only observer without publishing a listener
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ storage_observer_dir }}", up, --detach, --wait, --wait-timeout, '120']
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: storage_observer_up
+  changed_when: "'Created' in (storage_observer_up.stdout ~ storage_observer_up.stderr) or 'Started' in (storage_observer_up.stdout ~ storage_observer_up.stderr) or 'Recreated' in (storage_observer_up.stdout ~ storage_observer_up.stderr)"
+
+- name: Wait for successful independently sampled aggregates
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - "import json,time; d=json.load(open('{{ storage_observer_cache }}/snapshot.json')); assert all(d[k]['checked_at']>time.time()-180 and not d[k].get('error') for k in ('garage','postgresql'))"
+  changed_when: false
+  register: storage_observer_ready
+  until: storage_observer_ready.rc == 0
+  retries: 12
+  delay: 5

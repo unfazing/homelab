@@ -1,0 +1,42 @@
+---
+- name: Install the isolated persistent development storage services
+  hosts: storage
+  any_errors_fatal: true
+  become: true
+  gather_facts: true
+  vars_files: [../vars/storage.yml, ../vars/storage-applications.json]
+  tasks:
+    - name: Prepare the isolated storage runtime and mounted filesystems
+      ansible.builtin.import_role:
+        name: storage-runtime
+    - name: Prepare the internal aggregate telemetry network
+      ansible.builtin.import_role:
+        name: storage-observer
+        tasks_from: prepare
+    # Build the trusted UI image before database/object-store workloads compete
+    # for the storage user's bounded memory. The UI role skips unchanged builds.
+    - name: Build the trusted UI image before starting data services
+      ansible.builtin.import_role:
+        name: garage-ui
+        tasks_from: build
+    - name: Converge PostgreSQL
+      ansible.builtin.import_role:
+        name: postgresql
+    - name: Converge Garage
+      ansible.builtin.import_role:
+        name: garage
+    - name: Start the authenticated UI after Garage bootstrap
+      ansible.builtin.import_role:
+        name: garage-ui
+
+    - name: Start the isolated aggregate storage collector
+      ansible.builtin.import_role:
+        name: storage-observer
+
+# Reuse the canonical DNS, observer identities, dashboard and Caddy convergence.
+# This also supports a fresh install without relying on a prior Homepage state.
+- name: Publish private storage routes and update the operator dashboard
+  ansible.builtin.import_playbook: homepage.yml
+
+- name: Verify all storage services through their intended boundaries
+  ansible.builtin.import_playbook: storage-verify.yml

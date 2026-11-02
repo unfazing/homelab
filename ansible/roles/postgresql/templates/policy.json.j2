@@ -1,0 +1,19 @@
+{
+  "container": {{ postgresql_container_name | to_json }},
+  "admin_password": {{ storage_secrets.postgresql.admin_password | to_json }},
+{% if storage_monitoring_enabled | default(false) %}
+  "monitor_password": {{ storage_secrets.postgresql.monitor_password | to_json }},
+{% endif %}
+  "applications": [
+{% for app in postgresql_applications %}
+    {
+      "database": {{ app.database | to_json }},
+      "owner_role": {{ app.owner_role | to_json }},
+      "runtime_role": {{ app.runtime_role | to_json }},
+      "migration_role": {{ app.migration_role | to_json }},
+      "runtime_password": {{ storage_secrets.postgresql.applications[app.database].runtime_password | to_json }},
+      "migration_password": {{ storage_secrets.postgresql.applications[app.database].migration_password | to_json }}
+    }{{ ',' if not loop.last else '' }}
+{% endfor %}
+  ]
+}

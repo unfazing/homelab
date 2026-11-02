@@ -1,0 +1,17 @@
+---
+- name: Install the private HTTPS and native session verifier
+  ansible.builtin.copy:
+    src: verify.py
+    dest: "{{ garage_ui_compose_dir }}/verify.py"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Verify authenticated browser and S3 behavior after Caddy routes exist
+  ansible.builtin.command:
+    argv: [python3, "{{ garage_ui_compose_dir }}/verify.py"]
+    stdin: "{{ {'proxy_address': storage_proxy_address, 'ui_hostname': storage_ui_hostname, 's3_hostname': storage_s3_hostname, 'username': storage_secrets.garage.ui_username, 'password': storage_secrets.garage.ui_password, 'key_id': storage_secrets.garage.s3_key_id, 'key_secret': storage_secrets.garage.s3_secret_key, 'region': garage_region, 'bucket': garage_bucket_name, 'container': garage_ui_container_name, 'restart_ui': garage_ui_verify_restart | default(false) | bool} | to_json }}"
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+  no_log: true

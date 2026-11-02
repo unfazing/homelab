@@ -1,0 +1,111 @@
+---
+- name: Require the private UI and mounted rootless storage contract
+  ansible.builtin.assert:
+    that:
+      - storage_mounts_verified | default(false) | bool
+      - storage_runtime_user == 'homelab-storage'
+      - storage_garage_mount == '/srv/homelab/garage'
+      - storage_ui_hostname is match('^garage\.home\.[a-z0-9.-]+$')
+      - storage_s3_hostname is match('^s3\.home\.[a-z0-9.-]+$')
+      - garage_ui_base_image is match('^noooste/garage-ui:v0\.14\.0@sha256:[a-f0-9]{64}$')
+      - garage_ui_go_image is match('^golang:1\.27\.3-alpine@sha256:[a-f0-9]{64}$')
+      - garage_ui_source_revision is match('^[a-f0-9]{40}$')
+      - storage_runtime_environment.DOCKER_HOST == 'unix:///run/user/' ~ (storage_runtime_uid | string) ~ '/docker.sock'
+    quiet: true
+
+- name: Require an actual Garage ext4 mount before placing UI signing state
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, FSTYPE, --mountpoint, "{{ storage_garage_mount }}"]
+  register: garage_ui_mount
+  changed_when: false
+  failed_when: garage_ui_mount.rc != 0 or garage_ui_mount.stdout | trim != 'ext4'
+  check_mode: false
+
+- name: Validate the UI login instead of accepting upstream insecure defaults
+  ansible.builtin.assert:
+    that:
+      - storage_secrets.garage.ui_username is match('^[a-zA-Z0-9_.-]{1,40}$')
+      - storage_secrets.garage.ui_password | length >= 24
+      - storage_secrets.garage.admin_token is match('^[a-f0-9]{64}$')
+    quiet: true
+  no_log: true
+
+- name: Create the UI source and protected configuration directory
+  ansible.builtin.file:
+    path: "{{ garage_ui_compose_dir }}"
+    state: directory
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Inspect existing UI signing state directory
+  ansible.builtin.stat:
+    path: "{{ garage_ui_data_dir }}"
+  register: garage_ui_state
+
+- name: Reject existing non-directory or linked UI signing state
+  ansible.builtin.assert:
+    that:
+      - not garage_ui_state.stat.exists or (garage_ui_state.stat.isdir | default(false) and not garage_ui_state.stat.islnk | default(false))
+    quiet: true
+
+- name: Create UI state only when absent without changing existing signer ownership
+  ansible.builtin.file:
+    path: "{{ garage_ui_data_dir }}"
+    state: directory
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    mode: '0700'
+  when: not garage_ui_state.stat.exists
+
+- name: Require storage-account write access to the persistent UI state directory
+  ansible.builtin.command:
+    argv: [test, -w, "{{ garage_ui_data_dir }}"]
+  become_user: "{{ storage_runtime_user }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Fetch the checksum-pinned UI source for the patched Go build
+  ansible.builtin.get_url:
+    url: "https://api.github.com/repos/Noooste/garage-ui/tarball/{{ garage_ui_source_revision }}"
+    dest: "{{ garage_ui_compose_dir }}/source.tar.gz"
+    checksum: "sha256:{{ garage_ui_source_sha256 }}"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  register: garage_ui_source
+
+- name: Render the source-controlled security image build
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ garage_ui_compose_dir }}/Dockerfile"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  register: garage_ui_dockerfile
+
+- name: Exclude UI credentials and runtime configuration from the build context
+  ansible.builtin.template:
+    src: dockerignore.j2
+    dest: "{{ garage_ui_compose_dir }}/.dockerignore"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+
+- name: Inspect the patched image in the storage daemon only
+  ansible.builtin.command:
+    argv: [docker, image, inspect, "{{ garage_ui_image }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_ui_image_present
+  changed_when: false
+  failed_when: garage_ui_image_present.rc not in [0, 1]
+  when: not ansible_check_mode
+
+- name: Build only when the patched image or build input changed
+  ansible.builtin.command:
+    argv: [docker, build, --tag, "{{ garage_ui_image }}", "{{ garage_ui_compose_dir }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: true
+  when: not ansible_check_mode and (garage_ui_image_present.rc == 1 or garage_ui_source.changed or garage_ui_dockerfile.changed)

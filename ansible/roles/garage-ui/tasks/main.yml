@@ -1,0 +1,61 @@
+---
+- name: Prepare the patched UI image and durable state
+  ansible.builtin.import_tasks: build.yml
+
+- name: Render protected UI authentication and Garage connection settings
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ garage_ui_compose_dir }}/config.yaml"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  no_log: true
+
+- name: Render the private UI Compose project
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ garage_ui_compose_dir }}/compose.yml"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  no_log: true
+
+- name: Validate the UI Compose project without displaying resolved secrets
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ garage_ui_compose_dir }}", config, --quiet]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Start UI after Garage bootstrap without requiring the not-yet-published S3 route
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ garage_ui_compose_dir }}", up, --detach, --wait]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_ui_up
+  changed_when: "'Created' in (garage_ui_up.stdout ~ garage_ui_up.stderr) or 'Started' in (garage_ui_up.stdout ~ garage_ui_up.stderr) or 'Recreated' in (garage_ui_up.stdout ~ garage_ui_up.stderr)"
+  when: not ansible_check_mode
+
+- name: Wait for first-start signer generation before inspecting ownership
+  ansible.builtin.wait_for:
+    path: "{{ garage_ui_data_dir }}/jwt-key.pem"
+    state: present
+    timeout: 60
+  when: not ansible_check_mode
+
+- name: Verify UI generated its persistent signer instead of silently using a temporary key
+  ansible.builtin.stat:
+    path: "{{ garage_ui_data_dir }}/jwt-key.pem"
+  register: garage_ui_signer
+  when: not ansible_check_mode
+
+- name: Require a private persistent signer owned by the mapped storage account
+  ansible.builtin.assert:
+    that:
+      - garage_ui_signer.stat.isreg | default(false)
+      - not garage_ui_signer.stat.islnk | default(false)
+      - garage_ui_signer.stat.mode == '0600'
+      - garage_ui_signer.stat.uid == storage_runtime_uid | int
+    quiet: true
+  when: not ansible_check_mode

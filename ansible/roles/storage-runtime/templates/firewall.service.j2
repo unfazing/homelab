@@ -1,0 +1,14 @@
+[Unit]
+Description=Private development storage listeners and runtime egress
+Before=user@{{ storage_runtime_uid }}.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/homelab-storage-firewall
+ExecReload=/usr/local/libexec/homelab-storage-firewall
+RemainAfterExit=yes
+# Leave our policy installed on stop; never flush another owner's rules.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+---
+- name: Verify Garage still uses the expected durable filesystem
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, FSTYPE, --mountpoint, "{{ storage_garage_mount }}"]
+  register: garage_verify_mount
+  changed_when: false
+  failed_when: garage_verify_mount.rc != 0 or garage_verify_mount.stdout | trim != 'ext4'
+
+- name: Verify native API convergence is a no-op without exposing any key material
+  ansible.builtin.command:
+    argv: [python3, "{{ garage_compose_dir }}/reconcile.py"]
+    stdin: "{{ {'audit_only': true, 'container': garage_container_name, 'zone': garage_zone, 'capacity_gib': garage_capacity_gib | int, 'bucket': garage_bucket_name, 'key_id': storage_secrets.garage.s3_key_id, 'key_secret': storage_secrets.garage.s3_secret_key} | to_json }}"
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: garage_verify_reconcile
+  changed_when: false
+  failed_when: garage_verify_reconcile.rc != 0 or (garage_verify_reconcile.stdout | from_json).changed
+  no_log: true

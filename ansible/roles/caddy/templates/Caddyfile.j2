@@ -36,6 +36,17 @@
 		reverse_proxy {{ caddy_inkling_upstream }}
 	}
 
+{% if caddy_storage_enabled %}
+	@s3 host {{ caddy_s3_hostname }}
+	handle @s3 {
+		# Preserve Host and path for S3 signature validation. No proxy Basic Auth.
+		reverse_proxy {{ caddy_s3_upstream }}
+	}
+	@garage host {{ caddy_garage_hostname }}
+	handle @garage {
+		reverse_proxy {{ caddy_garage_upstream }}
+	}
+{% endif %}
 	@wireguard host wireguard.home.{{ caddy_domain }}
 	handle @wireguard {
 		reverse_proxy http://{{ hostvars[groups['access'][0]].ansible_host }}:51821

@@ -1,0 +1,5 @@
+---
+storage_observer_dir: /opt/homelab/storage-observer
+storage_observer_cache: /var/lib/homelab/storage-observer
+storage_observer_builder: golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c
+storage_observer_base: postgres:18.6-bookworm@sha256:5c4783a8cc3f0074912164f94dfa1be4e043438f0f707cf968d7af9a0d31a2c8

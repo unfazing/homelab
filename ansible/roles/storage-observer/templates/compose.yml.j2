@@ -1,0 +1,34 @@
+name: homelab-storage-observer
+services:
+  observer:
+    image: "homelab/storage-observer:{{ storage_observer_build_hash }}"
+    container_name: homelab-storage-observer
+    user: '0:0'
+    restart: unless-stopped
+    volumes:
+      - "{{ storage_observer_dir }}/config.json:/config/config.json:ro"
+      - "{{ storage_observer_cache }}:/output:rw"
+      - /etc/homelab/storage/postgresql-monitor-pgpass:/run/secrets/pgpass:ro
+      - /etc/homelab/storage/garage-monitor-token:/run/secrets/garage-token:ro
+    networks:
+      observer:
+        ipv4_address: "{{ storage_observer_address }}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 96m
+    cpus: 0.1
+    pids_limit: 32
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=8m
+      - /var/lib/postgresql:rw,nosuid,nodev,noexec,size=1m
+    healthcheck:
+      test: [CMD, /usr/local/bin/storage-observer, --check]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+networks:
+  observer:
+    name: "{{ storage_observer_network }}"
+    external: true

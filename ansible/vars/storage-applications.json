@@ -1,0 +1,10 @@
+{
+  "postgresql_applications": [
+    {
+      "database": "colouring_book_dev",
+      "owner_role": "colouring_book_owner",
+      "runtime_role": "colouring_book_app",
+      "migration_role": "colouring_book_migrator"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+---
+- name: Require the approved interim physical host and explicit backup policy
+  ansible.builtin.assert:
+    that:
+      - ansible_host == storage_host_address
+      - storage_host_address == '192.168.1.9'
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - not storage_backups_enabled
+      - storage_runtime_user == 'homelab-storage'
+      - storage_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+    quiet: true
+
+- name: Prepare protected guest tooling directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: [/usr/local/libexec]
+
+- name: Read the ignored controller secret bundle
+  ansible.builtin.set_fact:
+    storage_secrets: "{{ lookup('ansible.builtin.file', storage_secrets_file) | from_json }}"
+  no_log: true
+
+- name: Inspect existing CI and application identities without creating them
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ item }}"]
+  loop: [homelab-ci, homelab-deploy]
+  register: storage_existing_accounts
+  changed_when: false
+  failed_when: storage_existing_accounts.rc not in [0, 2]
+
+- name: Rebalance existing runtime limits with live-memory guards
+  ansible.builtin.include_role:
+    name: rootless-runtime
+    tasks_from: limits
+  vars:
+    rootless_user: "{{ item.item }}"
+    rootless_memory_max: "{{ storage_existing_runtime_memory_max }}"
+    rootless_cpu_quota: "200%"
+  loop: "{{ storage_existing_accounts.results }}"
+  when: item.rc == 0
+
+- name: Inspect and provision separately managed filesystems
+  ansible.builtin.include_tasks: volumes.yml
+
+- name: Ensure Docker-matched rootless prerequisites
+  ansible.builtin.include_role:
+    name: rootless-runtime
+    tasks_from: prerequisites
+
+- name: Prepare the storage identity with mandatory mount and firewall dependencies
+  ansible.builtin.include_role:
+    name: rootless-runtime
+    tasks_from: prepare
+  vars:
+    rootless_user: "{{ storage_runtime_user }}"
+    rootless_home: "{{ storage_runtime_home }}"
+    rootless_memory_max: "{{ storage_runtime_memory_max }}"
+    rootless_cpu_quota: "{{ storage_runtime_cpu_quota }}"
+    rootless_required_units:
+      - srv-homelab-postgresql.mount
+      - srv-homelab-garage.mount
+      - homelab-storage-firewall.service
+
+- name: Capture the storage identity independently of reused role facts
+  ansible.builtin.set_fact:
+    storage_runtime_uid: "{{ rootless_uid | int }}"
+
+- name: Protect the shared secret directory consistently across service roles
+  ansible.builtin.file:
+    path: /etc/homelab/storage
+    state: directory
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Render the storage listener and egress guard
+  ansible.builtin.template:
+    src: firewall.nft.j2
+    dest: /etc/homelab/storage/firewall.nft
+    mode: '0644'
+  register: storage_firewall_rules
+
+- name: Install the scoped firewall loader
+  ansible.builtin.copy:
+    src: load-firewall.py
+    dest: /usr/local/libexec/homelab-storage-firewall
+    mode: '0755'
+
+- name: Install the storage guard service
+  ansible.builtin.template:
+    src: firewall.service.j2
+    dest: /etc/systemd/system/homelab-storage-firewall.service
+    mode: '0644'
+
+- name: Enable policy before starting storage Docker
+  ansible.builtin.systemd_service:
+    name: homelab-storage-firewall
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Assert the live storage table even after a manual firewall reload
+  ansible.builtin.command:
+    argv: [/usr/local/libexec/homelab-storage-firewall]
+  changed_when: storage_firewall_rules.changed
+
+- name: Capture existing runner identities for the shared egress update
+  ansible.builtin.set_fact:
+    gitea_runner_ci_uid: "{{ storage_existing_accounts.results[0].stdout.split(':')[2] | int }}"
+    gitea_runner_deploy_uid: "{{ storage_existing_accounts.results[1].stdout.split(':')[2] | int }}"
+  when: storage_existing_accounts.results | map(attribute='rc') | list == [0, 0]
+
+- name: Allow application runtime database access while preserving CI denial
+  ansible.builtin.include_role:
+    name: gitea-runner
+    tasks_from: network
+  when: storage_existing_accounts.results | map(attribute='rc') | list == [0, 0]
+
+- name: Start the mount-guarded dedicated Docker daemon
+  ansible.builtin.include_role:
+    name: rootless-runtime
+    tasks_from: start
+  vars:
+    rootless_user: "{{ storage_runtime_user }}"
+    rootless_home: "{{ storage_runtime_home }}"
+    rootless_uid: "{{ storage_runtime_uid }}"
+
+- name: Publish the rootless service environment for deployment roles
+  ansible.builtin.set_fact:
+    storage_runtime_environment:
+      HOME: "{{ storage_runtime_home }}"
+      XDG_RUNTIME_DIR: "/run/user/{{ storage_runtime_uid }}"
+      DOCKER_HOST: "unix:///run/user/{{ storage_runtime_uid }}/docker.sock"

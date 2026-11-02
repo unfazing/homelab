@@ -1,0 +1,15 @@
+---
+- name: Require PostgreSQL's actual persistent mount before verification
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, FSTYPE, --mountpoint, "{{ storage_postgresql_mount }}"]
+  register: postgresql_verify_mount
+  changed_when: false
+  failed_when: postgresql_verify_mount.rc != 0 or postgresql_verify_mount.stdout | trim != 'ext4'
+
+- name: Verify SQL permissions and credential authentication without persisting test data
+  ansible.builtin.command:
+    argv: [python3, "{{ postgresql_compose_dir }}/verify.py", --config, "{{ postgresql_policy_file }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+  no_log: true

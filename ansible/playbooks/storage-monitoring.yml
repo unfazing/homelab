@@ -1,0 +1,23 @@
+---
+- name: Converge aggregate telemetry on an existing storage installation
+  hosts: storage
+  any_errors_fatal: true
+  become: true
+  gather_facts: false
+  vars_files: [../vars/storage.yml, ../vars/storage-applications.json]
+  tasks:
+    - ansible.builtin.include_role:
+        name: storage-runtime
+        tasks_from: verify-prerequisites
+    - ansible.builtin.import_role:
+        name: storage-observer
+        tasks_from: prepare
+    - ansible.builtin.import_role:
+        name: postgresql
+    - ansible.builtin.import_role:
+        name: garage
+    - ansible.builtin.import_role:
+        name: storage-observer
+
+- name: Update the fixed reporter and private dashboard through canonical convergence
+  ansible.builtin.import_playbook: homepage.yml

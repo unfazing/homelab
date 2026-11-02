@@ -1,0 +1,31 @@
+---
+# Shared contract for the interim Ubuntu storage host. No credentials here.
+storage_runtime_user: homelab-storage
+storage_runtime_home: /var/lib/homelab-storage
+storage_runtime_memory_max: 2G
+storage_runtime_cpu_quota: "200%"
+storage_existing_runtime_memory_max: 2G
+storage_secrets_file: "{{ playbook_dir }}/../../.generated/secrets/storage.json"
+storage_host_address: 192.168.1.9
+storage_proxy_address: 192.168.1.101
+storage_domain: "{{ lookup('ansible.builtin.env', 'HOMELAB_DOMAIN') }}"
+storage_s3_hostname: "s3.home.{{ storage_domain }}"
+storage_ui_hostname: "garage.home.{{ storage_domain }}"
+storage_volume_group: ubuntu-vg
+storage_postgresql_lv: homelab-postgresql
+storage_postgresql_size_gib: 20
+storage_postgresql_mount: /srv/homelab/postgresql
+storage_garage_lv: homelab-garage
+storage_garage_size_gib: 80
+storage_garage_mount: /srv/homelab/garage
+storage_backups_enabled: false
+garage_bucket_name: colouring-book-dev
+garage_region: homelab
+garage_capacity_gib: 64
+
+storage_monitoring_enabled: true
+storage_observer_network: homelab-storage-observer
+storage_observer_subnet: 172.30.93.0/29
+storage_observer_postgresql_address: 172.30.93.2
+storage_observer_garage_address: 172.30.93.3
+storage_observer_address: 172.30.93.4

@@ -1,0 +1,8 @@
+FROM {{ storage_observer_builder }} AS build
+WORKDIR /src
+COPY collect.go .
+RUN GOMAXPROCS=2 GOMEMLIMIT=256MiB CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /collector collect.go
+FROM {{ storage_observer_base }}
+COPY --from=build /collector /usr/local/bin/storage-observer
+ENTRYPOINT ["/usr/local/bin/storage-observer"]
+CMD []

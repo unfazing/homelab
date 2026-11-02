@@ -1,0 +1,60 @@
+name: homelab-postgresql
+services:
+  postgresql:
+    image: "{{ postgresql_image }}"
+    container_name: "{{ postgresql_container_name }}"
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgresql-admin-password
+      POSTGRES_INITDB_ARGS: --auth-local=peer --auth-host=scram-sha-256 --data-checksums
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "{{ storage_host_address }}:{{ postgresql_port }}:5432/tcp"
+    volumes:
+      - type: bind
+        source: "{{ storage_postgresql_mount }}/data"
+        target: /var/lib/postgresql
+        bind:
+          create_host_path: false
+      - "{{ postgresql_compose_dir }}/postgresql.conf:/etc/postgresql/postgresql.conf:ro"
+      - "{{ postgresql_compose_dir }}/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro"
+      - "{{ postgresql_secret_dir }}/postgresql-admin-password:/run/secrets/postgresql-admin-password:ro"
+    shm_size: 128m
+    mem_limit: "{{ postgresql_memory_limit }}"
+    cpus: "{{ postgresql_cpu_limit }}"
+    pids_limit: 128
+    cap_drop: [ALL]
+    # Initialization adjusts the mapped data/socket ownership, then gosu drops
+    # to postgres. No networking, mount or privileged administration capability.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,size=16m,mode=3775
+    healthcheck:
+      test: [CMD-SHELL, "exec gosu postgres pg_isready --username=postgres --dbname=postgres --quiet"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    stop_grace_period: 60s
+{% if storage_monitoring_enabled | default(false) %}
+    networks:
+      default: {}
+      observer:
+        ipv4_address: "{{ storage_observer_postgresql_address }}"
+{% endif %}
+    labels:
+      io.homelab.postgresql-config: "{{ lookup('ansible.builtin.template', 'postgresql.conf.j2') | hash('sha256') }}"
+      io.homelab.postgresql-hba: "{{ lookup('ansible.builtin.template', 'pg_hba.conf.j2') | hash('sha256') }}"
+{% if storage_monitoring_enabled | default(false) %}
+networks:
+  observer:
+    name: "{{ storage_observer_network }}"
+    external: true
+{% endif %}

@@ -14,6 +14,84 @@ env:
   ANSIBLE_LOCAL_TEMP: "{{.LOCAL_TEMP}}"
 
 tasks:
+  storage:secrets:
+    internal: true
+    cmds:
+      - python3 taskfiles/scripts/app/storage-secrets.py
+
+  storage:validate:
+    desc: Validate storage safety guards, service roles and Ansible deployment wiring
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - python3 -m unittest discover -s ansible/roles/storage-runtime/tests -v
+      - python3 -m unittest discover -s ansible/roles/postgresql/tests -v
+      - python3 -m unittest discover -s ansible/roles/garage/tests -v
+      - python3 -m unittest discover -s ansible/roles/garage-ui/tests -v
+      - python3 -m unittest discover -s ansible/roles/storage-observer/tests -v
+      - >-
+        ansible-playbook --syntax-check
+        -i ansible/inventories/homelab/hosts.example.yml
+        -i ansible/inventories/external/hosts.yml
+        ansible/playbooks/storage.yml
+      - >-
+        ansible-playbook --syntax-check
+        -i ansible/inventories/homelab/hosts.example.yml
+        -i ansible/inventories/external/hosts.yml
+        ansible/playbooks/storage-verify.yml
+      - >-
+        ansible-playbook --syntax-check
+        -i ansible/inventories/homelab/hosts.example.yml
+        -i ansible/inventories/external/hosts.yml
+        ansible/playbooks/storage-monitoring.yml
+      - task: runner:validate
+      - task: homepage:validate
+
+  storage:deploy:
+    vars:
+      STORAGE_VERIFY_RESTART: '{{.VERIFY_RESTART | default "false"}}'
+    desc: Install PostgreSQL Garage and authenticated Garage UI with a hidden red sudo prompt
+    deps: [":config:inventory", "adguard:domain", "caddy:credentials", "homepage:secrets", "storage:secrets"]
+    preconditions:
+      - sh: test -s .generated/secrets/adguard-admin-password && test ! -e .generated/secrets/.adguard-rotate.lock
+        msg: Existing AdGuard credentials are required; do not deploy during password rotation
+    cmds:
+      - task: storage:validate
+      - >-
+        ansible-playbook --ask-become-pass
+        -i "{{.INVENTORY}}" -i ansible/inventories/external/hosts.yml
+        -e "garage_ui_verify_restart={{.STORAGE_VERIFY_RESTART}}"
+        ansible/playbooks/storage.yml
+
+  storage:monitoring:deploy:
+    desc: Converge restricted storage metrics and Homepage on existing services with a hidden red sudo prompt
+    deps: [":config:inventory", "adguard:domain", "caddy:credentials", "homepage:secrets", "storage:secrets"]
+    cmds:
+      - task: storage:validate
+      - >-
+        ansible-playbook --ask-become-pass
+        -i "{{.INVENTORY}}" -i ansible/inventories/external/hosts.yml
+        ansible/playbooks/storage-monitoring.yml
+
+  storage:verify:
+    vars:
+      STORAGE_VERIFY_RESTART: '{{.VERIFY_RESTART | default "false"}}'
+    desc: Verify existing data mounts service authentication and private storage boundaries
+    deps: [":config:inventory", "adguard:domain"]
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - >-
+        ansible-playbook --ask-become-pass
+        -i "{{.INVENTORY}}" -i ansible/inventories/external/hosts.yml
+        -e "garage_ui_verify_restart={{.STORAGE_VERIFY_RESTART}}"
+        ansible/playbooks/storage-verify.yml
+
+  storage:credentials:
+    desc: Show storage and application credentials only in the operator terminal
+    vars:
+      APPLICATION: '{{.APPLICATION | default "colouring_book_dev"}}'
+    cmds:
+      - python3 taskfiles/scripts/app/storage-secrets.py credentials --application "{{.APPLICATION}}"
+
   runner:validate:
     desc: Validate the Docker runner installer and deployment admission tests
     cmds:
@@ -78,11 +156,28 @@ tasks:
     cmds:
       - python3 taskfiles/scripts/app/homepage-secrets.py
 
+  homepage:validate:
+    desc: Validate host reporters snapshot sampling and Homepage playbook wiring
+    cmds:
+      - mkdir -p "{{.LOCAL_TEMP}}"
+      - python3 -m unittest discover -s ansible/roles/homepage/tests -v
+      - node --test ansible/roles/homepage/tests/test-observer.cjs
+      - >-
+        ansible-playbook --syntax-check
+        -i ansible/inventories/homelab/hosts.example.yml
+        -i ansible/inventories/external/hosts.yml
+        ansible/playbooks/homepage.yml
+      - >-
+        ansible-playbook --syntax-check
+        -i ansible/inventories/homelab/hosts.example.yml
+        ansible/playbooks/homepage-refresh.yml
+
   homepage:check:
     desc: Preview Homepage, scoped observer identities and private dashboard ingress
     deps: [":config:inventory", "caddy:credentials", "homepage:secrets"]
     cmds:
-      - ansible-playbook --check -i "{{.INVENTORY}}" ansible/playbooks/homepage.yml
+      - task: homepage:validate
+      - ansible-playbook --check -i "{{.INVENTORY}}" -i ansible/inventories/external/hosts.yml ansible/playbooks/homepage.yml
 
   homepage:deploy:
     desc: Deploy the authenticated Homepage dashboard and approved integrations
@@ -91,7 +186,15 @@ tasks:
       - sh: test -s .generated/secrets/adguard-admin-password && test ! -e .generated/secrets/.adguard-rotate.lock
         msg: Existing AdGuard bootstrap secret is required; do not run during password rotation
     cmds:
-      - ansible-playbook -i "{{.INVENTORY}}" ansible/playbooks/homepage.yml
+      - task: homepage:validate
+      - ansible-playbook --ask-become-pass -i "{{.INVENTORY}}" -i ansible/inventories/external/hosts.yml ansible/playbooks/homepage.yml
+
+  homepage:refresh:
+    desc: Refresh Homepage layout and collectors using previously enrolled identities
+    deps: [":config:inventory", "adguard:domain"]
+    cmds:
+      - task: homepage:validate
+      - ansible-playbook -i "{{.INVENTORY}}" ansible/playbooks/homepage-refresh.yml
 
   homepage:verify:
     desc: Verify Homepage login, live widgets, secret redaction and restricted Caddy reads

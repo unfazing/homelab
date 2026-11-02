@@ -15,6 +15,10 @@
       - caddy_hermes_upstream == 'http://' ~ hostvars[groups['agents'][0]].ansible_host ~ ':9119'
       - caddy_inkling_hostname == 'inkling.home.' ~ caddy_domain
       - caddy_inkling_upstream == 'http://192.168.1.9:3000'
+      - not caddy_storage_enabled or caddy_s3_hostname == 's3.home.' ~ caddy_domain
+      - not caddy_storage_enabled or caddy_garage_hostname == 'garage.home.' ~ caddy_domain
+      - not caddy_storage_enabled or caddy_s3_upstream == 'http://192.168.1.9:3900'
+      - not caddy_storage_enabled or caddy_garage_upstream == 'http://192.168.1.9:3909'
       - caddy_proxy_network is match('^[a-z0-9][a-z0-9_.-]+$')
       - caddy_acme_environment in ['staging', 'production']
       - caddy_acme_ca is match('^https://')

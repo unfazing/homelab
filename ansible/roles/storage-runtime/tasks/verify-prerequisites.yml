@@ -1,0 +1,75 @@
+---
+- name: Read the installed storage account UID
+  ansible.builtin.command:
+    argv: [id, -u, "{{ storage_runtime_user }}"]
+  register: storage_verify_uid
+  changed_when: false
+
+- name: Load the protected verification credential bundle
+  ansible.builtin.set_fact:
+    storage_secrets: "{{ lookup('ansible.builtin.file', storage_secrets_file) | from_json }}"
+  no_log: true
+
+- name: Define the filesystem policy for a read-only mount check
+  ansible.builtin.include_tasks: policy.yml
+
+- name: Require the real separately managed data filesystems
+  ansible.builtin.command:
+    argv: [/usr/local/libexec/homelab-inspect-storage]
+    stdin: "{{ storage_volume_policy | combine({'require_mounted': true}) | to_json }}"
+  changed_when: false
+
+- name: Publish verified runtime prerequisites without changing service state
+  ansible.builtin.set_fact:
+    storage_runtime_uid: "{{ storage_verify_uid.stdout | int }}"
+    storage_mounts_verified: true
+    storage_runtime_environment:
+      HOME: "{{ storage_runtime_home }}"
+      XDG_RUNTIME_DIR: "/run/user/{{ storage_verify_uid.stdout }}"
+      DOCKER_HOST: "unix:///run/user/{{ storage_verify_uid.stdout }}/docker.sock"
+
+- name: Require the dedicated firewall service to be active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, homelab-storage-firewall]
+  changed_when: false
+
+- name: Require the scoped firewall table to exist
+  ansible.builtin.command:
+    argv: [nft, list, table, inet, homelab_storage]
+  changed_when: false
+
+- name: Read existing runtime identities without requiring a runner installation
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ item }}"]
+  loop: [homelab-ci, homelab-deploy]
+  register: storage_verify_accounts
+  changed_when: false
+  failed_when: storage_verify_accounts.rc not in [0, 2]
+
+- name: Prove the CI user cannot connect to persistent PostgreSQL
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import socket
+        try:
+            s = socket.create_connection(('192.168.1.9', 5432), timeout=3)
+        except OSError:
+            print('CI database connection denied')
+        else:
+            s.close()
+            raise SystemExit('CI can reach the persistent database')
+  become_user: homelab-ci
+  changed_when: false
+  when: storage_verify_accounts.results[0].rc == 0
+
+- name: Prove the application runtime can reach the authenticated database endpoint
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - "import socket; s=socket.create_connection(('192.168.1.9',5432),timeout=3); s.close()"
+  become_user: homelab-deploy
+  changed_when: false
+  when: storage_verify_accounts.results[1].rc == 0

@@ -1,0 +1,131 @@
+---
+- name: Require the prepared isolated storage runtime and persistent mount
+  ansible.builtin.assert:
+    that:
+      - storage_mounts_verified | default(false) | bool
+      - storage_runtime_uid is defined
+      - storage_runtime_environment.DOCKER_HOST == ('unix:///run/user/' ~ (storage_runtime_uid | string) ~ '/docker.sock')
+      - postgresql_image is match('^postgres:18\.6-bookworm@sha256:[a-f0-9]{64}$')
+      - postgresql_applications | length > 0
+      - storage_backups_enabled | default(false) | bool == false
+    quiet: true
+
+- name: Verify PostgreSQL's data filesystem is really mounted
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, FSTYPE, --mountpoint, "{{ storage_postgresql_mount }}"]
+  register: postgresql_data_mount
+  changed_when: false
+  failed_when: postgresql_data_mount.rc != 0 or postgresql_data_mount.stdout | trim != 'ext4'
+
+- name: Create the protected Compose directory
+  ansible.builtin.file:
+    path: "{{ postgresql_compose_dir }}"
+    state: directory
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Create the separate secret directory
+  ansible.builtin.file:
+    path: "{{ postgresql_secret_dir }}"
+    state: directory
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+
+- name: Create only the data parent without changing existing database ownership
+  ansible.builtin.file:
+    path: "{{ storage_postgresql_mount }}/data"
+    state: directory
+    owner: "{{ storage_runtime_user }}"
+    group: "{{ storage_runtime_user }}"
+    # The mapped postgres UID must traverse the mount parent; only its actual
+    # PGDATA subdirectory is mode 0700 and postgres-owned inside the namespace.
+    mode: '0755'
+
+- name: Install the administrator bootstrap secret as a protected mount file
+  ansible.builtin.copy:
+    content: "{{ storage_secrets.postgresql.admin_password }}\n"
+    dest: "{{ postgresql_secret_dir }}/postgresql-admin-password"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  no_log: true
+
+- name: Render the protected role and database policy
+  ansible.builtin.template:
+    src: policy.json.j2
+    dest: "{{ postgresql_policy_file }}"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0640'
+  no_log: true
+
+- name: Install guest convergence and verification scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ postgresql_compose_dir }}/{{ item }}"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: '0750'
+  loop: [reconcile.py, verify.py, monitor.py]
+
+- name: Validate role policy before starting PostgreSQL
+  ansible.builtin.command:
+    argv: [python3, "{{ postgresql_compose_dir }}/reconcile.py", --config, "{{ postgresql_policy_file }}", --validate-only]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+  no_log: true
+
+- name: Render PostgreSQL service configuration
+  ansible.builtin.template:
+    src: "{{ item.source }}"
+    dest: "{{ postgresql_compose_dir }}/{{ item.dest }}"
+    owner: root
+    group: "{{ storage_runtime_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { source: postgresql.conf.j2, dest: postgresql.conf, mode: '0644' }
+    - { source: pg_hba.conf.j2, dest: pg_hba.conf, mode: '0644' }
+    - { source: compose.yml.j2, dest: compose.yml, mode: '0640' }
+
+- name: Validate the Compose project without printing its resolved configuration
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ postgresql_compose_dir }}", config, --quiet]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  changed_when: false
+
+- name: Converge PostgreSQL without removing volumes
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ postgresql_compose_dir }}", up, --detach, --wait, --wait-timeout, '180']
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: postgresql_compose_up
+  changed_when: >-
+    'Created' in (postgresql_compose_up.stdout + postgresql_compose_up.stderr)
+    or 'Started' in (postgresql_compose_up.stdout + postgresql_compose_up.stderr)
+    or 'Recreated' in (postgresql_compose_up.stdout + postgresql_compose_up.stderr)
+
+- name: Reconcile application databases, passwords and least-privilege grants
+  ansible.builtin.command:
+    argv: [python3, "{{ postgresql_compose_dir }}/reconcile.py", --config, "{{ postgresql_policy_file }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: postgresql_reconcile
+  changed_when: (postgresql_reconcile.stdout | from_json).changed
+  no_log: true
+
+- name: Converge the restricted aggregate monitoring identity
+  ansible.builtin.command:
+    argv: [python3, "{{ postgresql_compose_dir }}/monitor.py", --config, "{{ postgresql_policy_file }}"]
+  become_user: "{{ storage_runtime_user }}"
+  environment: "{{ storage_runtime_environment }}"
+  register: postgresql_monitor
+  changed_when: (postgresql_monitor.stdout | from_json).changed
+  no_log: true
+  when: storage_monitoring_enabled | default(false) | bool
+
+- name: Verify runtime authentication and database boundaries
+  ansible.builtin.include_tasks: verify.yml

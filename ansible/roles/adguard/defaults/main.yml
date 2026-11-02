@@ -65,6 +65,10 @@ adguard_policy:
       answer: "{{ adguard_proxy_address }}"
     - domain: "wireguard.home.{{ adguard_domain }}"
       answer: "{{ adguard_proxy_address }}"
+    - domain: "s3.home.{{ adguard_domain }}"
+      answer: "{{ adguard_proxy_address }}"
+    - domain: "garage.home.{{ adguard_domain }}"
+      answer: "{{ adguard_proxy_address }}"
   querylog:
     enabled: true
     interval: 7776000000

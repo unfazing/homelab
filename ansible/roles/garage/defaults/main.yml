@@ -1,0 +1,14 @@
+---
+garage_image: "dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5"
+garage_compose_dir: /opt/homelab/garage
+garage_container_name: homelab-garage
+garage_network_name: homelab-storage
+garage_network_subnet: 172.30.92.0/28
+garage_container_address: 172.30.92.2
+garage_metadata_dir: "{{ storage_garage_mount }}/metadata"
+garage_objects_dir: "{{ storage_garage_mount }}/objects"
+garage_secret_dir: /etc/homelab/storage/garage
+garage_zone: red
+garage_bucket_name: colouring-book-dev
+garage_region: homelab
+garage_capacity_gib: 64

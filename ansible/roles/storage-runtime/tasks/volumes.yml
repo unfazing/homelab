@@ -1,0 +1,77 @@
+---
+- name: Define the managed filesystem policy
+  ansible.builtin.include_tasks: policy.yml
+
+- name: Install filesystem and LVM tooling without unrelated removals
+  ansible.builtin.apt:
+    name: [lvm2, e2fsprogs]
+    state: present
+    fail_on_autoremove: true
+
+- name: Install the read-only storage inspector
+  ansible.builtin.copy:
+    src: inspect-volumes.py
+    dest: /usr/local/libexec/homelab-inspect-storage
+    mode: '0755'
+
+- name: Inspect all volume targets and aggregate free extents before provisioning
+  ansible.builtin.command:
+    argv: [/usr/local/libexec/homelab-inspect-storage]
+    stdin: "{{ storage_volume_policy | to_json }}"
+  register: storage_volume_inspection
+  changed_when: false
+
+- name: Create only missing tagged logical volumes from free extents
+  community.general.lvol:
+    vg: "{{ storage_volume_group }}"
+    lv: "{{ item.lv }}"
+    size: "{{ item.size_gib }}g"
+    opts: "--addtag {{ item.tag }}"
+    shrink: false
+    force: false
+  loop: "{{ (storage_volume_inspection.stdout | from_json).volumes }}"
+  when: item.create
+
+- name: Initialize only verified new blank tagged storage volumes
+  community.general.filesystem:
+    fstype: ext4
+    dev: "{{ item.device }}"
+    opts: "-L {{ item.label }} -m 0"
+    force: false
+  loop: "{{ (storage_volume_inspection.stdout | from_json).volumes }}"
+  when: item.format
+
+- name: Create protected mount points without application data on the root disk
+  ansible.builtin.file:
+    path: "{{ item.mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ (storage_volume_inspection.stdout | from_json).volumes }}"
+
+- name: Read the managed filesystem UUIDs
+  ansible.builtin.command:
+    argv: [blkid, --output, value, --match-tag, UUID, "{{ item.device }}"]
+  loop: "{{ (storage_volume_inspection.stdout | from_json).volumes }}"
+  register: storage_filesystem_uuids
+  changed_when: false
+
+- name: Mount and persist separately managed data filesystems without nofail
+  ansible.posix.mount:
+    path: "{{ item.item.mount }}"
+    src: "UUID={{ item.stdout | trim }}"
+    fstype: ext4
+    opts: defaults,nosuid,nodev
+    state: mounted
+  loop: "{{ storage_filesystem_uuids.results }}"
+
+- name: Require the real data mounts before permitting a storage runtime
+  ansible.builtin.command:
+    argv: [/usr/local/libexec/homelab-inspect-storage]
+    stdin: "{{ storage_volume_policy | combine({'require_mounted': true}) | to_json }}"
+  changed_when: false
+
+- name: Publish the verified mount prerequisite to service roles
+  ansible.builtin.set_fact:
+    storage_mounts_verified: true

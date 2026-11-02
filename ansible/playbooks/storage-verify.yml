@@ -1,0 +1,45 @@
+---
+- name: Verify persistent storage and application permissions without granting authority
+  hosts: storage
+  any_errors_fatal: true
+  become: true
+  gather_facts: false
+  vars_files: [../vars/storage.yml, ../vars/storage-applications.json]
+  tasks:
+    - name: Read and verify installed storage prerequisites
+      ansible.builtin.include_role:
+        name: storage-runtime
+        tasks_from: verify-prerequisites
+    - name: Verify SQL authentication and per-application privileges
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: verify
+    - name: Verify Garage API, scoped credentials and persistence
+      ansible.builtin.include_role:
+        name: garage
+        tasks_from: verify
+    - name: Verify Garage UI authentication and intended HTTPS paths
+      ansible.builtin.include_role:
+        name: garage-ui
+        tasks_from: verify
+
+- name: Verify the host firewall excludes other LAN clients from backend listeners
+  hosts: access
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Reject direct database and storage-backend access from the LAN
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import socket
+            for port in [5432,3900,3909]:
+                try:
+                    s=socket.create_connection(('192.168.1.9',port),timeout=3)
+                except OSError:
+                    continue
+                s.close()
+                raise SystemExit('Unexpected direct LAN storage access')
+      changed_when: false

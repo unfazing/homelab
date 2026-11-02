@@ -1,0 +1,41 @@
+name: homelab-garage-ui
+services:
+  garage-ui:
+    image: "{{ garage_ui_image }}"
+    container_name: "{{ garage_ui_container_name }}"
+    # Root inside the rootless namespace is the unprivileged storage host UID.
+    # This avoids assuming host UID1000 owns the signer directory.
+    user: "0:0"
+    restart: unless-stopped
+    ports:
+      - "{{ storage_host_address }}:3909:8080/tcp"
+    volumes:
+      - type: bind
+        source: "{{ garage_ui_compose_dir }}/config.yaml"
+        target: /app/config.yaml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "{{ garage_ui_data_dir }}"
+        target: /app/data
+        bind: {create_host_path: false}
+    extra_hosts:
+      - "{{ storage_s3_hostname }}:{{ storage_proxy_address }}"
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,noexec,size=16m"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.25
+    pids_limit: 128
+    stop_grace_period: 30s
+    networks:
+      storage:
+        ipv4_address: "{{ garage_ui_container_address }}"
+    labels:
+      io.homelab.config-checksum: "{{ lookup('ansible.builtin.template', 'config.yaml.j2') | hash('sha256') }}"
+networks:
+  storage:
+    name: "{{ garage_ui_network_name }}"
+    external: true

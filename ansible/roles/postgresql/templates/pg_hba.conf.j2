@@ -1,0 +1,15 @@
+# Administration is container-local and tied to the postgres OS identity.
+local all postgres peer
+local all all reject
+# Host firewall permits local-host clients only. Rootless NAT may obscure their
+# source address, so HBA also restricts each login to its application database.
+host all postgres 0.0.0.0/0 scram-sha-256
+{% for app in postgresql_applications %}
+host {{ app.database }} {{ app.runtime_role }},{{ app.migration_role }} 0.0.0.0/0 scram-sha-256
+{% endfor %}
+{% if storage_monitoring_enabled | default(false) %}
+# Dedicated internal observer IP; no LAN monitoring login.
+host postgres{% for app in postgresql_applications %},{{ app.database }}{% endfor %} homelab_monitor {{ storage_observer_address }}/32 scram-sha-256
+{% endif %}
+host all all 0.0.0.0/0 reject
+host all all ::/0 reject

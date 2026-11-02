@@ -1,0 +1,69 @@
+name: homelab-garage
+services:
+  garage:
+    image: "{{ garage_image }}"
+    container_name: "{{ garage_container_name }}"
+    user: "0:0"
+    restart: unless-stopped
+    command: [/garage, -c, /etc/garage.toml, server]
+    entrypoint: []
+    ports:
+      - "{{ storage_host_address }}:3900:3900/tcp"
+    volumes:
+      - type: bind
+        source: "{{ garage_compose_dir }}/garage.toml"
+        target: /etc/garage.toml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "{{ garage_metadata_dir }}"
+        target: /var/lib/garage/meta
+        bind: {create_host_path: false}
+      - type: bind
+        source: "{{ garage_objects_dir }}"
+        target: /var/lib/garage/data
+        bind: {create_host_path: false}
+    secrets: [rpc_secret, admin_token, metrics_token]
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,noexec,size=16m"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+    stop_grace_period: 60s
+    networks:
+      storage:
+        ipv4_address: "{{ garage_container_address }}"
+{% if storage_monitoring_enabled | default(false) %}
+      observer:
+        ipv4_address: "{{ storage_observer_garage_address }}"
+{% endif %}
+    labels:
+      io.homelab.config-checksum: "{{ lookup('ansible.builtin.template', 'garage.toml.j2') | hash('sha256') }}"
+      io.homelab.secret-checksum: "{{ (storage_secrets.garage.rpc_secret ~ storage_secrets.garage.admin_token ~ storage_secrets.garage.metrics_token) | hash('sha256') }}"
+    healthcheck:
+      test: [CMD, /garage, -c, /etc/garage.toml, json-api, GetClusterStatus]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 10s
+secrets:
+  rpc_secret:
+    file: "{{ garage_secret_dir }}/rpc_secret"
+  admin_token:
+    file: "{{ garage_secret_dir }}/admin_token"
+  metrics_token:
+    file: "{{ garage_secret_dir }}/metrics_token"
+networks:
+  storage:
+    name: "{{ garage_network_name }}"
+    ipam:
+      config:
+        - subnet: "{{ garage_network_subnet }}"
+{% if storage_monitoring_enabled | default(false) %}
+  observer:
+    name: "{{ storage_observer_network }}"
+    external: true
+{% endif %}
