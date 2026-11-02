@@ -1,0 +1,182 @@
+---
+# Installs an operator-reviewed launcher only. Never starts/stops the app or migrates data.
+- name: Prepare restricted colouring-book deployment on existing red
+  hosts: red-server
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../vars/runner-apps.yml
+  vars:
+    preparation: "{{ playbook_dir }}/../../.generated/red-deploy"
+    snapshot: "{{ preparation }}/reviewed"
+    deployment_user: homelab-deploy
+    deployment_home: /var/lib/homelab-deploy
+    deployment_checkout: /opt/homelab/colouring-book/deployment
+    snapshot_files:
+      - {src: deploy-containers.sh, mode: '0755'}
+      - {src: compose.yaml, mode: '0644'}
+  tasks:
+    - name: Check reviewed source hashes on the controller
+      ansible.builtin.stat:
+        path: "{{ snapshot }}/{{ item }}"
+        checksum_algorithm: sha256
+      loop:
+        - deploy-containers.sh
+        - compose.yaml
+        - deploy/red-deploy-entrypoint.sh.example
+      delegate_to: localhost
+      become: false
+      register: reviewed_sources
+
+    - name: Require the pinned operator-reviewed app version
+      ansible.builtin.assert:
+        that:
+          - reviewed_sources.results[0].stat.checksum | default('') == '73cc6ed82ffb9a54d2a2adf664448199519ea3b8032e65d6c76d1344d17b24fa'
+          - reviewed_sources.results[1].stat.checksum | default('') == 'e0a1f913fc495973089fd1b265276169cdf7abcf1038764420ffdbb961237a8c'
+          - reviewed_sources.results[2].stat.checksum | default('') == 'f9065b3b670fcf055f22c35b0b3495b7c85717eb33ffcba33736dd1c53b4b5a2'
+        quiet: true
+
+    - name: Require the existing separate runtime identities
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Require both dedicated accounts before choosing Docker endpoints
+      ansible.builtin.assert:
+        that:
+          - "'homelab-deploy' in ansible_facts['getent_passwd']"
+          - "'homelab-ci' in ansible_facts['getent_passwd']"
+        quiet: true
+
+    - name: Read each rootless daemon identity without starting services
+      ansible.builtin.command:
+        argv: [docker, info, --format, '{{ "{{.ID}}" }}']
+      become_user: "{{ item }}"
+      environment:
+        HOME: "/var/lib/{{ item }}"
+        DOCKER_HOST: "unix:///run/user/{{ ansible_facts['getent_passwd'][item][1] }}/docker.sock"
+      loop: [homelab-deploy, homelab-ci]
+      register: daemon_ids
+      changed_when: false
+
+    - name: Require independent CI and app daemons
+      ansible.builtin.assert:
+        that:
+          - daemon_ids.results[0].stdout | trim | length > 0
+          - daemon_ids.results[0].stdout | trim != daemon_ids.results[1].stdout | trim
+        quiet: true
+
+    - name: Create operator-owned source and configuration directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: "{{ item.group | default('root') }}"
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - {path: /opt/homelab/colouring-book}
+        - {path: '{{ deployment_checkout }}'}
+        - {path: /etc/colouring-book, group: homelab-deploy, mode: '0750'}
+        - {path: /var/lib/colouring-book}
+        - {path: /srv/homelab/colouring-book}
+
+    - name: Install the immutable reviewed deployment snapshot
+      ansible.builtin.copy:
+        src: "{{ snapshot }}/{{ item.src }}"
+        dest: "{{ deployment_checkout }}/{{ item.src }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop: "{{ snapshot_files }}"
+
+    - name: Create only deployment metadata directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_user }}"
+        mode: '0700'
+      loop:
+        - '{{ deployment_checkout }}/.deploy'
+        - /var/lib/colouring-book/candidates
+        - '{{ deployment_home }}/.docker'
+
+    - name: Install the app-specific restricted SSH entrypoint
+      ansible.builtin.copy:
+        src: '{{ snapshot }}/deploy/red-deploy-entrypoint.sh.example'
+        dest: /usr/local/libexec/colouring-book-deploy
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Pin the production endpoint and daemon identity
+      ansible.builtin.copy:
+        content: |
+          CHECKOUT={{ deployment_checkout }}
+          RUNTIME_ENV=/etc/colouring-book/runtime.env
+          CANDIDATE_DIR=/var/lib/colouring-book/candidates
+          DOCKER_HOST=unix:///run/user/{{ ansible_facts['getent_passwd'][deployment_user][1] }}/docker.sock
+          EXPECTED_DOCKER_ID={{ daemon_ids.results[0].stdout | trim }}
+        dest: /etc/colouring-book/red-deploy.env
+        owner: root
+        group: '{{ deployment_user }}'
+        mode: '0640'
+
+    - name: Create server-only runtime defaults without replacing operator secrets
+      ansible.builtin.copy:
+        content: |
+          APP_DATA_DIR=/srv/homelab/colouring-book/data
+          APP_UID=10000
+          APP_GID=10000
+          FRONTEND_HOST=192.168.1.9
+          FRONTEND_PORT=3000
+          GENERATION_MAX_WORKERS=2
+          OPENROUTER_API_KEY=
+        dest: /etc/colouring-book/runtime.env
+        owner: root
+        group: '{{ deployment_user }}'
+        mode: '0640'
+        force: false
+      no_log: true
+
+    - name: Install the package-read-only registry login
+      ansible.builtin.copy:
+        content: "{{ {'auths': {pull.server: {'auth': ((pull.username ~ ':' ~ pull.password) | b64encode)}}} | to_json }}\n"
+        dest: '{{ deployment_home }}/.docker/config.json'
+        owner: '{{ deployment_user }}'
+        group: '{{ deployment_user }}'
+        mode: '0600'
+      vars:
+        pull: "{{ lookup('ansible.builtin.file', preparation ~ '/registry-credentials.json') | from_json }}"
+      no_log: true
+
+    - name: Require fixed root-owned forced commands and Ed25519 public keys
+      ansible.builtin.assert:
+        that:
+          - item.command is match('^/usr/local/libexec/[a-z0-9-]+$')
+          - "item.public_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+(?: [A-Za-z0-9_-]+)?$')"
+        quiet: true
+      loop: '{{ gitea_runner_app_launchers }}'
+
+    - name: Retain root ownership of the deployment SSH directory
+      ansible.builtin.file:
+        path: '{{ deployment_home }}/.ssh'
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Converge the same forced-key policy used by the runner installer
+      ansible.builtin.template:
+        src: ../roles/gitea-runner/templates/authorized_keys.j2
+        dest: '{{ deployment_home }}/.ssh/authorized_keys'
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Report preparation limits
+      ansible.builtin.debug:
+        msg: >-
+          Launcher and registry credential installed; no application was started.
+          Set the provider key with sudoedit /etc/colouring-book/runtime.env.
+          External data, mapped UID permissions, port handoff, private image pulls,
+          reviewed main and end-to-end acceptance remain required. Keep RED_DEPLOY_ENABLED=false.

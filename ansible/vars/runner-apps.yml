@@ -2,3 +2,8 @@
 # No application or durable data is created by installing the runner.
 # Admit each application explicitly using the contract described in the role README.
 gitea_runner_app_contracts: []
+
+# Root-owned app-specific entrypoints; workflows cannot replace their source.
+gitea_runner_app_launchers:
+  - command: /usr/local/libexec/colouring-book-deploy
+    public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA9Tw9tWShnBswYuQnPmgvKX4+b35JratHwRxA9Lr4Jh colouring-book-red-deploy

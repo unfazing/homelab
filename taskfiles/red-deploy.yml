@@ -1,0 +1,29 @@
+version: '3'
+silent: true
+env:
+  ANSIBLE_CONFIG: ansible/ansible.cfg
+  ANSIBLE_LOCAL_TEMP: .generated/ansible/tmp
+tasks:
+  snapshot:
+    desc: Fetch the fixed reviewed app deployment source without checking out a live branch
+    cmds:
+      - |
+        set -eu
+        mkdir -p .generated/red-deploy/reviewed
+        # Capture SSH success before extraction; never hide SSH failure in a pipeline.
+        ssh -o BatchMode=yes user@192.168.1.101 \
+          'sudo -n docker exec --user git gitea git --git-dir=/data/git/repositories/lab-agents-org/colouring-book-v1.git archive fa70be5717ac7a744e197591419155a21629cd0e deploy-containers.sh compose.yaml deploy/red-deploy-entrypoint.sh.example' \
+          > .generated/red-deploy/source.tar
+        tar -xf .generated/red-deploy/source.tar -C .generated/red-deploy/reviewed
+  validate:
+    desc: Validate the prepared restricted colouring-book host installer
+    cmds:
+      - mkdir -p .generated/ansible/tmp
+      - ansible-playbook --syntax-check -i ansible/inventories/external/hosts.yml ansible/playbooks/colouring-book-deploy.yml
+      - python3 -m unittest discover -s ansible/roles/gitea-runner/tests -v
+  install:
+    desc: Install reviewed colouring-book deployment access on red without starting the app
+    cmds:
+      - task: snapshot
+      - task: validate
+      - ansible-playbook --ask-become-pass -i ansible/inventories/external/hosts.yml ansible/playbooks/colouring-book-deploy.yml

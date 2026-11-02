@@ -3,3 +3,6 @@
 restrict,command="/usr/local/libexec/homelab-deploy {{ app.name }}" {{ key }}
 {% endfor %}
 {% endfor %}
+{% for launcher in gitea_runner_app_launchers | default([]) %}
+restrict,command="{{ launcher.command }}" {{ launcher.public_key }}
+{% endfor %}
